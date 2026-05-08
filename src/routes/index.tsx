@@ -223,7 +223,7 @@ function InputCard() {
             />
           )}
 
-          <button className="group mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[image:var(--gradient-primary)] px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-glow)] transition-transform hover:scale-[1.01] active:scale-[0.99]">
+          <button className="group mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[image:var(--gradient-primary)] animate-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-glow)] transition-transform hover:scale-[1.01] active:scale-[0.99]">
             Map My Semester
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </button>
@@ -292,7 +292,7 @@ function HowItWorks() {
               className="group relative rounded-2xl border border-border bg-card/60 p-6 backdrop-blur transition hover:border-primary/50 hover:bg-card"
             >
               <div className="flex items-center justify-between">
-                <span className="font-serif-display text-5xl text-transparent bg-clip-text bg-[image:var(--gradient-primary)]">
+                <span className="font-serif-display text-5xl text-transparent bg-clip-text bg-[image:var(--gradient-primary)] animate-gradient">
                   {s.n}
                 </span>
                 <div className="h-px flex-1 ml-4 bg-gradient-to-r from-border to-transparent" />
