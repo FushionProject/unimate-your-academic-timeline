@@ -112,8 +112,22 @@ function Hero() {
       />
 
       <div className="mx-auto max-w-3xl px-6 pt-20 pb-10 text-center sm:pt-28">
-        <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/50 backdrop-blur px-3 py-1 text-xs text-muted-foreground shadow-[0_0_30px_-10px_var(--primary)]">
-          <Sparkles className="h-3 w-3 text-primary animate-twinkle" />
+        <div
+          className="mx-auto inline-flex items-center gap-2 rounded-full bg-card/50 backdrop-blur px-3 py-1 text-xs text-muted-foreground"
+          style={{
+            border: "1px solid transparent",
+            backgroundImage:
+              "linear-gradient(var(--card), var(--card)), linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
+            backgroundOrigin: "border-box",
+            backgroundClip: "padding-box, border-box",
+            boxShadow:
+              "0 0 30px -10px rgba(255, 0, 110, 0.5), 0 0 30px -10px rgba(0, 212, 255, 0.4)",
+          }}
+        >
+          <Sparkles
+            className="h-3 w-3 animate-twinkle"
+            style={{ color: "#FF006E" }}
+          />
           <span>Built for students, by students</span>
         </div>
 
@@ -154,7 +168,17 @@ function Hero() {
 function Pill({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
     <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/60 backdrop-blur px-3 py-1.5 text-muted-foreground">
-      <span className="text-primary">{icon}</span>
+      <span
+        className="animate-tri-gradient bg-clip-text text-transparent"
+        style={{
+          backgroundImage:
+            "linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
+          backgroundSize: "300% 100%",
+          color: "transparent",
+        }}
+      >
+        {icon}
+      </span>
       <span>{text}</span>
     </div>
   );
@@ -312,7 +336,16 @@ function HowItWorks() {
     <section className="relative border-t border-border/60 py-24">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-xs uppercase tracking-[0.2em] text-primary">How it works</p>
+          <p
+            className="text-xs uppercase tracking-[0.2em] animate-tri-gradient bg-clip-text text-transparent"
+            style={{
+              backgroundImage:
+                "linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
+              backgroundSize: "300% 100%",
+            }}
+          >
+            How it works
+          </p>
           <h2 className="font-serif-display mt-3 text-4xl sm:text-5xl text-foreground">
             From syllabus to schedule, in three steps.
           </h2>
