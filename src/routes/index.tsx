@@ -118,11 +118,12 @@ function Hero() {
           Academic planning,
           <br />
           <span
-            className="italic"
+            className="italic animate-tri-gradient bg-clip-text text-transparent"
             style={{
-              color: "var(--neon-pink)",
-              textShadow:
-                "0 0 20px oklch(0.7 0.3 350 / 0.7), 0 0 50px oklch(0.7 0.3 350 / 0.4)",
+              backgroundImage:
+                "linear-gradient(90deg, #FF006E, #00D4FF, #9B59B6, #FF006E)",
+              backgroundSize: "300% 100%",
+              WebkitBackgroundClip: "text",
             }}
           >
             organized clearly.
@@ -238,12 +239,13 @@ function InputCard() {
           )}
 
           <button
-            className="group mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold transition-transform hover:scale-[1.01] active:scale-[0.99]"
+            className="group mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold text-white transition-transform hover:scale-[1.01] active:scale-[0.99] animate-tri-gradient"
             style={{
-              background: "var(--neon-lime)",
-              color: "oklch(0.12 0.04 250)",
+              backgroundImage:
+                "linear-gradient(90deg, #FF006E, #00D4FF, #9B59B6, #FF006E)",
+              backgroundSize: "300% 100%",
               boxShadow:
-                "0 0 30px oklch(0.9 0.32 140 / 0.6), 0 0 80px oklch(0.9 0.32 140 / 0.35)",
+                "0 0 30px rgba(255, 0, 110, 0.4), 0 0 80px rgba(0, 212, 255, 0.25)",
             }}
           >
             Map My Semester
