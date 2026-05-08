@@ -113,7 +113,14 @@ function Hero() {
         <h1 className="font-serif-display mt-6 text-5xl leading-[1.05] sm:text-6xl md:text-7xl text-foreground">
           Academic planning,
           <br />
-          <span className="italic text-transparent bg-clip-text bg-[image:var(--gradient-primary)] animate-gradient">
+          <span
+            className="italic"
+            style={{
+              color: "var(--neon-pink)",
+              textShadow:
+                "0 0 20px oklch(0.7 0.3 350 / 0.7), 0 0 50px oklch(0.7 0.3 350 / 0.4)",
+            }}
+          >
             organized clearly.
           </span>
         </h1>
@@ -159,11 +166,14 @@ function InputCard() {
         className="absolute -inset-8 rounded-[2rem] opacity-40 blur-3xl -z-10 animate-pulse-glow"
         style={{ background: "var(--gradient-primary)" }}
       />
-      {/* gradient border */}
+      {/* neon border */}
       <div
         aria-hidden
-        className="absolute -inset-px rounded-3xl opacity-80 -z-10 animate-gradient"
-        style={{ background: "linear-gradient(135deg, oklch(0.82 0.16 82), oklch(0.88 0.14 92), oklch(0.82 0.16 82))" }}
+        className="absolute -inset-px rounded-3xl opacity-80 -z-10"
+        style={{
+          background:
+            "linear-gradient(135deg, var(--neon-blue), var(--neon-lime), var(--neon-pink), var(--neon-yellow))",
+        }}
       />
       <div className="relative rounded-3xl border border-border/60 bg-card/90 backdrop-blur-xl p-2 shadow-[var(--shadow-card)]">
         <div className="flex items-center gap-1 rounded-2xl bg-secondary/60 p-1">
@@ -223,7 +233,15 @@ function InputCard() {
             />
           )}
 
-          <button className="group mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[image:var(--gradient-primary)] animate-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-glow)] transition-transform hover:scale-[1.01] active:scale-[0.99]">
+          <button
+            className="group mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold transition-transform hover:scale-[1.01] active:scale-[0.99]"
+            style={{
+              background: "var(--neon-lime)",
+              color: "oklch(0.12 0.04 250)",
+              boxShadow:
+                "0 0 30px oklch(0.9 0.32 140 / 0.6), 0 0 80px oklch(0.9 0.32 140 / 0.35)",
+            }}
+          >
             Map My Semester
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </button>
