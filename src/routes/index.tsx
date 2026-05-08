@@ -177,7 +177,7 @@ function InputCard() {
         className="absolute -inset-px rounded-3xl opacity-80 -z-10"
         style={{
           background:
-            "linear-gradient(135deg, var(--neon-blue), var(--neon-lime), var(--neon-pink), var(--neon-yellow))",
+            "linear-gradient(135deg, #FF006E, #00D4FF, #FF006E)",
         }}
       />
       <div className="relative rounded-3xl border border-border/60 bg-card/90 backdrop-blur-xl p-2 shadow-[var(--shadow-card)]">
