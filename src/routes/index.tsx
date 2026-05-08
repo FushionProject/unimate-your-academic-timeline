@@ -363,7 +363,21 @@ function Footer() {
 
 function Index() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="relative min-h-screen bg-background text-foreground overflow-hidden">
+      {/* ambient neon room glows */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 -z-10"
+        style={{
+          backgroundImage: [
+            "radial-gradient(ellipse 60% 40% at 0% 0%, rgba(255, 0, 110, 0.18), transparent 60%)",
+            "radial-gradient(ellipse 60% 40% at 100% 0%, rgba(0, 212, 255, 0.14), transparent 60%)",
+            "radial-gradient(ellipse 70% 50% at 100% 100%, rgba(155, 89, 182, 0.18), transparent 65%)",
+            "radial-gradient(ellipse 60% 40% at 0% 100%, rgba(0, 212, 255, 0.10), transparent 60%)",
+            "radial-gradient(ellipse 80% 60% at 50% 50%, rgba(13, 0, 21, 0.6), transparent 80%)",
+          ].join(","),
+        }}
+      />
       <Navbar />
       <main>
         <Hero />
