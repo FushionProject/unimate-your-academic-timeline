@@ -80,11 +80,11 @@ function Hero() {
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div
           className="absolute -top-40 left-1/4 h-[500px] w-[500px] rounded-full opacity-40 blur-3xl animate-blob"
-          style={{ background: "radial-gradient(circle, oklch(0.68 0.2 285 / 0.5), transparent 70%)" }}
+          style={{ background: "radial-gradient(circle, oklch(0.82 0.16 82 / 0.45), transparent 70%)" }}
         />
         <div
           className="absolute top-20 right-1/4 h-[420px] w-[420px] rounded-full opacity-30 blur-3xl animate-blob"
-          style={{ background: "radial-gradient(circle, oklch(0.78 0.18 320 / 0.5), transparent 70%)", animationDelay: "5s" }}
+          style={{ background: "radial-gradient(circle, oklch(0.55 0.12 240 / 0.55), transparent 70%)", animationDelay: "5s" }}
         />
       </div>
 
@@ -163,7 +163,7 @@ function InputCard() {
       <div
         aria-hidden
         className="absolute -inset-px rounded-3xl opacity-80 -z-10 animate-gradient"
-        style={{ background: "linear-gradient(135deg, oklch(0.68 0.2 285), oklch(0.78 0.18 320), oklch(0.68 0.2 285))" }}
+        style={{ background: "linear-gradient(135deg, oklch(0.82 0.16 82), oklch(0.88 0.14 92), oklch(0.82 0.16 82))" }}
       />
       <div className="relative rounded-3xl border border-border/60 bg-card/90 backdrop-blur-xl p-2 shadow-[var(--shadow-card)]">
         <div className="flex items-center gap-1 rounded-2xl bg-secondary/60 p-1">
