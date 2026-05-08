@@ -222,8 +222,8 @@
 }
 
 .animate-gradient {
-  background-size: 200% 200%;
-  animation: gradient-shift 8s ease infinite;
+  background-size: 300% 300%;
+  animation: gradient-shift 12s ease infinite;
 }
 
 @keyframes twinkle {
