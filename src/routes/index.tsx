@@ -73,59 +73,6 @@ function Navbar() {
   );
 }
 
-const chips = [
-  { label: "Midterm", date: "Oct 14", tag: "CS 211", side: "left", top: "8%", rot: -8, delay: 0 },
-  { label: "Essay Due", date: "Nov 2", tag: "ENG 102", side: "right", top: "14%", rot: 6, delay: 0.6 },
-  { label: "Reading", date: "Sep 18", tag: "HIST 240", side: "left", top: "30%", rot: 5, delay: 1.2 },
-  { label: "Final Exam", date: "Dec 12", tag: "MATH 220", side: "right", top: "36%", rot: -4, delay: 1.8 },
-  { label: "Quiz 3", date: "Sep 26", tag: "BIO 101", side: "left", top: "58%", rot: 4, delay: 2.4 },
-  { label: "Lab Report", date: "Oct 30", tag: "CHEM 110", side: "right", top: "64%", rot: -7, delay: 3 },
-] as const;
-
-function FloatingChip({
-  label,
-  date,
-  tag,
-  side,
-  top,
-  rot,
-  delay,
-}: {
-  label: string;
-  date: string;
-  tag: string;
-  side: "left" | "right";
-  top: string;
-  rot: number;
-  delay: number;
-}) {
-  const positions =
-    side === "left"
-      ? "left-[3%] sm:left-[6%] md:left-[10%] lg:left-[14%]"
-      : "right-[3%] sm:right-[6%] md:right-[10%] lg:right-[14%]";
-  return (
-    <div
-      className={`pointer-events-none absolute ${positions} animate-float`}
-      style={{
-        top,
-        ["--r" as string]: `${rot}deg`,
-        animationDelay: `${delay}s`,
-        transform: `rotate(${rot}deg)`,
-      }}
-    >
-      <div className="group/chip flex items-center gap-2.5 rounded-2xl border border-border/70 bg-card/80 backdrop-blur-xl px-3 py-2 text-xs shadow-[var(--shadow-card)] hover:opacity-100 transition-opacity opacity-90">
-        <div className="grid h-7 w-7 place-items-center rounded-lg bg-[image:var(--gradient-primary)] text-[10px] font-semibold text-primary-foreground shadow-[var(--shadow-glow)]">
-          {date.split(" ")[1]}
-        </div>
-        <div className="flex flex-col leading-tight pr-1">
-          <span className="text-foreground font-semibold">{label}</span>
-          <span className="text-[10px] text-muted-foreground tabular-nums">{tag} · {date}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function Hero() {
   return (
     <section className="relative overflow-hidden">
@@ -156,10 +103,6 @@ function Hero() {
         className="absolute inset-0 -z-10"
         style={{ background: "var(--gradient-hero)" }}
       />
-
-      {chips.map((c, i) => (
-        <FloatingChip key={c.label} {...c} />
-      ))}
 
       <div className="mx-auto max-w-3xl px-6 pt-20 pb-10 text-center sm:pt-28">
         <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/50 backdrop-blur px-3 py-1 text-xs text-muted-foreground shadow-[0_0_30px_-10px_var(--primary)]">
