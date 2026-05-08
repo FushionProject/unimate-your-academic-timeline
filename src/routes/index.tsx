@@ -80,11 +80,15 @@ function Hero() {
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div
           className="absolute -top-40 left-1/4 h-[500px] w-[500px] rounded-full opacity-40 blur-3xl animate-blob"
-          style={{ background: "radial-gradient(circle, oklch(0.82 0.16 82 / 0.45), transparent 70%)" }}
+          style={{ background: "radial-gradient(circle, oklch(0.7 0.3 350 / 0.45), transparent 70%)" }}
         />
         <div
-          className="absolute top-20 right-1/4 h-[420px] w-[420px] rounded-full opacity-30 blur-3xl animate-blob"
-          style={{ background: "radial-gradient(circle, oklch(0.55 0.12 240 / 0.55), transparent 70%)", animationDelay: "5s" }}
+          className="absolute top-20 right-1/4 h-[420px] w-[420px] rounded-full opacity-35 blur-3xl animate-blob"
+          style={{ background: "radial-gradient(circle, oklch(0.85 0.2 220 / 0.5), transparent 70%)", animationDelay: "5s" }}
+        />
+        <div
+          className="absolute top-40 left-1/2 h-[360px] w-[360px] rounded-full opacity-25 blur-3xl animate-blob"
+          style={{ background: "radial-gradient(circle, oklch(0.9 0.32 140 / 0.45), transparent 70%)", animationDelay: "10s" }}
         />
       </div>
 
