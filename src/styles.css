@@ -119,12 +119,12 @@
 }
 
 .dark {
-  /* Dark: deep midnight navy with warm gold accent */
-  --background: oklch(0.16 0.04 250);
+  /* Dark: deep purple-black with neon-tinted ambient glows */
+  --background: oklch(0.12 0.04 320);
   --foreground: oklch(0.96 0.02 85);
-  --card: oklch(0.21 0.045 250);
+  --card: oklch(0.17 0.05 320);
   --card-foreground: oklch(0.96 0.02 85);
-  --popover: oklch(0.21 0.045 250);
+  --popover: oklch(0.17 0.05 320);
   --popover-foreground: oklch(0.96 0.02 85);
   /* Neon lime green primary */
   --primary: oklch(0.9 0.32 140);
