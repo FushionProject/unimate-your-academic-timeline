@@ -40,8 +40,11 @@ function useTheme() {
 function Logo() {
   return (
     <div className="flex items-center gap-2">
-      <div className="relative grid h-8 w-8 place-items-center rounded-lg bg-[image:var(--gradient-primary)] shadow-[var(--shadow-glow)]">
-        <GraduationCap className="h-4 w-4 text-primary-foreground" strokeWidth={2.5} />
+      <div
+        className="relative grid h-8 w-8 place-items-center rounded-lg shadow-[var(--shadow-glow)]"
+        style={{ backgroundImage: "linear-gradient(135deg, #FF006E, #00D4FF)" }}
+      >
+        <GraduationCap className="h-4 w-4 text-white" strokeWidth={2.5} />
       </div>
       <span className="font-serif-display text-2xl tracking-tight text-foreground">
         UniMate
