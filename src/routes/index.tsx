@@ -80,11 +80,15 @@ function Hero() {
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div
           className="absolute -top-40 left-1/4 h-[500px] w-[500px] rounded-full opacity-40 blur-3xl animate-blob"
-          style={{ background: "radial-gradient(circle, oklch(0.82 0.16 82 / 0.45), transparent 70%)" }}
+          style={{ background: "radial-gradient(circle, oklch(0.7 0.3 350 / 0.45), transparent 70%)" }}
         />
         <div
-          className="absolute top-20 right-1/4 h-[420px] w-[420px] rounded-full opacity-30 blur-3xl animate-blob"
-          style={{ background: "radial-gradient(circle, oklch(0.55 0.12 240 / 0.55), transparent 70%)", animationDelay: "5s" }}
+          className="absolute top-20 right-1/4 h-[420px] w-[420px] rounded-full opacity-35 blur-3xl animate-blob"
+          style={{ background: "radial-gradient(circle, oklch(0.85 0.2 220 / 0.5), transparent 70%)", animationDelay: "5s" }}
+        />
+        <div
+          className="absolute top-40 left-1/2 h-[360px] w-[360px] rounded-full opacity-25 blur-3xl animate-blob"
+          style={{ background: "radial-gradient(circle, oklch(0.9 0.32 140 / 0.45), transparent 70%)", animationDelay: "10s" }}
         />
       </div>
 
@@ -113,7 +117,14 @@ function Hero() {
         <h1 className="font-serif-display mt-6 text-5xl leading-[1.05] sm:text-6xl md:text-7xl text-foreground">
           Academic planning,
           <br />
-          <span className="italic text-transparent bg-clip-text bg-[image:var(--gradient-primary)] animate-gradient">
+          <span
+            className="italic"
+            style={{
+              color: "var(--neon-pink)",
+              textShadow:
+                "0 0 20px oklch(0.7 0.3 350 / 0.7), 0 0 50px oklch(0.7 0.3 350 / 0.4)",
+            }}
+          >
             organized clearly.
           </span>
         </h1>
@@ -159,11 +170,14 @@ function InputCard() {
         className="absolute -inset-8 rounded-[2rem] opacity-40 blur-3xl -z-10 animate-pulse-glow"
         style={{ background: "var(--gradient-primary)" }}
       />
-      {/* gradient border */}
+      {/* neon border */}
       <div
         aria-hidden
-        className="absolute -inset-px rounded-3xl opacity-80 -z-10 animate-gradient"
-        style={{ background: "linear-gradient(135deg, oklch(0.82 0.16 82), oklch(0.88 0.14 92), oklch(0.82 0.16 82))" }}
+        className="absolute -inset-px rounded-3xl opacity-80 -z-10"
+        style={{
+          background:
+            "linear-gradient(135deg, var(--neon-blue), var(--neon-lime), var(--neon-pink), var(--neon-yellow))",
+        }}
       />
       <div className="relative rounded-3xl border border-border/60 bg-card/90 backdrop-blur-xl p-2 shadow-[var(--shadow-card)]">
         <div className="flex items-center gap-1 rounded-2xl bg-secondary/60 p-1">
@@ -223,7 +237,15 @@ function InputCard() {
             />
           )}
 
-          <button className="group mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[image:var(--gradient-primary)] animate-gradient px-6 py-3.5 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-glow)] transition-transform hover:scale-[1.01] active:scale-[0.99]">
+          <button
+            className="group mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold transition-transform hover:scale-[1.01] active:scale-[0.99]"
+            style={{
+              background: "var(--neon-lime)",
+              color: "oklch(0.12 0.04 250)",
+              boxShadow:
+                "0 0 30px oklch(0.9 0.32 140 / 0.6), 0 0 80px oklch(0.9 0.32 140 / 0.35)",
+            }}
+          >
             Map My Semester
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </button>
@@ -261,16 +283,22 @@ const steps = [
     n: "01",
     title: "Upload your syllabus",
     body: "Drop a PDF or paste the text. Works for any course, any format, any prof's chaotic Word doc.",
+    color: "var(--neon-blue)",
+    glow: "oklch(0.85 0.2 220 / 0.55)",
   },
   {
     n: "02",
     title: "AI maps every date",
     body: "Midterms, problem sets, readings, labs — extracted, categorized, and laid out on a clean timeline.",
+    color: "var(--neon-yellow)",
+    glow: "oklch(0.94 0.22 100 / 0.55)",
   },
   {
     n: "03",
     title: "Export to your calendar",
     body: "One click to Google, Apple, or Outlook. Your whole semester, synced everywhere you live.",
+    color: "var(--neon-pink)",
+    glow: "oklch(0.7 0.3 350 / 0.55)",
   },
 ];
 
@@ -292,7 +320,13 @@ function HowItWorks() {
               className="group relative rounded-2xl border border-border bg-card/60 p-6 backdrop-blur transition hover:border-primary/50 hover:bg-card"
             >
               <div className="flex items-center justify-between">
-                <span className="font-serif-display text-5xl text-transparent bg-clip-text bg-[image:var(--gradient-primary)] animate-gradient">
+                <span
+                  className="font-serif-display text-5xl"
+                  style={{
+                    color: s.color,
+                    textShadow: `0 0 18px ${s.glow}, 0 0 40px ${s.glow}`,
+                  }}
+                >
                   {s.n}
                 </span>
                 <div className="h-px flex-1 ml-4 bg-gradient-to-r from-border to-transparent" />
