@@ -283,16 +283,22 @@ const steps = [
     n: "01",
     title: "Upload your syllabus",
     body: "Drop a PDF or paste the text. Works for any course, any format, any prof's chaotic Word doc.",
+    color: "var(--neon-blue)",
+    glow: "oklch(0.85 0.2 220 / 0.55)",
   },
   {
     n: "02",
     title: "AI maps every date",
     body: "Midterms, problem sets, readings, labs — extracted, categorized, and laid out on a clean timeline.",
+    color: "var(--neon-yellow)",
+    glow: "oklch(0.94 0.22 100 / 0.55)",
   },
   {
     n: "03",
     title: "Export to your calendar",
     body: "One click to Google, Apple, or Outlook. Your whole semester, synced everywhere you live.",
+    color: "var(--neon-pink)",
+    glow: "oklch(0.7 0.3 350 / 0.55)",
   },
 ];
 
@@ -314,7 +320,13 @@ function HowItWorks() {
               className="group relative rounded-2xl border border-border bg-card/60 p-6 backdrop-blur transition hover:border-primary/50 hover:bg-card"
             >
               <div className="flex items-center justify-between">
-                <span className="font-serif-display text-5xl text-transparent bg-clip-text bg-[image:var(--gradient-primary)] animate-gradient">
+                <span
+                  className="font-serif-display text-5xl"
+                  style={{
+                    color: s.color,
+                    textShadow: `0 0 18px ${s.glow}, 0 0 40px ${s.glow}`,
+                  }}
+                >
                   {s.n}
                 </span>
                 <div className="h-px flex-1 ml-4 bg-gradient-to-r from-border to-transparent" />
