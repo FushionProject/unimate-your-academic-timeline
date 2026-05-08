@@ -74,48 +74,53 @@ function Navbar() {
 }
 
 const chips = [
-  { label: "Midterm", date: "Oct 14", side: "left", top: "12%", rot: -6 },
-  { label: "Essay Due", date: "Nov 2", side: "right", top: "18%", rot: 5 },
-  { label: "Quiz 3", date: "Sep 26", side: "left", top: "62%", rot: 4 },
-  { label: "Lab Report", date: "Oct 30", side: "right", top: "68%", rot: -7 },
-  { label: "Final Exam", date: "Dec 12", side: "right", top: "40%", rot: -3 },
-  { label: "Reading", date: "Sep 18", side: "left", top: "36%", rot: 8 },
+  { label: "Midterm", date: "Oct 14", tag: "CS 211", side: "left", top: "8%", rot: -8, delay: 0 },
+  { label: "Essay Due", date: "Nov 2", tag: "ENG 102", side: "right", top: "14%", rot: 6, delay: 0.6 },
+  { label: "Reading", date: "Sep 18", tag: "HIST 240", side: "left", top: "30%", rot: 5, delay: 1.2 },
+  { label: "Final Exam", date: "Dec 12", tag: "MATH 220", side: "right", top: "36%", rot: -4, delay: 1.8 },
+  { label: "Quiz 3", date: "Sep 26", tag: "BIO 101", side: "left", top: "58%", rot: 4, delay: 2.4 },
+  { label: "Lab Report", date: "Oct 30", tag: "CHEM 110", side: "right", top: "64%", rot: -7, delay: 3 },
 ] as const;
 
 function FloatingChip({
   label,
   date,
+  tag,
   side,
   top,
   rot,
-  i,
+  delay,
 }: {
   label: string;
   date: string;
+  tag: string;
   side: "left" | "right";
   top: string;
   rot: number;
-  i: number;
+  delay: number;
 }) {
   const positions =
     side === "left"
-      ? "left-[2%] sm:left-[6%] md:left-[10%]"
-      : "right-[2%] sm:right-[6%] md:right-[10%]";
+      ? "left-[3%] sm:left-[6%] md:left-[10%] lg:left-[14%]"
+      : "right-[3%] sm:right-[6%] md:right-[10%] lg:right-[14%]";
   return (
     <div
-      className={`pointer-events-none absolute hidden sm:flex ${positions} animate-float`}
+      className={`pointer-events-none absolute ${positions} animate-float`}
       style={{
         top,
         ["--r" as string]: `${rot}deg`,
-        animationDelay: `${i * 0.6}s`,
+        animationDelay: `${delay}s`,
         transform: `rotate(${rot}deg)`,
       }}
     >
-      <div className="flex items-center gap-2 rounded-full border border-border/70 bg-card/70 backdrop-blur-md px-3 py-1.5 text-xs shadow-[var(--shadow-card)] opacity-60">
-        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-        <span className="text-foreground/80 font-medium">{label}</span>
-        <span className="text-muted-foreground">·</span>
-        <span className="text-muted-foreground tabular-nums">{date}</span>
+      <div className="group/chip flex items-center gap-2.5 rounded-2xl border border-border/70 bg-card/80 backdrop-blur-xl px-3 py-2 text-xs shadow-[var(--shadow-card)] hover:opacity-100 transition-opacity opacity-90">
+        <div className="grid h-7 w-7 place-items-center rounded-lg bg-[image:var(--gradient-primary)] text-[10px] font-semibold text-primary-foreground shadow-[var(--shadow-glow)]">
+          {date.split(" ")[1]}
+        </div>
+        <div className="flex flex-col leading-tight pr-1">
+          <span className="text-foreground font-semibold">{label}</span>
+          <span className="text-[10px] text-muted-foreground tabular-nums">{tag} · {date}</span>
+        </div>
       </div>
     </div>
   );
@@ -124,6 +129,18 @@ function FloatingChip({
 function Hero() {
   return (
     <section className="relative overflow-hidden">
+      {/* aurora blobs */}
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div
+          className="absolute -top-40 left-1/4 h-[500px] w-[500px] rounded-full opacity-40 blur-3xl animate-blob"
+          style={{ background: "radial-gradient(circle, oklch(0.68 0.2 285 / 0.5), transparent 70%)" }}
+        />
+        <div
+          className="absolute top-20 right-1/4 h-[420px] w-[420px] rounded-full opacity-30 blur-3xl animate-blob"
+          style={{ background: "radial-gradient(circle, oklch(0.78 0.18 320 / 0.5), transparent 70%)", animationDelay: "5s" }}
+        />
+      </div>
+
       {/* dot grid */}
       <div
         className="absolute inset-0 -z-10"
@@ -141,19 +158,19 @@ function Hero() {
       />
 
       {chips.map((c, i) => (
-        <FloatingChip key={c.label} {...c} i={i} />
+        <FloatingChip key={c.label} {...c} />
       ))}
 
       <div className="mx-auto max-w-3xl px-6 pt-20 pb-10 text-center sm:pt-28">
-        <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-card/50 backdrop-blur px-3 py-1 text-xs text-muted-foreground">
-          <Sparkles className="h-3 w-3 text-primary" />
+        <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-primary/20 bg-card/50 backdrop-blur px-3 py-1 text-xs text-muted-foreground shadow-[0_0_30px_-10px_var(--primary)]">
+          <Sparkles className="h-3 w-3 text-primary animate-twinkle" />
           <span>Built for students, by students</span>
         </div>
 
         <h1 className="font-serif-display mt-6 text-5xl leading-[1.05] sm:text-6xl md:text-7xl text-foreground">
           Academic planning,
           <br />
-          <span className="italic text-transparent bg-clip-text bg-[image:var(--gradient-primary)]">
+          <span className="italic text-transparent bg-clip-text bg-[image:var(--gradient-primary)] animate-gradient">
             organized clearly.
           </span>
         </h1>
@@ -193,13 +210,19 @@ function InputCard() {
 
   return (
     <div className="relative">
-      {/* glow */}
+      {/* outer glow halo */}
       <div
         aria-hidden
-        className="absolute -inset-px rounded-3xl opacity-60 blur-2xl -z-10"
+        className="absolute -inset-8 rounded-[2rem] opacity-40 blur-3xl -z-10 animate-pulse-glow"
         style={{ background: "var(--gradient-primary)" }}
       />
-      <div className="rounded-3xl border border-border bg-card/80 backdrop-blur-xl p-2 shadow-[var(--shadow-card)]">
+      {/* gradient border */}
+      <div
+        aria-hidden
+        className="absolute -inset-px rounded-3xl opacity-80 -z-10 animate-gradient"
+        style={{ background: "linear-gradient(135deg, oklch(0.68 0.2 285), oklch(0.78 0.18 320), oklch(0.68 0.2 285))" }}
+      />
+      <div className="relative rounded-3xl border border-border/60 bg-card/90 backdrop-blur-xl p-2 shadow-[var(--shadow-card)]">
         <div className="flex items-center gap-1 rounded-2xl bg-secondary/60 p-1">
           <TabButton active={tab === "pdf"} onClick={() => setTab("pdf")}>
             <Upload className="h-3.5 w-3.5" /> Upload PDF
