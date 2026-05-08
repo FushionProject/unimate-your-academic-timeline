@@ -88,7 +88,7 @@ function Hero() {
         />
         <div
           className="absolute top-40 left-1/2 h-[360px] w-[360px] rounded-full opacity-25 blur-3xl animate-blob"
-          style={{ background: "radial-gradient(circle, oklch(0.9 0.32 140 / 0.45), transparent 70%)", animationDelay: "10s" }}
+          style={{ background: "radial-gradient(circle, oklch(0.7 0.3 350 / 0.45), transparent 70%)", animationDelay: "10s" }}
         />
       </div>
 
@@ -121,7 +121,7 @@ function Hero() {
             className="italic animate-tri-gradient bg-clip-text text-transparent"
             style={{
               backgroundImage:
-                "linear-gradient(90deg, #FF006E, #00D4FF, #9B59B6, #FF006E)",
+                "linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
               backgroundSize: "300% 100%",
               WebkitBackgroundClip: "text",
             }}
@@ -177,7 +177,7 @@ function InputCard() {
         className="absolute -inset-px rounded-3xl opacity-80 -z-10"
         style={{
           background:
-            "linear-gradient(135deg, var(--neon-blue), var(--neon-lime), var(--neon-pink), var(--neon-yellow))",
+            "linear-gradient(135deg, #FF006E, #00D4FF, #FF006E)",
         }}
       />
       <div className="relative rounded-3xl border border-border/60 bg-card/90 backdrop-blur-xl p-2 shadow-[var(--shadow-card)]">
@@ -242,7 +242,7 @@ function InputCard() {
             className="group mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold text-white transition-transform hover:scale-[1.01] active:scale-[0.99] animate-tri-gradient"
             style={{
               backgroundImage:
-                "linear-gradient(90deg, #FF006E, #00D4FF, #9B59B6, #FF006E)",
+                "linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
               backgroundSize: "300% 100%",
               boxShadow:
                 "0 0 30px rgba(255, 0, 110, 0.4), 0 0 80px rgba(0, 212, 255, 0.25)",
@@ -285,22 +285,22 @@ const steps = [
     n: "01",
     title: "Upload your syllabus",
     body: "Drop a PDF or paste the text. Works for any course, any format, any prof's chaotic Word doc.",
-    color: "var(--neon-blue)",
-    glow: "oklch(0.85 0.2 220 / 0.55)",
+    color: "#FF006E",
+    glow: "rgba(255, 0, 110, 0.55)",
   },
   {
     n: "02",
     title: "AI maps every date",
     body: "Midterms, problem sets, readings, labs — extracted, categorized, and laid out on a clean timeline.",
-    color: "var(--neon-yellow)",
-    glow: "oklch(0.94 0.22 100 / 0.55)",
+    color: "#00D4FF",
+    glow: "rgba(0, 212, 255, 0.55)",
   },
   {
     n: "03",
     title: "Export to your calendar",
     body: "One click to Google, Apple, or Outlook. Your whole semester, synced everywhere you live.",
-    color: "var(--neon-pink)",
-    glow: "oklch(0.7 0.3 350 / 0.55)",
+    color: "#FF006E",
+    glow: "rgba(255, 0, 110, 0.55)",
   },
 ];
 
