@@ -15,6 +15,10 @@ dist-ssr
 .tanstack/**
 .nitro
 *.local
+.env.local.save
+
+# Unrelated project accidentally nested in this folder — not part of UniMate
+goplatinum_export/
 
 # Wrangler / Cloudflare
 .wrangler/

@@ -9,6 +9,13 @@ import {
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
+import { ThemeProvider } from "../components/theme-provider";
+import { AuthProvider } from "../lib/auth-context";
+import { Sidebar } from "../components/sidebar";
+import { Navbar } from "../components/navbar";
+import { MusicPlayer } from "../components/music-player";
+import { PomodoroTimer } from "../components/pomodoro-timer";
+import { DateWidget } from "../components/date-widget";
 
 function NotFoundComponent() {
   return (
@@ -97,10 +104,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+// Runs before first paint so the stored theme applies without a flash. The
+// class it adds isn't in the server HTML, so <html> needs
+// suppressHydrationWarning to avoid a React hydration mismatch.
+const themeInitScript = `(function(){try{var t=localStorage.getItem("theme")||"light";document.documentElement.classList.add(t);}catch(e){}})();`;
+
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <HeadContent />
       </head>
       <body>
@@ -116,7 +129,22 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      <AuthProvider>
+        <ThemeProvider>
+          <div className="min-h-screen flex flex-col">
+            <Navbar />
+            <div className="flex flex-1">
+              <Sidebar />
+              <div className="flex-1 ml-16 p-6">
+                <DateWidget />
+                <Outlet />
+              </div>
+            </div>
+            <PomodoroTimer />
+            <MusicPlayer />
+          </div>
+        </ThemeProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

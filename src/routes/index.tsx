@@ -1,425 +1,207 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, useRef } from "react";
-import {
-  Upload,
-  FileText,
-  Sun,
-  Moon,
-  Sparkles,
-  CalendarDays,
-  ShieldCheck,
-  Zap,
-  ArrowRight,
-  GraduationCap,
-} from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowRight, Brain, FileText, Calendar, Sparkles, BookOpen, NotebookPen, CalendarCheck, Telescope } from "lucide-react";
+import { useTheme } from "../components/theme-provider";
 
 export const Route = createFileRoute("/")({
   component: Index,
 });
 
-function useTheme() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
-  useEffect(() => {
-    const stored = (typeof window !== "undefined" && localStorage.getItem("theme")) as
-      | "dark"
-      | "light"
-      | null;
-    const initial = stored ?? "dark";
-    setTheme(initial);
-    document.documentElement.classList.toggle("dark", initial === "dark");
-  }, []);
-  const toggle = () => {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.documentElement.classList.toggle("dark", next === "dark");
-    localStorage.setItem("theme", next);
-  };
-  return { theme, toggle };
-}
-
-function Logo() {
-  return (
-    <div className="flex items-center gap-2">
-      <div
-        className="relative grid h-8 w-8 place-items-center rounded-lg shadow-[var(--shadow-glow)]"
-        style={{ backgroundImage: "linear-gradient(135deg, #FF006E, #00D4FF)" }}
-      >
-        <GraduationCap className="h-4 w-4 text-white" strokeWidth={2.5} />
-      </div>
-      <span className="font-serif-display text-2xl tracking-tight text-foreground">
-        UniMate
-      </span>
-    </div>
-  );
-}
-
-function Navbar() {
-  const { theme, toggle } = useTheme();
-  return (
-    <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/60 border-b border-border/60">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <Logo />
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggle}
-            aria-label="Toggle theme"
-            className="grid h-9 w-9 place-items-center rounded-full border border-border bg-card/60 text-muted-foreground transition hover:text-foreground hover:bg-card"
-          >
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
-          <button className="hidden sm:inline-flex h-9 items-center rounded-full border border-border bg-card/60 px-4 text-sm font-medium text-foreground transition hover:bg-card">
-            Sign in
-          </button>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-function Hero() {
-  return (
-    <section className="relative overflow-hidden">
-      {/* aurora blobs */}
-      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div
-          className="absolute -top-40 left-1/4 h-[500px] w-[500px] rounded-full opacity-40 blur-3xl animate-blob"
-          style={{ background: "radial-gradient(circle, oklch(0.7 0.3 350 / 0.45), transparent 70%)" }}
-        />
-        <div
-          className="absolute top-20 right-1/4 h-[420px] w-[420px] rounded-full opacity-35 blur-3xl animate-blob"
-          style={{ background: "radial-gradient(circle, oklch(0.85 0.2 220 / 0.5), transparent 70%)", animationDelay: "5s" }}
-        />
-        <div
-          className="absolute top-40 left-1/2 h-[360px] w-[360px] rounded-full opacity-25 blur-3xl animate-blob"
-          style={{ background: "radial-gradient(circle, oklch(0.7 0.3 350 / 0.45), transparent 70%)", animationDelay: "10s" }}
-        />
-      </div>
-
-      {/* dot grid */}
-      <div
-        className="absolute inset-0 -z-10"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle, var(--grid-color) 1px, transparent 1px)",
-          backgroundSize: "24px 24px",
-          maskImage:
-            "radial-gradient(ellipse 80% 60% at 50% 30%, black, transparent 80%)",
-        }}
-      />
-      <div
-        className="absolute inset-0 -z-10"
-        style={{ background: "var(--gradient-hero)" }}
-      />
-
-      <div className="mx-auto max-w-3xl px-6 pt-20 pb-10 text-center sm:pt-28">
-        <div
-          className="mx-auto inline-flex items-center gap-2 rounded-full bg-card/50 backdrop-blur px-3 py-1 text-xs text-muted-foreground"
-          style={{
-            border: "1px solid transparent",
-            backgroundImage:
-              "linear-gradient(var(--card), var(--card)), linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
-            backgroundOrigin: "border-box",
-            backgroundClip: "padding-box, border-box",
-            boxShadow:
-              "0 0 30px -10px rgba(255, 0, 110, 0.5), 0 0 30px -10px rgba(0, 212, 255, 0.4)",
-          }}
-        >
-          <Sparkles
-            className="h-3 w-3 animate-twinkle"
-            style={{ color: "#FF006E" }}
-          />
-          <span>Built for students, by students</span>
-        </div>
-
-        <h1 className="font-serif-display mt-6 text-5xl leading-[1.05] sm:text-6xl md:text-7xl text-foreground">
-          Academic planning,
-          <br />
-          <span
-            className="italic animate-tri-gradient bg-clip-text text-transparent"
-            style={{
-              backgroundImage:
-                "linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
-              backgroundSize: "300% 100%",
-              WebkitBackgroundClip: "text",
-            }}
-          >
-            organized clearly.
-          </span>
-        </h1>
-
-        <p className="mx-auto mt-6 max-w-xl text-base sm:text-lg text-muted-foreground">
-          Upload your syllabus. UniMate extracts every deadline, exam, quiz, and
-          assignment — and maps your entire semester onto a calendar you can actually use.
-        </p>
-      </div>
-
-      <div className="relative mx-auto max-w-2xl px-6 pb-24">
-        <InputCard />
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-xs">
-          <Pill icon={<Zap className="h-3.5 w-3.5" />} text="Results in 10 seconds" />
-          <Pill icon={<CalendarDays className="h-3.5 w-3.5" />} text="Exports to any calendar" />
-          <Pill icon={<ShieldCheck className="h-3.5 w-3.5" />} text="No account needed" />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Pill({ icon, text }: { icon: React.ReactNode; text: string }) {
-  return (
-    <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/60 backdrop-blur px-3 py-1.5 text-muted-foreground">
-      <span
-        className="animate-tri-gradient bg-clip-text text-transparent"
-        style={{
-          backgroundImage:
-            "linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
-          backgroundSize: "300% 100%",
-          color: "transparent",
-        }}
-      >
-        {icon}
-      </span>
-      <span>{text}</span>
-    </div>
-  );
-}
-
-function InputCard() {
-  const [tab, setTab] = useState<"pdf" | "text">("pdf");
-  const [filename, setFilename] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+function Index() {
+  const { theme } = useTheme();
 
   return (
-    <div className="relative">
-      {/* outer glow halo */}
-      <div
-        aria-hidden
-        className="absolute -inset-8 rounded-[2rem] opacity-40 blur-3xl -z-10 animate-pulse-glow"
-        style={{ background: "var(--gradient-primary)" }}
-      />
-      {/* neon border */}
-      <div
-        aria-hidden
-        className="absolute -inset-px rounded-3xl opacity-80 -z-10"
-        style={{
-          background:
-            "linear-gradient(135deg, #FF006E, #00D4FF, #FF006E)",
-        }}
-      />
-      <div className="relative rounded-3xl border border-border/60 bg-card/90 backdrop-blur-xl p-2 shadow-[var(--shadow-card)]">
-        <div className="flex items-center gap-1 rounded-2xl bg-secondary/60 p-1">
-          <TabButton active={tab === "pdf"} onClick={() => setTab("pdf")}>
-            <Upload className="h-3.5 w-3.5" /> Upload PDF
-          </TabButton>
-          <TabButton active={tab === "text"} onClick={() => setTab("text")}>
-            <FileText className="h-3.5 w-3.5" /> Paste text
-          </TabButton>
-        </div>
-
-        <div className="p-4 sm:p-6">
-          {tab === "pdf" ? (
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                const f = e.dataTransfer.files?.[0];
-                if (f) setFilename(f.name);
-              }}
-              onClick={() => inputRef.current?.click()}
-              className={`group relative cursor-pointer rounded-2xl border-2 border-dashed transition-all ${
-                dragOver
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/60 hover:bg-secondary/40"
-              } px-6 py-12 text-center`}
-            >
-              <input
-                ref={inputRef}
-                type="file"
-                accept="application/pdf"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) setFilename(f.name);
+    <div className="min-h-screen bg-background text-foreground">
+      <main>
+        {/* Hero Section */}
+        <section className="relative py-[140px]">
+          <div className="mx-auto max-w-4xl px-6 text-center">
+            <h1 className="font-serif-display text-5xl sm:text-6xl md:text-7xl font-medium tracking-tight text-foreground mb-6">
+              Your entire academic life, in one place
+            </h1>
+            <p className="mx-auto max-w-2xl text-[18px] text-[#555555] mb-8">
+              Add your classes, grades, and due dates — then let AI help you actually stay on top of it all
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Link
+                to="/planner"
+                className={`inline-flex items-center justify-center gap-2 rounded-[50px] px-8 py-4 text-base font-bold transition-transform hover:scale-[1.02] active:scale-[0.98] ${theme === "light" ? "bg-[#F5C518] text-[#1a1a1a]" : "text-white animate-tri-gradient"}`}
+                style={{
+                  backgroundImage: theme === "light" ? "none" : "linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
+                  backgroundSize: "300% 100%",
+                  boxShadow: theme === "light" ? "none" : "0 0 30px rgba(255, 0, 110, 0.4), 0 0 80px rgba(0, 212, 255, 0.25)",
+                  padding: theme === "light" ? "16px 32px" : "",
                 }}
-              />
-              <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-secondary text-primary group-hover:scale-110 transition-transform">
-                <Upload className="h-5 w-5" />
-              </div>
-              <p className="mt-4 text-sm font-medium text-foreground">
-                {filename ?? "Drop your syllabus PDF here"}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {filename ? "Ready to map" : "or click to browse · PDF up to 10MB"}
-              </p>
+              >
+                Get Started
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                to="/ask"
+                className="text-sm text-[#555555] hover:underline transition-colors"
+              >
+                Try Ask UniMate
+              </Link>
             </div>
-          ) : (
-            <textarea
-              placeholder="Paste your syllabus text here — assignments, exam dates, weekly readings…"
-              className="w-full resize-none rounded-2xl border border-border bg-secondary/40 p-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring min-h-[180px]"
-            />
-          )}
+          </div>
+        </section>
 
-          <button
-            className="group mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold text-white transition-transform hover:scale-[1.01] active:scale-[0.99] animate-tri-gradient"
-            style={{
-              backgroundImage:
-                "linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
-              backgroundSize: "300% 100%",
-              boxShadow:
-                "0 0 30px rgba(255, 0, 110, 0.4), 0 0 80px rgba(0, 212, 255, 0.25)",
-            }}
-          >
-            Map My Semester
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition ${
-        active
-          ? "bg-card text-foreground shadow-[var(--shadow-card)]"
-          : "text-muted-foreground hover:text-foreground"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-const steps = [
-  {
-    n: "01",
-    title: "Upload your syllabus",
-    body: "Drop a PDF or paste the text. Works for any course, any format, any prof's chaotic Word doc.",
-    color: "#FF006E",
-    glow: "rgba(255, 0, 110, 0.55)",
-  },
-  {
-    n: "02",
-    title: "AI maps every date",
-    body: "Midterms, problem sets, readings, labs — extracted, categorized, and laid out on a clean timeline.",
-    color: "#00D4FF",
-    glow: "rgba(0, 212, 255, 0.55)",
-  },
-  {
-    n: "03",
-    title: "Export to your calendar",
-    body: "One click to Google, Apple, or Outlook. Your whole semester, synced everywhere you live.",
-    color: "#FF006E",
-    glow: "rgba(255, 0, 110, 0.55)",
-  },
-];
-
-function HowItWorks() {
-  return (
-    <section className="relative border-t border-border/60 py-24">
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="mx-auto max-w-2xl text-center">
-          <p
-            className="text-xs uppercase tracking-[0.2em] animate-tri-gradient bg-clip-text text-transparent"
-            style={{
-              backgroundImage:
-                "linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
-              backgroundSize: "300% 100%",
-            }}
-          >
-            How it works
-          </p>
-          <h2 className="font-serif-display mt-3 text-4xl sm:text-5xl text-foreground">
-            From syllabus to schedule, in three steps.
-          </h2>
-        </div>
-
-        <div className="mt-16 grid gap-6 md:grid-cols-3">
-          {steps.map((s, i) => (
-            <div
-              key={s.n}
-              className="group relative rounded-2xl border border-border bg-card/60 p-6 backdrop-blur transition hover:border-primary/50 hover:bg-card"
-            >
-              <div className="flex items-center justify-between">
-                <span
-                  className="font-serif-display text-5xl"
+        {/* 3-Step Setup Section */}
+        <section className="py-20">
+          <div className="mx-auto max-w-6xl px-6">
+            <div className="text-center mb-12">
+              <h2 className="font-serif-display text-xl font-normal text-foreground/70 mb-4 tracking-wide uppercase">
+                Get started in 3 steps
+              </h2>
+            </div>
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="text-center">
+                <div className="h-20 w-20 rounded-2xl flex items-center justify-center mx-auto mb-6"
                   style={{
-                    color: s.color,
-                    textShadow: `0 0 18px ${s.glow}, 0 0 40px ${s.glow}`,
+                    background: theme === "light" ? "transparent" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
+                    border: theme === "light" ? "2px solid #F5C518" : "none",
+                    boxShadow: theme === "light" ? "0 4px 12px rgba(255, 215, 0, 0.15)" : "none",
                   }}
                 >
-                  {s.n}
-                </span>
-                <div className="h-px flex-1 ml-4 bg-gradient-to-r from-border to-transparent" />
+                  <NotebookPen className="h-10 w-10 text-[#F5C518]" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">Add your courses</h3>
+                <p className="text-muted-foreground">Enter your classes and grades in seconds</p>
               </div>
-              <h3 className="mt-6 text-lg font-semibold text-foreground">{s.title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{s.body}</p>
-              {i < steps.length - 1 && (
-                <ArrowRight className="hidden md:block absolute -right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground/40" />
-              )}
+              <div className="text-center">
+                <div className="h-20 w-20 rounded-2xl flex items-center justify-center mx-auto mb-6"
+                  style={{
+                    background: theme === "light" ? "transparent" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
+                    border: theme === "light" ? "2px solid #F5C518" : "none",
+                    boxShadow: theme === "light" ? "0 4px 12px rgba(255, 215, 0, 0.15)" : "none",
+                  }}
+                >
+                  <CalendarCheck className="h-10 w-10 text-[#F5C518]" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">Track assignments</h3>
+                <p className="text-muted-foreground">Log deadlines and stay ahead of due dates</p>
+              </div>
+              <div className="text-center">
+                <div className="h-20 w-20 rounded-2xl flex items-center justify-center mx-auto mb-6"
+                  style={{
+                    background: theme === "light" ? "transparent" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
+                    border: theme === "light" ? "2px solid #F5C518" : "none",
+                    boxShadow: theme === "light" ? "0 4px 12px rgba(255, 215, 0, 0.15)" : "none",
+                  }}
+                >
+                  <Telescope className="h-10 w-10 text-[#F5C518]" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">Study smarter</h3>
+                <p className="text-muted-foreground">AI that actually knows your workload</p>
+              </div>
             </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
+          </div>
+        </section>
 
-function Footer() {
-  return (
-    <footer className="border-t border-border/60 py-10">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 sm:flex-row">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Logo />
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Made for students who'd rather be doing literally anything else. © {new Date().getFullYear()} UniMate
-        </p>
-      </div>
-    </footer>
-  );
-}
+        {/* Feature Grid Section */}
+        <section className="py-20">
+          <div className="mx-auto max-w-6xl px-6">
+            <div className="text-center mb-12">
+              <h2 className="font-serif-display text-3xl sm:text-4xl font-medium text-foreground mb-4">
+                What UniMate helps you do
+              </h2>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="rounded-2xl border p-6 hover:border-primary/50 transition-colors border-border bg-card/60">
+                <div className="h-12 w-12 rounded-xl flex items-center justify-center mb-4"
+                  style={{
+                    background: theme === "light" ? "#F5C518" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
+                  }}
+                >
+                  <Brain className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Ask UniMate</h3>
+                <p className="text-sm text-muted-foreground">Answers based on the classes and grades you enter</p>
+              </div>
+              <div className="rounded-2xl border p-6 hover:border-primary/50 transition-colors border-border bg-card/60">
+                <div className="h-12 w-12 rounded-xl flex items-center justify-center mb-4"
+                  style={{
+                    background: theme === "light" ? "#F5C518" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
+                  }}
+                >
+                  <FileText className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Smart Notes</h3>
+                <p className="text-sm text-muted-foreground">Organized by the courses you add</p>
+              </div>
+              <div className="rounded-2xl border p-6 hover:border-primary/50 transition-colors border-border bg-card/60">
+                <div className="h-12 w-12 rounded-xl flex items-center justify-center mb-4"
+                  style={{
+                    background: theme === "light" ? "#F5C518" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
+                  }}
+                >
+                  <Calendar className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Homework Tracker</h3>
+                <p className="text-sm text-muted-foreground">Add and track every assignment yourself</p>
+              </div>
+              <div className="rounded-2xl border p-6 hover:border-primary/50 transition-colors border-border bg-card/60">
+                <div className="h-12 w-12 rounded-xl flex items-center justify-center mb-4"
+                  style={{
+                    background: theme === "light" ? "#F5C518" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
+                  }}
+                >
+                  <BookOpen className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Study Planner</h3>
+                <p className="text-sm text-muted-foreground">Built around your real deadlines</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-function Index() {
-  return (
-    <div className="relative min-h-screen bg-background text-foreground overflow-hidden">
-      {/* ambient neon room glows */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 -z-10"
-        style={{
-          backgroundImage: [
-            "radial-gradient(ellipse 60% 40% at 0% 0%, rgba(255, 0, 110, 0.18), transparent 60%)",
-            "radial-gradient(ellipse 60% 40% at 100% 0%, rgba(0, 212, 255, 0.14), transparent 60%)",
-            "radial-gradient(ellipse 70% 50% at 100% 100%, rgba(155, 89, 182, 0.18), transparent 65%)",
-            "radial-gradient(ellipse 60% 40% at 0% 100%, rgba(0, 212, 255, 0.10), transparent 60%)",
-            "radial-gradient(ellipse 80% 60% at 50% 50%, rgba(13, 0, 21, 0.6), transparent 80%)",
-          ].join(","),
-        }}
-      />
-      <Navbar />
-      <main>
-        <Hero />
-        <HowItWorks />
+        {/* Footer CTA Section */}
+        <section className="py-20">
+          <div className="mx-auto max-w-4xl px-6 text-center">
+            <h2 className="font-serif-display text-3xl sm:text-4xl font-medium text-foreground mb-6">
+              Built for students who'd rather be doing anything else
+            </h2>
+            <Link
+              to="/planner"
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-8 py-4 text-base font-bold transition-transform hover:scale-[1.02] active:scale-[0.98] ${theme === "light" ? "bg-[#F5C518] text-[#1a1a1a]" : "text-white animate-tri-gradient"}`}
+              style={{
+                backgroundImage: theme === "light" ? "none" : "linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
+                backgroundSize: "300% 100%",
+                boxShadow: theme === "light" ? "none" : "0 0 30px rgba(255, 0, 110, 0.4), 0 0 80px rgba(0, 212, 255, 0.25)",
+              }}
+            >
+              Get Started Free
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </section>
+
+        {/* Footer */}
+        <footer className="border-t py-12 border-border/60">
+          <div className="mx-auto max-w-6xl px-6">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded flex items-center justify-center"
+                  style={{
+                    background: theme === "light" ? "#F5C518" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
+                  }}
+                >
+                  <span className="text-white font-bold text-xs">U</span>
+                </div>
+                <span className="font-serif-display text-lg text-foreground">UniMate</span>
+              </div>
+              <div className="flex items-center gap-6">
+                <Link to="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Home</Link>
+                <Link to="/ask" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Ask UniMate</Link>
+                <Link to="/planner" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Course Planner</Link>
+                <Link to="/bulletin" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Bulletin Board</Link>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Made for students who'd rather be doing anything else.
+              </p>
+            </div>
+          </div>
+        </footer>
       </main>
-      <Footer />
     </div>
   );
 }
