@@ -15,6 +15,26 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
+type SearchResult = {
+  title: string;
+  link: string;
+  snippet?: string;
+  description?: string;
+};
+
+type ChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
+type GroqChatResponse = {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+};
+
 // Handle /api/ask-unimate endpoint
 async function handleAskUniMate(request: Request): Promise<Response> {
   try {
@@ -43,7 +63,8 @@ async function handleAskUniMate(request: Request): Promise<Response> {
       console.warn("SERPAPI_KEY not set, returning mock data");
       return new Response(
         JSON.stringify({
-          answer: "This is a mock answer for testing. The SerpAPI key is not configured, so I cannot perform real web searches. Please add SERPAPI_KEY to your environment variables.",
+          answer:
+            "This is a mock answer for testing. The SerpAPI key is not configured, so I cannot perform real web searches. Please add SERPAPI_KEY to your environment variables.",
           webResults: [
             {
               title: "Mock Web Result 1",
@@ -61,13 +82,13 @@ async function handleAskUniMate(request: Request): Promise<Response> {
         {
           status: 200,
           headers: { "content-type": "application/json" },
-        }
+        },
       );
     }
 
     // Call SerpAPI for web search
     const serpResponse = await fetch(
-      `https://serpapi.com/search?engine=google&q=${encodeURIComponent(question)}&api_key=${serpApiKey}&num=5`
+      `https://serpapi.com/search?engine=google&q=${encodeURIComponent(question)}&api_key=${serpApiKey}&num=5`,
     );
 
     if (!serpResponse.ok) {
@@ -79,11 +100,11 @@ async function handleAskUniMate(request: Request): Promise<Response> {
       });
     }
 
-    const serpData = await serpResponse.json();
+    const serpData = (await serpResponse.json()) as { organic_results?: SearchResult[] };
     const organicResults = serpData.organic_results || [];
 
     // Get top 3 web results
-    const top3Results = organicResults.slice(0, 3).map((item: any) => ({
+    const top3Results = organicResults.slice(0, 3).map((item) => ({
       title: item.title,
       link: item.link,
       snippet: item.snippet || item.description || "",
@@ -96,19 +117,21 @@ async function handleAskUniMate(request: Request): Promise<Response> {
       console.warn("GROQ_API_KEY not set, returning web results only");
       return new Response(
         JSON.stringify({
-          answer: "AI answer not available. Please add GROQ_API_KEY to your environment variables to enable AI-powered answers.",
+          answer:
+            "AI answer not available. Please add GROQ_API_KEY to your environment variables to enable AI-powered answers.",
           webResults: top3Results,
           relatedConcepts: [],
         }),
         {
           status: 200,
           headers: { "content-type": "application/json" },
-        }
+        },
       );
     }
 
     // Build system prompt with class context
-    let systemPrompt = "You are an academic tutor. Given this question and web search results, provide a clear concise answer with step-by-step explanation if needed.";
+    let systemPrompt =
+      "You are an academic tutor. Given this question and web search results, provide a clear concise answer with step-by-step explanation if needed.";
     if (classContext && classContext.length > 0) {
       systemPrompt += ` The student is currently taking these courses: ${classContext.join(", ")}. Tailor your explanations to be relevant to their coursework.`;
     }
@@ -117,7 +140,7 @@ async function handleAskUniMate(request: Request): Promise<Response> {
     }
 
     // Build messages array with conversation history
-    const messages: any[] = [
+    const messages: ChatMessage[] = [
       {
         role: "system",
         content: systemPrompt,
@@ -125,7 +148,7 @@ async function handleAskUniMate(request: Request): Promise<Response> {
     ];
 
     // Add conversation history if provided
-    if (conversationHistory && conversationHistory.length > 0) {
+    if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
       messages.push(...conversationHistory);
     }
 
@@ -137,7 +160,7 @@ async function handleAskUniMate(request: Request): Promise<Response> {
       userContent = `Please provide a more detailed breakdown of the previous answer, going deeper into the concepts and providing additional context or examples.`;
     } else {
       const context = top3Results
-        .map((result: any, i: number) => `Source ${i + 1}: ${result.title}\n${result.snippet}`)
+        .map((result, i) => `Source ${i + 1}: ${result.title}\n${result.snippet}`)
         .join("\n\n");
       userContent = `Question: ${question}\n\nWeb Search Results:\n${context}\n\nPlease provide a helpful answer based on these results.`;
     }
@@ -151,7 +174,7 @@ async function handleAskUniMate(request: Request): Promise<Response> {
     const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${groqApiKey}`,
+        Authorization: `Bearer ${groqApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -171,7 +194,7 @@ async function handleAskUniMate(request: Request): Promise<Response> {
       });
     }
 
-    const groqData = await groqResponse.json();
+    const groqData = (await groqResponse.json()) as GroqChatResponse;
     const answer = groqData.choices?.[0]?.message?.content || "No answer generated.";
 
     console.log("AI answer generated:", answer);
@@ -183,7 +206,7 @@ async function handleAskUniMate(request: Request): Promise<Response> {
         const conceptsResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${groqApiKey}`,
+            Authorization: `Bearer ${groqApiKey}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -191,7 +214,8 @@ async function handleAskUniMate(request: Request): Promise<Response> {
             messages: [
               {
                 role: "system",
-                content: "You are an academic tutor. Based on the question and answer, suggest 2-3 related concepts the student might want to explore next. Return ONLY a JSON array of strings, no other text.",
+                content:
+                  "You are an academic tutor. Based on the question and answer, suggest 2-3 related concepts the student might want to explore next. Return ONLY a JSON array of strings, no other text.",
               },
               {
                 role: "user",
@@ -204,7 +228,7 @@ async function handleAskUniMate(request: Request): Promise<Response> {
         });
 
         if (conceptsResponse.ok) {
-          const conceptsData = await conceptsResponse.json();
+          const conceptsData = (await conceptsResponse.json()) as GroqChatResponse;
           const conceptsText = conceptsData.choices?.[0]?.message?.content || "[]";
           try {
             relatedConcepts = JSON.parse(conceptsText);
@@ -247,14 +271,17 @@ async function handleDashboardAI(request: Request): Promise<Response> {
 
     if (!groqApiKey) {
       const mockResponses: Record<string, string> = {
-        "study-tonight": "Tonight, focus on Physics I — your lowest grade at 79%. Review the last problem set and redo any missed questions. Spend 45 minutes, then close with 15 minutes reviewing Calculus for the upcoming quiz.",
-        "on-track": "CS 101 (A-): On track for an A.\nCalculus II (B+): Push hard on the next quiz to secure an A-.\nEnglish Comp (A): Solid — maintain momentum.\nPhysics I (C+): At risk — needs dedicated attention this week to avoid a grade drop.",
-        "motivation": "You're carrying 4 courses and still maintaining above a 3.4 GPA. The Physics grade is the one thing standing between you and a 3.5+. Fix that, and this is a strong semester.",
-        "chat": "Based on your grades and upcoming deadlines, prioritize assignments due within 48 hours first, then spend 30 minutes daily on your weakest subject. Consistency beats cramming every time.",
+        "study-tonight":
+          "Tonight, focus on Physics I — your lowest grade at 79%. Review the last problem set and redo any missed questions. Spend 45 minutes, then close with 15 minutes reviewing Calculus for the upcoming quiz.",
+        "on-track":
+          "CS 101 (A-): On track for an A.\nCalculus II (B+): Push hard on the next quiz to secure an A-.\nEnglish Comp (A): Solid — maintain momentum.\nPhysics I (C+): At risk — needs dedicated attention this week to avoid a grade drop.",
+        motivation:
+          "You're carrying 4 courses and still maintaining above a 3.4 GPA. The Physics grade is the one thing standing between you and a 3.5+. Fix that, and this is a strong semester.",
+        chat: "Based on your grades and upcoming deadlines, prioritize assignments due within 48 hours first, then spend 30 minutes daily on your weakest subject. Consistency beats cramming every time.",
       };
       return new Response(
         JSON.stringify({ answer: mockResponses[type] || mockResponses["chat"] }),
-        { status: 200, headers: { "content-type": "application/json" } }
+        { status: 200, headers: { "content-type": "application/json" } },
       );
     }
 
@@ -262,13 +289,16 @@ async function handleDashboardAI(request: Request): Promise<Response> {
     let userMessage = "";
 
     if (type === "study-tonight") {
-      systemPrompt = "You are an academic advisor for a college student. Give a specific, actionable study recommendation for tonight based on their grades and upcoming assignments. Be direct — name the subject, say why, give a time estimate. Keep it under 120 words.";
+      systemPrompt =
+        "You are an academic advisor for a college student. Give a specific, actionable study recommendation for tonight based on their grades and upcoming assignments. Be direct — name the subject, say why, give a time estimate. Keep it under 120 words.";
       userMessage = `${academicContext}\n\nWhat should this student specifically study tonight?`;
     } else if (type === "on-track") {
-      systemPrompt = "You are an academic advisor. Analyze the student's current grades and give a brief course-by-course end-of-semester prediction. Be honest and specific. Format: \"Course name: current grade → projected outcome. One short note.\" Keep total response under 150 words.";
+      systemPrompt =
+        'You are an academic advisor. Analyze the student\'s current grades and give a brief course-by-course end-of-semester prediction. Be honest and specific. Format: "Course name: current grade → projected outcome. One short note." Keep total response under 150 words.';
       userMessage = `${academicContext}\n\nPredict the end-of-semester outcome per course.`;
     } else if (type === "motivation") {
-      systemPrompt = "You are a motivational academic coach. Write exactly 2-3 sentences that are SPECIFIC to this student's actual grades and situation — no generic platitudes. Reference their real numbers or specific challenges. Make it feel personal, not corporate.";
+      systemPrompt =
+        "You are a motivational academic coach. Write exactly 2-3 sentences that are SPECIFIC to this student's actual grades and situation — no generic platitudes. Reference their real numbers or specific challenges. Make it feel personal, not corporate.";
       userMessage = `${academicContext || "A college student working hard on their coursework."}\n\nWrite a brief, specific motivational message.`;
     } else if (type === "chat") {
       systemPrompt = `You are UniMate, an AI academic advisor for college students. You have the student's academic data below and can help with coursework questions, study strategies, grade analysis, and academic planning. Be helpful, specific, and concise (under 200 words per response).\n\n${academicContext}`;
@@ -280,7 +310,7 @@ async function handleDashboardAI(request: Request): Promise<Response> {
       });
     }
 
-    const messages: any[] = [{ role: "system", content: systemPrompt }];
+    const messages: ChatMessage[] = [{ role: "system", content: systemPrompt }];
 
     if (type === "chat" && chatHistory && Array.isArray(chatHistory)) {
       messages.push(...chatHistory.slice(-10));
@@ -311,7 +341,7 @@ async function handleDashboardAI(request: Request): Promise<Response> {
       });
     }
 
-    const groqData = await groqResponse.json();
+    const groqData = (await groqResponse.json()) as GroqChatResponse;
     const answer = groqData.choices?.[0]?.message?.content || "No response generated.";
 
     return new Response(JSON.stringify({ answer }), {
@@ -335,11 +365,15 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 // Shared Groq chat-completion call that expects a JSON payload back.
-async function callGroqJson(groqApiKey: string, systemPrompt: string, userContent: string): Promise<unknown> {
+async function callGroqJson(
+  groqApiKey: string,
+  systemPrompt: string,
+  userContent: string,
+): Promise<unknown> {
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${groqApiKey}`,
+      Authorization: `Bearer ${groqApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -404,7 +438,7 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
               }
             ]
             Only return the JSON array, no other text.`,
-      syllabusText
+      syllabusText,
     );
 
     return jsonResponse({ items });
@@ -433,9 +467,21 @@ async function handleExtractResources(request: Request): Promise<Response> {
       console.warn("GROQ_API_KEY not set, returning mock data for testing");
       return jsonResponse({
         resources: [
-          { type: "portal", title: "Canvas Course Portal", details: "https://canvas.university.edu/courses/cs101" },
-          { type: "textbook", title: "Introduction to Algorithms", details: "3rd Edition, ISBN: 978-0262033848" },
-          { type: "office_hours", title: "Professor Smith", details: "Mon/Wed 2-4pm, Building A, Room 301" },
+          {
+            type: "portal",
+            title: "Canvas Course Portal",
+            details: "https://canvas.university.edu/courses/cs101",
+          },
+          {
+            type: "textbook",
+            title: "Introduction to Algorithms",
+            details: "3rd Edition, ISBN: 978-0262033848",
+          },
+          {
+            type: "office_hours",
+            title: "Professor Smith",
+            details: "Mon/Wed 2-4pm, Building A, Room 301",
+          },
           { type: "contact", title: "Email", details: "smith@university.edu" },
         ],
       });
@@ -454,7 +500,7 @@ async function handleExtractResources(request: Request): Promise<Response> {
               }
             ]
             Only return the JSON array, no other text.`,
-      syllabusText
+      syllabusText,
     );
 
     return jsonResponse({ resources });
@@ -532,7 +578,7 @@ async function handleGenerateStudyMap(request: Request): Promise<Response> {
               }
             ]
             Only return the JSON array, no other text.`,
-      JSON.stringify(items, null, 2)
+      JSON.stringify(items, null, 2),
     );
 
     return jsonResponse({ study_tasks: studyTasks });
@@ -569,7 +615,12 @@ async function handleCanvasProxy(request: Request): Promise<Response> {
       return jsonResponse({ error: "Canvas URL must use https" }, 400);
     }
     const hostname = canvasUrl.hostname;
-    if (hostname === "localhost" || !hostname.includes(".") || /^[\d.]+$/.test(hostname) || hostname.includes(":")) {
+    if (
+      hostname === "localhost" ||
+      !hostname.includes(".") ||
+      /^[\d.]+$/.test(hostname) ||
+      hostname.includes(":")
+    ) {
       return jsonResponse({ error: "Invalid Canvas host" }, 400);
     }
     if (typeof path !== "string" || !path.startsWith("/api/v1/")) {
@@ -577,7 +628,7 @@ async function handleCanvasProxy(request: Request): Promise<Response> {
     }
 
     const upstream = await fetch(`${canvasUrl.origin}${path}`, {
-      headers: { "Authorization": `Bearer ${apiToken}` },
+      headers: { Authorization: `Bearer ${apiToken}` },
     });
 
     const body = await upstream.text();
@@ -600,7 +651,10 @@ async function getIsProFromToken(accessToken: string): Promise<boolean> {
   if (!supabaseUrl || !supabaseAnonKey) return false;
 
   try {
-    const res = await fetch(`${supabaseUrl}/rest/v1/profiles?select=is_pro`, {
+    // Reads the is_pro column from the public.profiles table ONLY — never
+    // raw_user_meta_data or any auth-user field, which a user can influence.
+    // RLS ("profiles_select_own") scopes this to the caller's own row.
+    const res = await fetch(`${supabaseUrl}/rest/v1/profiles?select=is_pro&limit=1`, {
       headers: {
         apikey: supabaseAnonKey,
         Authorization: `Bearer ${accessToken}`,
@@ -655,18 +709,23 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
     const userPrompt =
       typeof question === "string" && question.trim()
         ? question.trim()
-        : "This is a homework or study question captured from a screen. Identify the question and answer it clearly, showing your reasoning.";
+        : "This is a homework or study question captured from a screen. Identify the question and give a clear, direct answer.";
 
     const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${groqApiKey}`,
+        Authorization: `Bearer ${groqApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        // Groq's vision-capable model naming has shifted before — check
-        // console.groq.com/docs/models if this endpoint starts 404ing.
-        model: "llama-3.2-90b-vision-preview",
+        // Vision-capable model available on this Groq account (verified it
+        // reads text out of images). Groq's model lineup shifts often — if
+        // this 400s with model_decommissioned/model_not_found, hit
+        // GET /openai/v1/models and pick another that accepts image_url content.
+        model: "qwen/qwen3.6-27b",
+        // qwen is a reasoning model; without this it spends the whole token
+        // budget "thinking" and never reaches an answer. "none" turns that off.
+        reasoning_effort: "none",
         messages: [
           {
             role: "user",
@@ -688,7 +747,10 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
     }
 
     const groqData = await groqResponse.json();
-    const answer = groqData.choices?.[0]?.message?.content || "No answer generated.";
+    const raw = groqData.choices?.[0]?.message?.content || "No answer generated.";
+    // qwen is a reasoning model that emits a <think>...</think> block before
+    // the actual answer — strip it so the user only sees the answer.
+    const answer = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim() || raw.trim();
 
     return jsonResponse({ answer });
   } catch (error) {
@@ -717,8 +779,11 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
     const stripePriceId = process.env.STRIPE_PRICE_ID;
     if (!stripeSecretKey || !stripePriceId) {
       return jsonResponse(
-        { error: "Payments aren't configured yet. Add STRIPE_SECRET_KEY and STRIPE_PRICE_ID to your environment." },
-        501
+        {
+          error:
+            "Payments aren't configured yet. Add STRIPE_SECRET_KEY and STRIPE_PRICE_ID to your environment.",
+        },
+        501,
       );
     }
 
@@ -777,12 +842,16 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
 // Verifies a Stripe webhook signature (HMAC-SHA256 over "timestamp.payload")
 // using Web Crypto, since the Stripe SDK's own verifier isn't something that
 // can be assumed to work unmodified on Workers.
-async function verifyStripeSignature(payload: string, signatureHeader: string, secret: string): Promise<boolean> {
+async function verifyStripeSignature(
+  payload: string,
+  signatureHeader: string,
+  secret: string,
+): Promise<boolean> {
   const parts = Object.fromEntries(
     signatureHeader.split(",").map((part) => {
       const [key, value] = part.split("=");
       return [key, value];
-    })
+    }),
   );
   const timestamp = parts.t;
   const signature = parts.v1;
@@ -795,7 +864,7 @@ async function verifyStripeSignature(payload: string, signatureHeader: string, s
     encoder.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
   const signatureBuffer = await crypto.subtle.sign("HMAC", key, encoder.encode(signedPayload));
   const expectedSignature = Array.from(new Uint8Array(signatureBuffer))
@@ -823,7 +892,10 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 
     const signatureHeader = request.headers.get("Stripe-Signature");
     const payload = await request.text();
-    if (!signatureHeader || !(await verifyStripeSignature(payload, signatureHeader, webhookSecret))) {
+    if (
+      !signatureHeader ||
+      !(await verifyStripeSignature(payload, signatureHeader, webhookSecret))
+    ) {
       return new Response("Invalid signature", { status: 400 });
     }
 
@@ -870,7 +942,7 @@ let serverEntryPromise: Promise<ServerEntry> | undefined;
 async function getServerEntry(): Promise<ServerEntry> {
   if (!serverEntryPromise) {
     serverEntryPromise = import("@tanstack/react-start/server-entry").then(
-      (m) => ((m as { default?: ServerEntry }).default ?? (m as unknown as ServerEntry)),
+      (m) => (m as { default?: ServerEntry }).default ?? (m as unknown as ServerEntry),
     );
   }
   return serverEntryPromise;

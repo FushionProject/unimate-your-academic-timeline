@@ -35,7 +35,9 @@ export function DateWidget() {
       quoteIndex = parseInt(storedQuoteIndex, 10);
     } else {
       // Pick new quote for today
-      const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
+      const dayOfYear = Math.floor(
+        (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24),
+      );
       quoteIndex = dayOfYear % STUDY_QUOTES.length;
       localStorage.setItem(QUOTE_DATE_KEY, todayString);
       localStorage.setItem(QUOTE_STORAGE_KEY, quoteIndex.toString());
@@ -50,7 +52,11 @@ export function DateWidget() {
   }, []);
 
   const today = new Date();
-  const dateOptions: Intl.DateTimeFormatOptions = { weekday: "long", month: "long", day: "numeric" };
+  const dateOptions: Intl.DateTimeFormatOptions = {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  };
   const formattedDate = today.toLocaleDateString("en-US", dateOptions);
 
   return (

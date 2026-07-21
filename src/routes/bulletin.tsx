@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus, Globe, X, ExternalLink } from "lucide-react";
-import { useTheme } from "../components/theme-provider";
 import { useState, useEffect } from "react";
 
 export const Route = createFileRoute("/bulletin")({
@@ -15,7 +14,6 @@ interface Link {
 }
 
 function Bulletin() {
-  const { theme } = useTheme();
   const [links, setLinks] = useState<Link[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newLink, setNewLink] = useState({ title: "", url: "", classTag: "" });
@@ -51,13 +49,16 @@ function Bulletin() {
     setLinks(links.filter((link) => link.id !== id));
   };
 
-  const groupedLinks = links.reduce((acc, link) => {
-    if (!acc[link.classTag]) {
-      acc[link.classTag] = [];
-    }
-    acc[link.classTag].push(link);
-    return acc;
-  }, {} as Record<string, Link[]>);
+  const groupedLinks = links.reduce(
+    (acc, link) => {
+      if (!acc[link.classTag]) {
+        acc[link.classTag] = [];
+      }
+      acc[link.classTag].push(link);
+      return acc;
+    },
+    {} as Record<string, Link[]>,
+  );
 
   return (
     <div className="relative min-h-screen bg-background text-foreground">
@@ -74,12 +75,7 @@ function Bulletin() {
         <div className="flex justify-center mb-8">
           <button
             onClick={() => setIsModalOpen(true)}
-            className={`inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-base font-bold transition-transform hover:scale-[1.02] active:scale-[0.98] ${theme === "light" ? "bg-[#F5C518] text-[#1a1a1a]" : "text-white animate-tri-gradient"}`}
-            style={{
-              backgroundImage: theme === "light" ? "none" : "linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
-              backgroundSize: "300% 100%",
-              boxShadow: theme === "light" ? "none" : "0 0 30px rgba(255, 0, 110, 0.4), 0 0 80px rgba(0, 212, 255, 0.25)",
-            }}
+            className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-base font-bold transition-transform hover:scale-[1.02] active:scale-[0.98] bg-[#F5C518] text-[#1a1a1a]"
           >
             <Plus className="h-4 w-4" />
             Add New Link
@@ -88,7 +84,9 @@ function Bulletin() {
 
         {Object.keys(groupedLinks).length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-muted-foreground">No links saved yet. Add your first link to get started!</p>
+            <p className="text-muted-foreground">
+              No links saved yet. Add your first link to get started!
+            </p>
           </div>
         ) : (
           <div className="space-y-8">
@@ -96,7 +94,9 @@ function Bulletin() {
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([classTag, classLinks]) => (
                 <div key={classTag}>
-                  <h2 className="font-serif-display text-2xl font-medium text-foreground mb-4">{classTag}</h2>
+                  <h2 className="font-serif-display text-2xl font-medium text-foreground mb-4">
+                    {classTag}
+                  </h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {classLinks.map((link) => (
                       <div
@@ -110,15 +110,16 @@ function Bulletin() {
                           <X className="h-3 w-3" />
                         </button>
                         <div className="flex items-start gap-3 mb-3">
-                          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#FF006E] to-[#00D4FF] flex items-center justify-center flex-shrink-0"
-                            style={{
-                              background: "linear-gradient(135deg, #FF006E, #00D4FF)",
-                            }}
+                          <div
+                            className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                            style={{ background: "var(--gradient-primary)" }}
                           >
-                            <Globe className="h-4 w-4 text-white" />
+                            <Globe className="h-4 w-4 text-[#1a1a1a]" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-foreground text-sm truncate">{link.title}</h3>
+                            <h3 className="font-medium text-foreground text-sm truncate">
+                              {link.title}
+                            </h3>
                             <p className="text-xs text-muted-foreground">{classTag}</p>
                           </div>
                         </div>
@@ -142,10 +143,10 @@ function Bulletin() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div
-            className="rounded-2xl border p-6 w-full max-w-md border-border bg-card shadow-[var(--shadow-card)]"
-          >
-            <h2 className="font-serif-display text-2xl font-medium text-foreground mb-6">Add New Link</h2>
+          <div className="rounded-2xl border p-6 w-full max-w-md border-border bg-card shadow-[var(--shadow-card)]">
+            <h2 className="font-serif-display text-2xl font-medium text-foreground mb-6">
+              Add New Link
+            </h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Link Title</label>

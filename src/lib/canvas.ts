@@ -109,9 +109,16 @@ function canvasProxyFetch(apiUrl: string, apiToken: string, path: string): Promi
 }
 
 // Test Canvas connection
-export async function testCanvasConnection(apiUrl: string, apiToken: string): Promise<{ success: boolean; courses?: CanvasCourse[]; error?: string }> {
+export async function testCanvasConnection(
+  apiUrl: string,
+  apiToken: string,
+): Promise<{ success: boolean; courses?: CanvasCourse[]; error?: string }> {
   try {
-    const response = await canvasProxyFetch(apiUrl, apiToken, "/api/v1/courses?enrollment_state=active&per_page=100");
+    const response = await canvasProxyFetch(
+      apiUrl,
+      apiToken,
+      "/api/v1/courses?enrollment_state=active&per_page=100",
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -136,13 +143,21 @@ export async function fetchCanvasData(): Promise<{ success: boolean; error?: str
     const { apiUrl, apiToken } = config;
 
     // Fetch courses
-    const coursesResponse = await canvasProxyFetch(apiUrl, apiToken, "/api/v1/courses?enrollment_state=active&per_page=100");
+    const coursesResponse = await canvasProxyFetch(
+      apiUrl,
+      apiToken,
+      "/api/v1/courses?enrollment_state=active&per_page=100",
+    );
     if (!coursesResponse.ok) throw new Error("Failed to fetch courses");
     const courses: CanvasCourse[] = await coursesResponse.json();
     localStorage.setItem(CANVAS_COURSES_KEY, JSON.stringify(courses));
 
     // Fetch upcoming events
-    const eventsResponse = await canvasProxyFetch(apiUrl, apiToken, "/api/v1/users/self/upcoming_events?per_page=50");
+    const eventsResponse = await canvasProxyFetch(
+      apiUrl,
+      apiToken,
+      "/api/v1/users/self/upcoming_events?per_page=50",
+    );
     if (!eventsResponse.ok) throw new Error("Failed to fetch events");
     const events: CanvasEvent[] = await eventsResponse.json();
     localStorage.setItem(CANVAS_EVENTS_KEY, JSON.stringify(events));
@@ -160,7 +175,7 @@ export async function fetchCanvasData(): Promise<{ success: boolean; error?: str
         const enrollmentResponse = await canvasProxyFetch(
           apiUrl,
           apiToken,
-          `/api/v1/courses/${course.id}/enrollments?user_id=self`
+          `/api/v1/courses/${course.id}/enrollments?user_id=self`,
         );
         if (enrollmentResponse.ok) {
           const courseEnrollments: CanvasEnrollment[] = await enrollmentResponse.json();
@@ -179,7 +194,7 @@ export async function fetchCanvasData(): Promise<{ success: boolean; error?: str
         const assignmentsResponse = await canvasProxyFetch(
           apiUrl,
           apiToken,
-          `/api/v1/courses/${course.id}/assignments?bucket=upcoming&per_page=50`
+          `/api/v1/courses/${course.id}/assignments?bucket=upcoming&per_page=50`,
         );
         if (assignmentsResponse.ok) {
           const courseAssignments: CanvasAssignment[] = await assignmentsResponse.json();

@@ -22,6 +22,11 @@ const STUDY_QUOTES = [
   "Believe you can and you're halfway there.",
 ];
 
+type WebAudioWindow = Window &
+  typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext;
+  };
+
 export function PomodoroTimer() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -31,21 +36,24 @@ export function PomodoroTimer() {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const playChime = () => {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    
+    const AudioContextConstructor =
+      window.AudioContext || (window as WebAudioWindow).webkitAudioContext;
+    if (!AudioContextConstructor) return;
+    const audioContext = new AudioContextConstructor();
+
     // Create a soft chime sound
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
-    
+
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
-    
+
     oscillator.frequency.value = 880; // A5 note
     oscillator.type = "sine";
-    
+
     gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
-    
+
     oscillator.start(audioContext.currentTime);
     oscillator.stop(audioContext.currentTime + 1);
   };
@@ -78,7 +86,7 @@ export function PomodoroTimer() {
           if (prev <= 1) {
             setIsRunning(false);
             playChime();
-            
+
             if (mode === "focus") {
               setPomodorosCompleted((prev) => {
                 const newCount = prev + 1;
@@ -92,7 +100,7 @@ export function PomodoroTimer() {
             } else {
               switchMode("focus");
             }
-            
+
             return MODES[mode].duration;
           }
           return prev - 1;
@@ -117,7 +125,7 @@ export function PomodoroTimer() {
       {!isExpanded && (
         <button
           onClick={() => setIsExpanded(true)}
-          className="h-12 w-12 rounded-full bg-black text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+          className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
         >
           <Timer className="h-5 w-5" />
         </button>
@@ -164,9 +172,7 @@ export function PomodoroTimer() {
             <div className="text-5xl font-bold text-foreground mb-2 font-mono">
               {formatTime(timeLeft)}
             </div>
-            <div className="text-sm text-muted-foreground">
-              {MODES[mode].label}
-            </div>
+            <div className="text-sm text-muted-foreground">{MODES[mode].label}</div>
           </div>
 
           {/* Pomodoros Counter */}
@@ -187,7 +193,7 @@ export function PomodoroTimer() {
             </button>
             <button
               onClick={toggleTimer}
-              className="h-12 w-12 rounded-full bg-black text-white flex items-center justify-center hover:bg-black/80 transition-colors"
+              className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors"
             >
               {isRunning ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
             </button>

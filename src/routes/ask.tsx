@@ -1,9 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
-import { Send, GraduationCap, ExternalLink, X, Plus, History, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import {
+  Send,
+  ExternalLink,
+  X,
+  Plus,
+  History,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+} from "lucide-react";
 import { askUniMate } from "../functions/ask-unimate";
 import ReactMarkdown from "react-markdown";
-import { useTheme } from "../components/theme-provider";
+import { LogoMark } from "../components/logo-mark";
 import { useCourses, useAssignments, getAcademicContext } from "../lib/courses";
 
 export const Route = createFileRoute("/ask")({
@@ -14,7 +23,11 @@ interface Message {
   id: string;
   type: "user" | "ai";
   content: string;
-  sources?: any[];
+  sources?: {
+    title: string;
+    link: string;
+    snippet: string;
+  }[];
   relatedConcepts?: string[];
 }
 
@@ -26,7 +39,6 @@ interface QuestionHistory {
 }
 
 function Ask() {
-  const { theme } = useTheme();
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -94,7 +106,10 @@ function Ask() {
     }));
   };
 
-  const handleSend = async (overrideQuestion?: string, mode: "normal" | "simpler" | "deeper" = "normal") => {
+  const handleSend = async (
+    overrideQuestion?: string,
+    mode: "normal" | "simpler" | "deeper" = "normal",
+  ) => {
     const questionToSend = overrideQuestion || question;
     if (!questionToSend.trim() || loading) return;
 
@@ -110,7 +125,7 @@ function Ask() {
 
     try {
       // Combine manually-entered class tags with course/grade context added in the planner
-      let combinedClassContext = [...classContext];
+      const combinedClassContext = [...classContext];
       let academicContextStr = "";
 
       if (courses.length > 0) {
@@ -195,15 +210,10 @@ function Ask() {
         <div className="flex-1 overflow-y-auto px-6 py-8">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center">
-              <div
-                className="h-20 w-20 rounded-2xl flex items-center justify-center mb-6"
-                style={{
-                  background: theme === "light" ? "#F5C518" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
-                }}
-              >
-                <GraduationCap className="h-10 w-10 text-white" />
-              </div>
-              <h2 className="font-serif-display text-2xl font-medium text-foreground mb-2">Ask UniMate</h2>
+              <LogoMark className="h-20 w-20 mb-6" />
+              <h2 className="font-serif-display text-2xl font-medium text-foreground mb-2">
+                Ask UniMate
+              </h2>
               <p className="text-muted-foreground">Ask anything from your class</p>
             </div>
           ) : (
@@ -213,16 +223,7 @@ function Ask() {
                   key={message.id}
                   className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  {message.type === "ai" && (
-                    <div
-                      className="h-8 w-8 rounded-lg flex items-center justify-center mr-3 flex-shrink-0"
-                      style={{
-                        background: theme === "light" ? "#F5C518" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
-                      }}
-                    >
-                      <GraduationCap className="h-4 w-4 text-white" />
-                    </div>
-                  )}
+                  {message.type === "ai" && <LogoMark className="h-8 w-8 mr-3 flex-shrink-0" />}
                   <div
                     className={`max-w-[70%] ${
                       message.type === "user"
@@ -232,9 +233,9 @@ function Ask() {
                     style={{
                       background:
                         message.type === "user"
-                          ? "linear-gradient(135deg, #FF006E, #00D4FF)"
+                          ? "var(--gradient-primary)"
                           : "bg-card/60 border border-border/60",
-                      color: message.type === "user" ? "white" : "inherit",
+                      color: message.type === "user" ? "var(--primary-foreground)" : "inherit",
                     }}
                   >
                     <div className="text-sm prose prose-sm max-w-none">
@@ -293,23 +294,20 @@ function Ask() {
               ))}
               {loading && (
                 <div className="flex justify-start">
+                  <LogoMark className="h-8 w-8 mr-3 flex-shrink-0" />
                   <div
-                    className="h-8 w-8 rounded-lg flex items-center justify-center mr-3 flex-shrink-0"
-                    style={{
-                      background: theme === "light" ? "#F5C518" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
-                    }}
-                  >
-                    <GraduationCap className="h-4 w-4 text-white" />
-                  </div>
-                  <div
-                    className={`rounded-2xl rounded-tl-sm px-4 py-3 ${
-                      "bg-card/60 border border-border/60"
-                    }`}
+                    className={`rounded-2xl rounded-tl-sm px-4 py-3 ${"bg-card/60 border border-border/60"}`}
                   >
                     <div className="flex gap-1">
                       <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" />
-                      <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0.1s" }} />
-                      <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: "0.2s" }} />
+                      <div
+                        className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce"
+                        style={{ animationDelay: "0.1s" }}
+                      />
+                      <div
+                        className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce"
+                        style={{ animationDelay: "0.2s" }}
+                      />
                     </div>
                   </div>
                 </div>
@@ -333,10 +331,7 @@ function Ask() {
             <button
               onClick={() => handleSend()}
               disabled={loading || !question.trim()}
-              className="h-12 w-12 rounded-full flex items-center justify-center transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-gradient-to-br from-[#FF006E] to-[#00D4FF] text-white"
-              style={{
-                background: "linear-gradient(135deg, #FF006E, #00D4FF)",
-              }}
+              className="h-12 w-12 rounded-full flex items-center justify-center transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-primary text-primary-foreground"
             >
               <Send className="h-5 w-5" />
             </button>
@@ -353,9 +348,7 @@ function Ask() {
       {/* Class Setup Modal */}
       {showClassSetup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div
-            className="rounded-2xl p-6 w-full max-w-md bg-card border border-border/60"
-          >
+          <div className="rounded-2xl p-6 w-full max-w-md bg-card border border-border/60">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-foreground">Setup Your Classes</h3>
               <button
@@ -391,10 +384,7 @@ function Ask() {
                   className="inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full bg-primary/10 text-primary"
                 >
                   {cls}
-                  <button
-                    onClick={() => handleRemoveClass(cls)}
-                    className="hover:text-foreground"
-                  >
+                  <button onClick={() => handleRemoveClass(cls)} className="hover:text-foreground">
                     <X className="h-3 w-3" />
                   </button>
                 </span>
@@ -413,9 +403,7 @@ function Ask() {
       {/* Recent Questions Panel */}
       {showHistory && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div
-            className="rounded-2xl p-6 w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col bg-card border border-border/60"
-          >
+          <div className="rounded-2xl p-6 w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col bg-card border border-border/60">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-foreground">Recent Questions</h3>
               <button

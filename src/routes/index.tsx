@@ -1,14 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Brain, FileText, Calendar, Sparkles, BookOpen, NotebookPen, CalendarCheck, Telescope } from "lucide-react";
-import { useTheme } from "../components/theme-provider";
+import {
+  ArrowRight,
+  Brain,
+  FileText,
+  Calendar,
+  Sparkles,
+  BookOpen,
+  NotebookPen,
+  CalendarCheck,
+  Telescope,
+} from "lucide-react";
+import { LogoMark } from "../components/logo-mark";
 
 export const Route = createFileRoute("/")({
   component: Index,
 });
 
 function Index() {
-  const { theme } = useTheme();
-
   return (
     <div className="min-h-screen bg-background text-foreground">
       <main>
@@ -19,26 +27,19 @@ function Index() {
               Your entire academic life, in one place
             </h1>
             <p className="mx-auto max-w-2xl text-[18px] text-[#555555] mb-8">
-              Add your classes, grades, and due dates — then let AI help you actually stay on top of it all
+              Add your classes, grades, and due dates — then let AI help you actually stay on top of
+              it all
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
-                to="/planner"
-                className={`inline-flex items-center justify-center gap-2 rounded-[50px] px-8 py-4 text-base font-bold transition-transform hover:scale-[1.02] active:scale-[0.98] ${theme === "light" ? "bg-[#F5C518] text-[#1a1a1a]" : "text-white animate-tri-gradient"}`}
-                style={{
-                  backgroundImage: theme === "light" ? "none" : "linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
-                  backgroundSize: "300% 100%",
-                  boxShadow: theme === "light" ? "none" : "0 0 30px rgba(255, 0, 110, 0.4), 0 0 80px rgba(0, 212, 255, 0.25)",
-                  padding: theme === "light" ? "16px 32px" : "",
-                }}
+                to="/dashboard"
+                className="inline-flex items-center justify-center gap-2 rounded-[50px] px-8 py-4 text-base font-bold transition-transform hover:scale-[1.02] active:scale-[0.98] bg-[#F5C518] text-[#1a1a1a]"
+                style={{ padding: "16px 32px" }}
               >
                 Get Started
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link
-                to="/ask"
-                className="text-sm text-[#555555] hover:underline transition-colors"
-              >
+              <Link to="/ask" className="text-sm text-[#555555] hover:underline transition-colors">
                 Try Ask UniMate
               </Link>
             </div>
@@ -55,11 +56,12 @@ function Index() {
             </div>
             <div className="grid md:grid-cols-3 gap-8">
               <div className="text-center">
-                <div className="h-20 w-20 rounded-2xl flex items-center justify-center mx-auto mb-6"
+                <div
+                  className="h-20 w-20 rounded-2xl flex items-center justify-center mx-auto mb-6"
                   style={{
-                    background: theme === "light" ? "transparent" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
-                    border: theme === "light" ? "2px solid #F5C518" : "none",
-                    boxShadow: theme === "light" ? "0 4px 12px rgba(255, 215, 0, 0.15)" : "none",
+                    background: "transparent",
+                    border: "2px solid #F5C518",
+                    boxShadow: "0 4px 12px rgba(245, 197, 24, 0.15)",
                   }}
                 >
                   <NotebookPen className="h-10 w-10 text-[#F5C518]" />
@@ -68,11 +70,12 @@ function Index() {
                 <p className="text-muted-foreground">Enter your classes and grades in seconds</p>
               </div>
               <div className="text-center">
-                <div className="h-20 w-20 rounded-2xl flex items-center justify-center mx-auto mb-6"
+                <div
+                  className="h-20 w-20 rounded-2xl flex items-center justify-center mx-auto mb-6"
                   style={{
-                    background: theme === "light" ? "transparent" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
-                    border: theme === "light" ? "2px solid #F5C518" : "none",
-                    boxShadow: theme === "light" ? "0 4px 12px rgba(255, 215, 0, 0.15)" : "none",
+                    background: "transparent",
+                    border: "2px solid #F5C518",
+                    boxShadow: "0 4px 12px rgba(245, 197, 24, 0.15)",
                   }}
                 >
                   <CalendarCheck className="h-10 w-10 text-[#F5C518]" />
@@ -81,11 +84,12 @@ function Index() {
                 <p className="text-muted-foreground">Log deadlines and stay ahead of due dates</p>
               </div>
               <div className="text-center">
-                <div className="h-20 w-20 rounded-2xl flex items-center justify-center mx-auto mb-6"
+                <div
+                  className="h-20 w-20 rounded-2xl flex items-center justify-center mx-auto mb-6"
                   style={{
-                    background: theme === "light" ? "transparent" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
-                    border: theme === "light" ? "2px solid #F5C518" : "none",
-                    boxShadow: theme === "light" ? "0 4px 12px rgba(255, 215, 0, 0.15)" : "none",
+                    background: "transparent",
+                    border: "2px solid #F5C518",
+                    boxShadow: "0 4px 12px rgba(245, 197, 24, 0.15)",
                   }}
                 >
                   <Telescope className="h-10 w-10 text-[#F5C518]" />
@@ -107,45 +111,53 @@ function Index() {
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="rounded-2xl border p-6 hover:border-primary/50 transition-colors border-border bg-card/60">
-                <div className="h-12 w-12 rounded-xl flex items-center justify-center mb-4"
+                <div
+                  className="h-12 w-12 rounded-xl flex items-center justify-center mb-4"
                   style={{
-                    background: theme === "light" ? "#F5C518" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
+                    background: "var(--gradient-primary)",
                   }}
                 >
-                  <Brain className="h-6 w-6 text-white" />
+                  <Brain className="h-6 w-6 text-[#1a1a1a]" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Ask UniMate</h3>
-                <p className="text-sm text-muted-foreground">Answers based on the classes and grades you enter</p>
+                <p className="text-sm text-muted-foreground">
+                  Answers based on the classes and grades you enter
+                </p>
               </div>
               <div className="rounded-2xl border p-6 hover:border-primary/50 transition-colors border-border bg-card/60">
-                <div className="h-12 w-12 rounded-xl flex items-center justify-center mb-4"
+                <div
+                  className="h-12 w-12 rounded-xl flex items-center justify-center mb-4"
                   style={{
-                    background: theme === "light" ? "#F5C518" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
+                    background: "var(--gradient-primary)",
                   }}
                 >
-                  <FileText className="h-6 w-6 text-white" />
+                  <FileText className="h-6 w-6 text-[#1a1a1a]" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Smart Notes</h3>
                 <p className="text-sm text-muted-foreground">Organized by the courses you add</p>
               </div>
               <div className="rounded-2xl border p-6 hover:border-primary/50 transition-colors border-border bg-card/60">
-                <div className="h-12 w-12 rounded-xl flex items-center justify-center mb-4"
+                <div
+                  className="h-12 w-12 rounded-xl flex items-center justify-center mb-4"
                   style={{
-                    background: theme === "light" ? "#F5C518" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
+                    background: "var(--gradient-primary)",
                   }}
                 >
-                  <Calendar className="h-6 w-6 text-white" />
+                  <Calendar className="h-6 w-6 text-[#1a1a1a]" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Homework Tracker</h3>
-                <p className="text-sm text-muted-foreground">Add and track every assignment yourself</p>
+                <p className="text-sm text-muted-foreground">
+                  Add and track every assignment yourself
+                </p>
               </div>
               <div className="rounded-2xl border p-6 hover:border-primary/50 transition-colors border-border bg-card/60">
-                <div className="h-12 w-12 rounded-xl flex items-center justify-center mb-4"
+                <div
+                  className="h-12 w-12 rounded-xl flex items-center justify-center mb-4"
                   style={{
-                    background: theme === "light" ? "#F5C518" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
+                    background: "var(--gradient-primary)",
                   }}
                 >
-                  <BookOpen className="h-6 w-6 text-white" />
+                  <BookOpen className="h-6 w-6 text-[#1a1a1a]" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">Study Planner</h3>
                 <p className="text-sm text-muted-foreground">Built around your real deadlines</p>
@@ -161,13 +173,8 @@ function Index() {
               Built for students who'd rather be doing anything else
             </h2>
             <Link
-              to="/planner"
-              className={`inline-flex items-center justify-center gap-2 rounded-xl px-8 py-4 text-base font-bold transition-transform hover:scale-[1.02] active:scale-[0.98] ${theme === "light" ? "bg-[#F5C518] text-[#1a1a1a]" : "text-white animate-tri-gradient"}`}
-              style={{
-                backgroundImage: theme === "light" ? "none" : "linear-gradient(90deg, #FF006E, #00D4FF, #FF006E)",
-                backgroundSize: "300% 100%",
-                boxShadow: theme === "light" ? "none" : "0 0 30px rgba(255, 0, 110, 0.4), 0 0 80px rgba(0, 212, 255, 0.25)",
-              }}
+              to="/dashboard"
+              className="inline-flex items-center justify-center gap-2 rounded-xl px-8 py-4 text-base font-bold transition-transform hover:scale-[1.02] active:scale-[0.98] bg-[#F5C518] text-[#1a1a1a]"
             >
               Get Started Free
               <ArrowRight className="h-4 w-4" />
@@ -180,20 +187,34 @@ function Index() {
           <div className="mx-auto max-w-6xl px-6">
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded flex items-center justify-center"
-                  style={{
-                    background: theme === "light" ? "#F5C518" : theme === "minimal" ? "black" : "linear-gradient(135deg, #FF006E, #00D4FF)",
-                  }}
-                >
-                  <span className="text-white font-bold text-xs">U</span>
-                </div>
+                <LogoMark className="h-7 w-7" />
                 <span className="font-serif-display text-lg text-foreground">UniMate</span>
               </div>
               <div className="flex items-center gap-6">
-                <Link to="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Home</Link>
-                <Link to="/ask" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Ask UniMate</Link>
-                <Link to="/planner" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Course Planner</Link>
-                <Link to="/bulletin" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Bulletin Board</Link>
+                <Link
+                  to="/"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Home
+                </Link>
+                <Link
+                  to="/ask"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Ask UniMate
+                </Link>
+                <Link
+                  to="/planner"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Syllabus
+                </Link>
+                <Link
+                  to="/bulletin"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Bulletin Board
+                </Link>
               </div>
               <p className="text-sm text-muted-foreground">
                 Made for students who'd rather be doing anything else.

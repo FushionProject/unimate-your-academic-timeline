@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Home, ChevronLeft, ChevronRight, Brain, Calendar, LayoutGrid, FileText, Flame, LayoutDashboard } from "lucide-react";
+import {
+  IconHome,
+  IconSyllabus,
+  IconDashboard,
+  IconNotes,
+  IconAsk,
+  IconFlame,
+  IconChevronLeft,
+  IconChevronRight,
+} from "./icons";
 import { useStudyStreak } from "../hooks/use-study-streak";
 
 export function Sidebar() {
@@ -8,12 +17,11 @@ export function Sidebar() {
   const { streak, bestStreak } = useStudyStreak();
 
   const menuItems = [
-    { icon: Home, label: "Home", to: "/" },
-    { icon: LayoutDashboard, label: "Dashboard", to: "/dashboard" },
-    { icon: Brain, label: "Ask UniMate", to: "/ask" },
-    { icon: Calendar, label: "Course Planner", to: "/planner" },
-    { icon: LayoutGrid, label: "Bulletin Board", to: "/bulletin" },
-    { icon: FileText, label: "Notes", to: "/notes" },
+    { icon: IconHome, label: "Home", to: "/" },
+    { icon: IconSyllabus, label: "Syllabus", to: "/planner" },
+    { icon: IconDashboard, label: "Dashboard", to: "/dashboard" },
+    { icon: IconNotes, label: "Notes", to: "/notes" },
+    { icon: IconAsk, label: "Ask UniMate", to: "/ask" },
   ];
 
   return (
@@ -27,7 +35,11 @@ export function Sidebar() {
         onClick={() => setIsExpanded(!isExpanded)}
         className="absolute -right-3 top-6 h-6 w-6 rounded-full bg-black border-2 border-white flex items-center justify-center hover:bg-gray-800 transition-colors"
       >
-        {isExpanded ? <ChevronLeft className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        {isExpanded ? (
+          <IconChevronLeft className="h-3 w-3" />
+        ) : (
+          <IconChevronRight className="h-3 w-3" />
+        )}
       </button>
 
       {/* Menu Items */}
@@ -40,9 +52,7 @@ export function Sidebar() {
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />
             {isExpanded && (
-              <span className="text-sm font-medium whitespace-nowrap">
-                {item.label}
-              </span>
+              <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>
             )}
           </Link>
         ))}
@@ -51,7 +61,7 @@ export function Sidebar() {
       {/* Study Streak Indicator */}
       <div className="p-4 border-t border-gray-800">
         <div className="flex items-center gap-3 px-3 py-2">
-          <Flame className="h-5 w-5 text-orange-500 flex-shrink-0" />
+          <IconFlame className="h-5 w-5 text-orange-500 flex-shrink-0" />
           {isExpanded && (
             <div className="flex flex-col">
               <span className="text-sm font-bold text-orange-500">{streak} day streak</span>

@@ -1,5 +1,16 @@
 import { useState, useRef, useEffect } from "react";
-import { Music, Play, Pause, Volume2, VolumeX, Headphones, CloudRain, Waves, Coffee, Disc } from "lucide-react";
+import {
+  Music,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Headphones,
+  CloudRain,
+  Waves,
+  Coffee,
+  Disc,
+} from "lucide-react";
 
 interface Station {
   id: string;
@@ -11,8 +22,19 @@ interface Station {
   webAudioType?: "rain" | "ocean" | "coffee" | "classical";
 }
 
+type WebAudioWindow = Window &
+  typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext;
+  };
+
 const stations: Station[] = [
-  { id: "lofi", name: "Lofi Hip Hop", icon: Headphones, type: "local", audioSrc: "/audio/lofi.mp3" },
+  {
+    id: "lofi",
+    name: "Lofi Hip Hop",
+    icon: Headphones,
+    type: "local",
+    audioSrc: "/audio/lofi.mp3",
+  },
   { id: "rain", name: "Rain", icon: CloudRain, type: "webaudio", webAudioType: "rain" },
   { id: "ocean", name: "Ocean", icon: Waves, type: "webaudio", webAudioType: "ocean" },
   { id: "coffee", name: "Coffee Shop", icon: Coffee, type: "webaudio", webAudioType: "coffee" },
@@ -47,15 +69,21 @@ export function MusicPlayer() {
     const bufferSize = 2 * ctx.sampleRate;
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const output = buffer.getChannelData(0);
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+    let b0 = 0,
+      b1 = 0,
+      b2 = 0,
+      b3 = 0,
+      b4 = 0,
+      b5 = 0,
+      b6 = 0;
     for (let i = 0; i < bufferSize; i++) {
       const white = Math.random() * 2 - 1;
       b0 = 0.99886 * b0 + white * 0.0555179;
       b1 = 0.99332 * b1 + white * 0.0750759;
-      b2 = 0.96900 * b2 + white * 0.1538520;
-      b3 = 0.86650 * b3 + white * 0.3104856;
-      b4 = 0.55000 * b4 + white * 0.5329522;
-      b5 = -0.7616 * b5 - white * 0.0168980;
+      b2 = 0.969 * b2 + white * 0.153852;
+      b3 = 0.8665 * b3 + white * 0.3104856;
+      b4 = 0.55 * b4 + white * 0.5329522;
+      b5 = -0.7616 * b5 - white * 0.016898;
       output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
       output[i] *= 0.11;
       b6 = white * 0.115926;
@@ -68,7 +96,10 @@ export function MusicPlayer() {
 
   const setupWebAudio = (type: string) => {
     if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextConstructor =
+        window.AudioContext || (window as WebAudioWindow).webkitAudioContext;
+      if (!AudioContextConstructor) return;
+      audioContextRef.current = new AudioContextConstructor();
     }
     const ctx = audioContextRef.current;
     const gainNode = ctx.createGain();
@@ -198,7 +229,7 @@ export function MusicPlayer() {
       {!isExpanded && (
         <button
           onClick={() => setIsExpanded(true)}
-          className="h-12 w-12 rounded-full bg-black text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+          className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
         >
           <Music className="h-5 w-5" />
         </button>
@@ -262,13 +293,16 @@ export function MusicPlayer() {
           <div className="p-4 border-t border-border/60 flex items-center gap-3">
             <button
               onClick={togglePlay}
-              className="h-10 w-10 rounded-full bg-black text-white flex items-center justify-center hover:bg-black/80 transition-colors"
+              className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors"
             >
               {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
             </button>
 
             <div className="flex-1 flex items-center gap-2">
-              <button onClick={toggleMute} className="text-muted-foreground hover:text-foreground transition-colors">
+              <button
+                onClick={toggleMute}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
                 {volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
               </button>
               <input

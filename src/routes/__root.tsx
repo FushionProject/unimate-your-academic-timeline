@@ -16,6 +16,7 @@ import { Navbar } from "../components/navbar";
 import { MusicPlayer } from "../components/music-player";
 import { PomodoroTimer } from "../components/pomodoro-timer";
 import { DateWidget } from "../components/date-widget";
+// import { ScreenAssistant } from "../components/screen-assistant"; // Hidden for now — future rollout
 
 function NotFoundComponent() {
   return (
@@ -80,10 +81,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "UniMate — Academic planning, organized clearly." },
-      { name: "description", content: "Upload your syllabus. Get every deadline, exam, and assignment mapped into a clean visual timeline — exportable to any calendar." },
+      {
+        name: "description",
+        content:
+          "Upload your syllabus. Get every deadline, exam, and assignment mapped into a clean visual timeline — exportable to any calendar.",
+      },
       { name: "author", content: "UniMate" },
       { property: "og:title", content: "UniMate — Academic planning, organized clearly." },
-      { property: "og:description", content: "Turn any syllabus into a semester-long calendar in 10 seconds." },
+      {
+        property: "og:description",
+        content: "Turn any syllabus into a semester-long calendar in 10 seconds.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
@@ -91,7 +99,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap",
+      },
       {
         rel: "stylesheet",
         href: appCss,
@@ -107,7 +118,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 // Runs before first paint so the stored theme applies without a flash. The
 // class it adds isn't in the server HTML, so <html> needs
 // suppressHydrationWarning to avoid a React hydration mismatch.
-const themeInitScript = `(function(){try{var t=localStorage.getItem("theme")||"light";document.documentElement.classList.add(t);}catch(e){}})();`;
+const themeInitScript = `(function(){try{var t=localStorage.getItem("theme")==="dark"?"dark":"light";document.documentElement.classList.add(t);}catch(e){}})();`;
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
@@ -142,6 +153,7 @@ function RootComponent() {
             </div>
             <PomodoroTimer />
             <MusicPlayer />
+            {/* <ScreenAssistant /> — Hidden for now, future rollout */}
           </div>
         </ThemeProvider>
       </AuthProvider>

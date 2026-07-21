@@ -2,17 +2,24 @@ import { z } from "zod";
 
 const responseSchema = z.object({
   answer: z.string(),
-  webResults: z.array(z.object({
-    title: z.string(),
-    link: z.string(),
-    snippet: z.string(),
-  })),
+  webResults: z.array(
+    z.object({
+      title: z.string(),
+      link: z.string(),
+      snippet: z.string(),
+    }),
+  ),
   relatedConcepts: z.array(z.string()).optional(),
 });
 
+type ConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export async function askUniMate(data: {
   question: string;
-  conversationHistory?: any[];
+  conversationHistory?: ConversationMessage[];
   classContext?: string[];
   mode?: "normal" | "simpler" | "deeper";
   canvasContext?: string;

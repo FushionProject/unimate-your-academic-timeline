@@ -14,7 +14,13 @@ const responseSchema = z.object({
   study_tasks: z.array(studyTaskSchema),
 });
 
-export async function generateStudyMap(data: { items: any[] }) {
+type SyllabusItem = {
+  title: string;
+  type: "exam" | "quiz" | "assignment" | "deadline";
+  due_date: string;
+};
+
+export async function generateStudyMap(data: { items: SyllabusItem[] }) {
   const { items } = data;
   console.log("generateStudyMap called with items:", items);
 

@@ -6,12 +6,31 @@ import { extractResources } from "../functions/extract-resources";
 import { generateStudyMap } from "../functions/generate-study-map";
 import { useAddCourse, useAddAssignment } from "../lib/courses";
 import { useAuth } from "../lib/auth-context";
+import { SyllabusTimeline } from "../components/syllabus-timeline";
 
 const itemSchema = z.object({
   title: z.string(),
   type: z.enum(["exam", "quiz", "assignment", "deadline"]),
   due_date: z.string(),
 });
+
+type SyllabusItem = z.infer<typeof itemSchema>;
+
+type CourseResource = {
+  type: string;
+  title: string;
+  details?: string;
+};
+
+type StudyTask = {
+  title: string;
+  description: string;
+  start_date: string;
+  end_date: string;
+  estimated_hours: number;
+  priority: "high" | "medium" | "low";
+  related_to: string;
+};
 
 const searchSchema = z.object({
   items: z.array(itemSchema),
@@ -28,8 +47,8 @@ function Results() {
   const { user } = useAuth();
   const { items, syllabusText } = Route.useSearch();
   const [tab, setTab] = useState<"timeline" | "study-map">("timeline");
-  const [resources, setResources] = useState<any[] | null>(null);
-  const [studyTasks, setStudyTasks] = useState<any[] | null>(null);
+  const [resources, setResources] = useState<CourseResource[] | null>(null);
+  const [studyTasks, setStudyTasks] = useState<StudyTask[] | null>(null);
   const [loadingResources, setLoadingResources] = useState(false);
   const [loadingStudyMap, setLoadingStudyMap] = useState(false);
   const [saveCourseName, setSaveCourseName] = useState("");
@@ -78,8 +97,8 @@ function Results() {
             name: item.title,
             course_id: course.id,
             due_at: new Date(item.due_date + "T12:00:00").toISOString(),
-          })
-        )
+          }),
+        ),
       );
       setSavedToPlanner(true);
     } catch (error) {
@@ -90,23 +109,8 @@ function Results() {
     }
   };
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case "exam":
-        return "bg-red-100 text-red-800 border-red-200";
-      case "quiz":
-        return "bg-blue-100 text-blue-800 border-blue-200";
-      case "assignment":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "deadline":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
-  };
-
   // Calculate semester week intensity from items
-  const calculateWeekIntensity = (items: any[]) => {
+  const calculateWeekIntensity = (items: SyllabusItem[]) => {
     if (!items || items.length === 0) return [];
 
     // Infer semester start from the earliest date
@@ -186,7 +190,8 @@ function Results() {
             {!user ? (
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm text-muted-foreground">
-                  Sign in to save these {items.length} item{items.length !== 1 ? "s" : ""} to your Course Planner.
+                  Sign in to save these {items.length} item{items.length !== 1 ? "s" : ""} to your
+                  Course Planner.
                 </p>
                 <Link
                   to="/signin"
@@ -198,11 +203,14 @@ function Results() {
             ) : savedToPlanner ? (
               <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
                 <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-                Saved {items.length} item{items.length !== 1 ? "s" : ""} to "{saveCourseName}" in your Course Planner.
+                Saved {items.length} item{items.length !== 1 ? "s" : ""} to "{saveCourseName}" in
+                your Course Planner.
               </div>
             ) : (
               <>
-                <h3 className="text-sm font-semibold text-foreground mb-1">Save to Course Planner</h3>
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Save to Course Planner
+                </h3>
                 <p className="text-xs text-muted-foreground mb-3">
                   Add these {items.length} items to your dashboard by saving them under a course.
                 </p>
@@ -226,7 +234,11 @@ function Results() {
                     disabled={!saveCourseName.trim() || saving}
                     className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50 flex-shrink-0"
                   >
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
                     Save to Planner
                   </button>
                 </div>
@@ -301,40 +313,7 @@ function Results() {
 
         {tab === "timeline" && (
           <>
-            {!items || items.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">No items found. Please try again.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4 mb-8">
-                {items.map((item, index) => (
-                  <div
-                    key={index}
-                    className="rounded-xl border border-border bg-card p-4 shadow-sm hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-foreground text-lg">{item.title}</h3>
-                        <div className="flex items-center gap-3 mt-2">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${getTypeColor(item.type)}`}
-                          >
-                            {item.type}
-                          </span>
-                          <span className="text-sm text-muted-foreground">
-                            Due: {new Date(item.due_date + "T12:00:00").toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <SyllabusTimeline items={items ?? []} />
 
             {/* Resources & Links Section */}
             <div className="mt-8">
@@ -397,10 +376,13 @@ function Results() {
                         <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
                           <span>
-                            📅 {new Date(task.start_date + "T12:00:00").toLocaleDateString("en-US", {
+                            📅{" "}
+                            {new Date(task.start_date + "T12:00:00").toLocaleDateString("en-US", {
                               month: "short",
                               day: "numeric",
-                            })} - {new Date(task.end_date + "T12:00:00").toLocaleDateString("en-US", {
+                            })}{" "}
+                            -{" "}
+                            {new Date(task.end_date + "T12:00:00").toLocaleDateString("en-US", {
                               month: "short",
                               day: "numeric",
                             })}

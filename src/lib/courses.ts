@@ -23,7 +23,8 @@ export interface Assignment {
 }
 
 function requireSupabase() {
-  if (!supabase) throw new Error("Auth isn't configured yet — add your Supabase keys to .env.local.");
+  if (!supabase)
+    throw new Error("Auth isn't configured yet — add your Supabase keys to .env.local.");
   return supabase;
 }
 
@@ -161,7 +162,10 @@ export function useRemoveAssignment() {
 
 // --- Pure helpers (operate on already-fetched data, no fetching of their own) ---
 
-export function getCourseGrade(courses: Course[], courseId: string): { score: number | null; grade: string | null } {
+export function getCourseGrade(
+  courses: Course[],
+  courseId: string,
+): { score: number | null; grade: string | null } {
   const course = courses.find((c) => c.id === courseId);
   return { score: course?.score ?? null, grade: course?.grade ?? null };
 }

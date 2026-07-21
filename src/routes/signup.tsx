@@ -39,7 +39,8 @@ function SignUp() {
           <CheckCircle2 className="h-10 w-10 text-green-500 mx-auto mb-4" />
           <h1 className="text-xl font-semibold text-foreground mb-2">Check your email</h1>
           <p className="text-sm text-muted-foreground">
-            We sent a confirmation link to <span className="text-foreground">{email}</span>. Click it to activate your account, then sign in.
+            We sent a confirmation link to <span className="text-foreground">{email}</span>. Click
+            it to activate your account, then sign in.
           </p>
           <Link
             to="/signin"

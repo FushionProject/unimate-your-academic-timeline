@@ -45,9 +45,9 @@ function Upgrade() {
       <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card/90 backdrop-blur-xl p-8 shadow-[var(--shadow-card)] text-center">
         <div
           className="h-14 w-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
-          style={{ background: "linear-gradient(135deg, #FF006E, #00D4FF)" }}
+          style={{ background: "var(--gradient-primary)" }}
         >
-          <Sparkles className="h-7 w-7 text-white" />
+          <Sparkles className="h-7 w-7 text-[#1a1a1a]" />
         </div>
         <h1 className="text-2xl font-bold text-foreground mb-1">UniMate Pro</h1>
         <p className="text-sm text-muted-foreground mb-6">

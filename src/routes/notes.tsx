@@ -1,6 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Save, Bold, Italic, Underline, Type, Palette, Search, X, Pin, PinOff, Hash, BookOpen } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Save,
+  Bold,
+  Italic,
+  Underline,
+  Type,
+  Palette,
+  Search,
+  X,
+  Pin,
+  PinOff,
+  Hash,
+  BookOpen,
+} from "lucide-react";
 import { useTheme } from "../components/theme-provider";
 import { useCourses } from "../lib/courses";
 
@@ -16,6 +31,9 @@ interface NoteFormatting {
   underline: boolean;
   backgroundColor: string;
 }
+
+type FontFamily = NoteFormatting["fontFamily"];
+type FontSize = NoteFormatting["fontSize"];
 
 interface Note {
   id: string;
@@ -51,8 +69,14 @@ function Notes() {
   const { data: manualCourses = [] } = useCourses();
 
   const tagColors = [
-    "#FEF3C7", "#DBEAFE", "#D1FAE5", "#FCE7F3",
-    "#E9D5FF", "#FED7AA", "#FECACA", "#D1D5DB"
+    "#FEF3C7",
+    "#DBEAFE",
+    "#D1FAE5",
+    "#FCE7F3",
+    "#E9D5FF",
+    "#FED7AA",
+    "#FECACA",
+    "#D1D5DB",
   ];
 
   const getTagColor = (tag: string) => {
@@ -151,8 +175,17 @@ function Notes() {
     if (!selectedNoteId) return;
     const updatedNotes = notes.map((note) =>
       note.id === selectedNoteId
-        ? { ...note, title, body, formatting, tags, pinned: note.pinned, course: selectedCourse || note.course, updatedAt: new Date().toISOString() }
-        : note
+        ? {
+            ...note,
+            title,
+            body,
+            formatting,
+            tags,
+            pinned: note.pinned,
+            course: selectedCourse || note.course,
+            updatedAt: new Date().toISOString(),
+          }
+        : note,
     );
     setNotes(updatedNotes);
   };
@@ -179,12 +212,15 @@ function Notes() {
 
   const handleTogglePin = (id: string) => {
     const updatedNotes = notes.map((note) =>
-      note.id === id ? { ...note, pinned: !note.pinned } : note
+      note.id === id ? { ...note, pinned: !note.pinned } : note,
     );
     setNotes(updatedNotes);
   };
 
-  const wordCount = body.trim().split(/\s+/).filter((word) => word.length > 0).length;
+  const wordCount = body
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0).length;
   const charCount = body.length;
 
   const filteredNotes = notes
@@ -210,9 +246,7 @@ function Notes() {
     <div className="h-screen bg-background">
       <div className="flex h-full">
         {/* Left Panel - Notes List */}
-        <div
-          className="w-80 border-r flex flex-col border-border/60"
-        >
+        <div className="w-80 border-r flex flex-col border-border/60">
           <div className="p-4 border-b border-border/60">
             <button
               onClick={handleCreateNote}
@@ -270,7 +304,9 @@ function Notes() {
           <div className="flex-1 overflow-y-auto">
             {filteredNotes.length === 0 ? (
               <div className="p-4 text-center text-muted-foreground text-sm">
-                {notes.length === 0 ? "No notes yet. Create your first note!" : "No notes match your search."}
+                {notes.length === 0
+                  ? "No notes yet. Create your first note!"
+                  : "No notes match your search."}
               </div>
             ) : (
               filteredNotes.map((note) => (
@@ -278,9 +314,7 @@ function Notes() {
                   key={note.id}
                   onClick={() => handleSelectNote(note)}
                   className={`p-4 border-b border-border/60 cursor-pointer transition-colors ${
-                    selectedNoteId === note.id
-                      ? "bg-primary/10"
-                      : "hover:bg-card/60"
+                    selectedNoteId === note.id ? "bg-primary/10" : "hover:bg-card/60"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -342,9 +376,7 @@ function Notes() {
         <div className="flex-1 flex flex-col">
           {selectedNote ? (
             <>
-              <div
-                className="p-4 border-b flex items-center gap-4 border-border/60"
-              >
+              <div className="p-4 border-b flex items-center gap-4 border-border/60">
                 <input
                   type="text"
                   value={title}
@@ -363,9 +395,7 @@ function Notes() {
 
               {/* Course Selector */}
               {manualCourses.length > 0 && (
-                <div
-                  className="px-4 py-2 border-b flex items-center gap-2 border-border/60"
-                >
+                <div className="px-4 py-2 border-b flex items-center gap-2 border-border/60">
                   <BookOpen className="h-4 w-4 text-muted-foreground" />
                   <select
                     value={selectedCourse}
@@ -383,9 +413,7 @@ function Notes() {
               )}
 
               {/* Tag Input */}
-              <div
-                className="px-4 py-2 border-b flex items-center gap-2 flex-wrap border-border/60"
-              >
+              <div className="px-4 py-2 border-b flex items-center gap-2 flex-wrap border-border/60">
                 <Hash className="h-4 w-4 text-muted-foreground" />
                 <input
                   type="text"
@@ -413,15 +441,18 @@ function Notes() {
               </div>
 
               {/* Formatting Toolbar */}
-              <div
-                className="px-4 py-2 border-b flex items-center gap-3 flex-wrap border-border/60"
-              >
+              <div className="px-4 py-2 border-b flex items-center gap-3 flex-wrap border-border/60">
                 {/* Font Family */}
                 <div className="flex items-center gap-2">
                   <Type className="h-4 w-4 text-muted-foreground" />
                   <select
                     value={formatting.fontFamily}
-                    onChange={(e) => setFormatting({ ...formatting, fontFamily: e.target.value as any })}
+                    onChange={(e) =>
+                      setFormatting({
+                        ...formatting,
+                        fontFamily: e.target.value as FontFamily,
+                      })
+                    }
                     className="text-xs bg-transparent border-none focus:outline-none cursor-pointer text-foreground"
                   >
                     <option value="sans-serif">Sans</option>
@@ -435,7 +466,12 @@ function Notes() {
                 <div className="flex items-center gap-2">
                   <select
                     value={formatting.fontSize}
-                    onChange={(e) => setFormatting({ ...formatting, fontSize: e.target.value as any })}
+                    onChange={(e) =>
+                      setFormatting({
+                        ...formatting,
+                        fontSize: e.target.value as FontSize,
+                      })
+                    }
                     className="text-xs bg-transparent border-none focus:outline-none cursor-pointer text-foreground"
                   >
                     <option value="14px">Small</option>
@@ -488,13 +524,17 @@ function Notes() {
                     {backgroundColors.map((color) => (
                       <button
                         key={color.name}
-                        onClick={() => setFormatting({ ...formatting, backgroundColor: color.value })}
+                        onClick={() =>
+                          setFormatting({ ...formatting, backgroundColor: color.value })
+                        }
                         className={`h-5 w-5 rounded-full border-2 transition-all hover:scale-110 ${
                           formatting.backgroundColor === color.value
                             ? "border-foreground scale-110"
                             : "border-transparent"
                         }`}
-                        style={{ backgroundColor: color.value === "transparent" ? "#f5f5f5" : color.value }}
+                        style={{
+                          backgroundColor: color.value === "transparent" ? "#f5f5f5" : color.value,
+                        }}
                         title={color.name}
                       />
                     ))}
