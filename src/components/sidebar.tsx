@@ -18,7 +18,7 @@ export function Sidebar() {
 
   const menuItems = [
     { icon: IconHome, label: "Home", to: "/" },
-    { icon: IconSyllabus, label: "Syllabus", to: "/planner" },
+    { icon: IconSyllabus, label: "Upload Syllabus", to: "/planner" },
     { icon: IconDashboard, label: "Dashboard", to: "/dashboard" },
     { icon: IconNotes, label: "Notes", to: "/notes" },
     { icon: IconAsk, label: "Ask UniMate", to: "/ask" },
@@ -26,13 +26,15 @@ export function Sidebar() {
 
   return (
     <div
-      className={`fixed left-0 top-0 h-full bg-black text-white transition-all duration-300 ease-in-out z-[60] ${
+      className={`fixed left-0 top-0 hidden h-full bg-black text-white transition-all duration-300 ease-in-out z-[60] md:block ${
         isExpanded ? "w-64" : "w-16"
       }`}
     >
       {/* Toggle Button */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
+        aria-label={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
+        title={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
         className="absolute -right-3 top-6 h-6 w-6 rounded-full bg-black border-2 border-white flex items-center justify-center hover:bg-gray-800 transition-colors"
       >
         {isExpanded ? (
@@ -48,6 +50,8 @@ export function Sidebar() {
           <Link
             key={item.to}
             to={item.to}
+            aria-label={item.label}
+            title={!isExpanded ? item.label : undefined}
             className="flex items-center gap-4 px-3 py-3 rounded-lg hover:bg-gray-800 transition-colors group"
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />

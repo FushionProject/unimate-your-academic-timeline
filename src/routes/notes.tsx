@@ -243,10 +243,10 @@ function Notes() {
   const selectedNote = notes.find((note) => note.id === selectedNoteId);
 
   return (
-    <div className="h-screen bg-background">
-      <div className="flex h-full">
+    <div className="min-h-[calc(100vh-12rem)] bg-background">
+      <div className="flex min-h-[calc(100vh-12rem)] flex-col overflow-hidden rounded-xl border border-border/60 lg:flex-row">
         {/* Left Panel - Notes List */}
-        <div className="w-80 border-r flex flex-col border-border/60">
+        <div className="flex max-h-[18rem] w-full flex-col border-b border-border/60 lg:max-h-none lg:w-80 lg:border-b-0 lg:border-r">
           <div className="p-4 border-b border-border/60">
             <button
               onClick={handleCreateNote}
@@ -271,6 +271,7 @@ function Notes() {
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery("")}
+                  aria-label="Clear note search"
                   className="absolute right-2 top-1/2 -translate-y-1/2 h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card/60 transition-colors"
                 >
                   <X className="h-3 w-3" />
@@ -351,6 +352,8 @@ function Notes() {
                           e.stopPropagation();
                           handleTogglePin(note.id);
                         }}
+                        aria-label={note.pinned ? `Unpin ${note.title}` : `Pin ${note.title}`}
+                        title={note.pinned ? "Unpin note" : "Pin note"}
                         className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card/80 transition-colors"
                       >
                         {note.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
@@ -360,6 +363,8 @@ function Notes() {
                           e.stopPropagation();
                           handleDeleteNote(note.id);
                         }}
+                        aria-label={`Delete ${note.title}`}
+                        title="Delete note"
                         className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card/80 transition-colors"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -373,10 +378,10 @@ function Notes() {
         </div>
 
         {/* Right Panel - Editor */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex min-w-0 flex-1 flex-col">
           {selectedNote ? (
             <>
-              <div className="p-4 border-b flex items-center gap-4 border-border/60">
+              <div className="flex flex-col gap-3 border-b border-border/60 p-4 sm:flex-row sm:items-center sm:gap-4">
                 <input
                   type="text"
                   value={title}
@@ -432,6 +437,7 @@ function Notes() {
                     #{tag}
                     <button
                       onClick={() => handleRemoveTag(tag)}
+                      aria-label={`Remove ${tag} tag`}
                       className="h-4 w-4 rounded-full flex items-center justify-center hover:bg-black/10 transition-colors"
                     >
                       <X className="h-2 w-2" />
@@ -486,6 +492,8 @@ function Notes() {
                 {/* Text Formatting */}
                 <button
                   onClick={() => setFormatting({ ...formatting, bold: !formatting.bold })}
+                  aria-label="Toggle bold"
+                  title="Bold"
                   className={`p-1.5 rounded transition-colors ${
                     formatting.bold
                       ? "bg-primary text-primary-foreground"
@@ -496,6 +504,8 @@ function Notes() {
                 </button>
                 <button
                   onClick={() => setFormatting({ ...formatting, italic: !formatting.italic })}
+                  aria-label="Toggle italic"
+                  title="Italic"
                   className={`p-1.5 rounded transition-colors ${
                     formatting.italic
                       ? "bg-primary text-primary-foreground"
@@ -506,6 +516,8 @@ function Notes() {
                 </button>
                 <button
                   onClick={() => setFormatting({ ...formatting, underline: !formatting.underline })}
+                  aria-label="Toggle underline"
+                  title="Underline"
                   className={`p-1.5 rounded transition-colors ${
                     formatting.underline
                       ? "bg-primary text-primary-foreground"
@@ -527,6 +539,7 @@ function Notes() {
                         onClick={() =>
                           setFormatting({ ...formatting, backgroundColor: color.value })
                         }
+                        aria-label={`Set note background to ${color.name}`}
                         className={`h-5 w-5 rounded-full border-2 transition-all hover:scale-110 ${
                           formatting.backgroundColor === color.value
                             ? "border-foreground scale-110"
@@ -543,7 +556,7 @@ function Notes() {
               </div>
 
               <div
-                className="flex-1 p-6 flex flex-col"
+                className="flex-1 p-6 pb-28 flex flex-col sm:pb-6"
                 style={{ backgroundColor: formatting.backgroundColor }}
               >
                 <textarea

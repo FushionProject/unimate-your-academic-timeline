@@ -32,11 +32,11 @@ function Index() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
-                to="/dashboard"
+                to="/planner"
                 className="inline-flex items-center justify-center gap-2 rounded-[50px] px-8 py-4 text-base font-bold transition-transform hover:scale-[1.02] active:scale-[0.98] bg-[#F5C518] text-[#1a1a1a]"
                 style={{ padding: "16px 32px" }}
               >
-                Get Started
+                Upload a Syllabus
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link to="/ask" className="text-sm text-[#555555] hover:underline transition-colors">
@@ -66,8 +66,12 @@ function Index() {
                 >
                   <NotebookPen className="h-10 w-10 text-[#F5C518]" />
                 </div>
-                <h3 className="text-xl font-semibold text-foreground mb-2">Add your courses</h3>
-                <p className="text-muted-foreground">Enter your classes and grades in seconds</p>
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Upload or paste a syllabus
+                </h3>
+                <p className="text-muted-foreground">
+                  Start with the document your professor gave you
+                </p>
               </div>
               <div className="text-center">
                 <div
@@ -80,8 +84,8 @@ function Index() {
                 >
                   <CalendarCheck className="h-10 w-10 text-[#F5C518]" />
                 </div>
-                <h3 className="text-xl font-semibold text-foreground mb-2">Track assignments</h3>
-                <p className="text-muted-foreground">Log deadlines and stay ahead of due dates</p>
+                <h3 className="text-xl font-semibold text-foreground mb-2">Review your timeline</h3>
+                <p className="text-muted-foreground">Check the dates UniMate found before saving</p>
               </div>
               <div className="text-center">
                 <div
@@ -94,8 +98,10 @@ function Index() {
                 >
                   <Telescope className="h-10 w-10 text-[#F5C518]" />
                 </div>
-                <h3 className="text-xl font-semibold text-foreground mb-2">Study smarter</h3>
-                <p className="text-muted-foreground">AI that actually knows your workload</p>
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Save and plan your week
+                </h3>
+                <p className="text-muted-foreground">Send deadlines to your dashboard when ready</p>
               </div>
             </div>
           </div>
@@ -173,10 +179,10 @@ function Index() {
               Built for students who'd rather be doing anything else
             </h2>
             <Link
-              to="/dashboard"
+              to="/planner"
               className="inline-flex items-center justify-center gap-2 rounded-xl px-8 py-4 text-base font-bold transition-transform hover:scale-[1.02] active:scale-[0.98] bg-[#F5C518] text-[#1a1a1a]"
             >
-              Get Started Free
+              Start with a Syllabus
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
@@ -207,13 +213,19 @@ function Index() {
                   to="/planner"
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Syllabus
+                  Upload
                 </Link>
                 <Link
-                  to="/bulletin"
+                  to="/dashboard"
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Bulletin Board
+                  Dashboard
+                </Link>
+                <Link
+                  to="/notes"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Notes
                 </Link>
               </div>
               <p className="text-sm text-muted-foreground">

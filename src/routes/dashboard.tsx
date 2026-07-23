@@ -20,6 +20,7 @@ import { useStudyStreak } from "../hooks/use-study-streak";
 // import { useAssistantEnabled } from "../hooks/use-assistant-enabled"; // Hidden for now — future rollout
 import { useTheme } from "../components/theme-provider";
 import { ProtectedRoute } from "../components/protected-route";
+import { useAuth } from "../lib/auth-context";
 import {
   useCourses,
   useAssignments,
@@ -84,6 +85,7 @@ type ChatMessage = { role: "user" | "assistant"; content: string };
 
 function Dashboard() {
   const { theme } = useTheme();
+  const { session } = useAuth();
   const { streak, bestStreak } = useStudyStreak();
   // const { enabled: assistantEnabled, setAssistantEnabled } = useAssistantEnabled(); // Hidden for now — future rollout
 
@@ -165,7 +167,10 @@ function Dashboard() {
   ): Promise<string> => {
     const res = await fetch("/api/dashboard-ai", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session?.access_token ?? ""}`,
+      },
       body: JSON.stringify({
         type,
         academicContext: buildContext(),
@@ -193,7 +198,10 @@ function Dashboard() {
     setMotivationLoading(true);
     fetch("/api/dashboard-ai", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session?.access_token ?? ""}`,
+      },
       body: JSON.stringify({ type: "motivation", academicContext: ctx }),
     })
       .then((r) => r.json())
@@ -310,9 +318,9 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-6xl px-6 py-8">
+      <div className="mx-auto max-w-6xl px-0 py-6 sm:px-2 sm:py-8">
         {/* Header */}
-        <div className="mb-8 flex items-end justify-between gap-3">
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
@@ -420,6 +428,8 @@ function Dashboard() {
                       <button
                         onClick={handleAddCourse}
                         disabled={!courseName.trim() || addCourse.isPending}
+                        aria-label="Add course"
+                        title="Add course"
                         className="inline-flex items-center justify-center rounded-lg px-3 bg-primary text-primary-foreground disabled:opacity-50 flex-shrink-0"
                       >
                         <Plus className="h-4 w-4" />
@@ -454,6 +464,8 @@ function Dashboard() {
                           </div>
                           <button
                             onClick={() => handleRemoveCourse(course.id)}
+                            aria-label={`Remove ${course.name}`}
+                            title={`Remove ${course.name}`}
                             className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -497,6 +509,8 @@ function Dashboard() {
                         type="date"
                         value={assignmentDue}
                         onChange={(e) => setAssignmentDue(e.target.value)}
+                        aria-label="Assignment due date"
+                        title="Assignment due date"
                         className="flex-1 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                       />
                       <button
@@ -507,6 +521,8 @@ function Dashboard() {
                           !assignmentDue ||
                           addAssignment.isPending
                         }
+                        aria-label="Add assignment"
+                        title="Add assignment"
                         className="inline-flex items-center justify-center rounded-lg px-3 bg-primary text-primary-foreground disabled:opacity-50 flex-shrink-0"
                       >
                         <Plus className="h-4 w-4" />
@@ -514,13 +530,15 @@ function Dashboard() {
                     </div>
                   </div>
                   {courses.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Add a course first, then you can track its assignments here.
-                    </p>
+                    <div className="rounded-xl border border-dashed border-border/70 bg-secondary/30 p-4 text-sm text-muted-foreground">
+                      Add a course first, or upload a syllabus and let UniMate create the course and
+                      deadlines for you.
+                    </div>
                   ) : sortedAssignments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No assignments yet. Add one above.
-                    </p>
+                    <div className="rounded-xl border border-dashed border-border/70 bg-secondary/30 p-4 text-sm text-muted-foreground">
+                      No assignments yet. Add one manually above or upload a syllabus to fill this
+                      list automatically.
+                    </div>
                   ) : (
                     <div className="space-y-3">
                       {sortedAssignments.map((assignment) => {
@@ -537,42 +555,58 @@ function Dashboard() {
                         return (
                           <div
                             key={assignment.id}
-                            className={`flex items-start gap-3 p-3 rounded-lg bg-secondary/40 ${assignment.completed ? "opacity-50" : ""}`}
+                            className={`flex flex-col gap-3 p-3 rounded-lg bg-secondary/40 sm:flex-row sm:items-start ${assignment.completed ? "opacity-50" : ""}`}
                           >
-                            <button
-                              onClick={() =>
-                                handleToggleAssignment(assignment.id, assignment.completed)
-                              }
-                              className="mt-0.5 text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
-                            >
-                              {assignment.completed ? (
-                                <CheckCircle2 className="h-5 w-5 text-primary" />
-                              ) : (
-                                <Circle className="h-5 w-5" />
-                              )}
-                            </button>
-                            <div className="flex-1 min-w-0">
-                              <p
-                                className={`text-sm font-medium text-foreground ${assignment.completed ? "line-through" : ""}`}
+                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                              <button
+                                onClick={() =>
+                                  handleToggleAssignment(assignment.id, assignment.completed)
+                                }
+                                aria-label={
+                                  assignment.completed
+                                    ? `Mark ${assignment.name} incomplete`
+                                    : `Mark ${assignment.name} complete`
+                                }
+                                title={
+                                  assignment.completed
+                                    ? `Mark ${assignment.name} incomplete`
+                                    : `Mark ${assignment.name} complete`
+                                }
+                                className="mt-0.5 text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
                               >
-                                {assignment.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {course?.name || "Unknown Course"}
-                              </p>
+                                {assignment.completed ? (
+                                  <CheckCircle2 className="h-5 w-5 text-primary" />
+                                ) : (
+                                  <Circle className="h-5 w-5" />
+                                )}
+                              </button>
+                              <div className="min-w-0 flex-1">
+                                <p
+                                  className={`text-sm font-medium text-foreground ${assignment.completed ? "line-through" : ""}`}
+                                >
+                                  {assignment.name}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {course?.name || "Unknown Course"}
+                                </p>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <div className={`h-2 w-2 rounded-full ${dotColor}`} />
-                              <p className="text-sm font-medium text-foreground">
-                                {dueDate.toLocaleDateString()}
-                              </p>
+                            <div className="flex items-center justify-between gap-3 sm:flex-shrink-0">
+                              <div className="flex items-center gap-2">
+                                <div className={`h-2 w-2 rounded-full ${dotColor}`} />
+                                <p className="text-sm font-medium text-foreground">
+                                  {dueDate.toLocaleDateString()}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => handleRemoveAssignment(assignment.id)}
+                                aria-label={`Remove ${assignment.name}`}
+                                title={`Remove ${assignment.name}`}
+                                className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
                             </div>
-                            <button
-                              onClick={() => handleRemoveAssignment(assignment.id)}
-                              className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
                           </div>
                         );
                       })}
@@ -582,7 +616,7 @@ function Dashboard() {
 
                 {/* What to Study Tonight */}
                 <div className="rounded-2xl border border-border/60 bg-card/90 backdrop-blur-xl p-6 shadow-[var(--shadow-card)]">
-                  <div className="flex items-center justify-between gap-3 mb-4">
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-4 w-4 text-muted-foreground" />
                       <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -703,6 +737,7 @@ function Dashboard() {
                     <button
                       onClick={() => handleAction("study-tonight")}
                       disabled={actionLoading}
+                      aria-label="Get study tonight recommendation"
                       className={`flex flex-col items-start gap-1.5 rounded-xl p-3 text-left transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 border ${
                         activeAction === "study-tonight" && !actionLoading
                           ? "border-primary bg-primary/10"
@@ -718,6 +753,7 @@ function Dashboard() {
                     <button
                       onClick={() => handleAction("on-track")}
                       disabled={actionLoading}
+                      aria-label="Get semester forecast"
                       className={`flex flex-col items-start gap-1.5 rounded-xl p-3 text-left transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 border ${
                         activeAction === "on-track" && !actionLoading
                           ? "border-primary bg-primary/10"
@@ -817,6 +853,8 @@ function Dashboard() {
                     <button
                       onClick={handleChat}
                       disabled={chatLoading || !chatInput.trim()}
+                      aria-label="Send dashboard advisor message"
+                      title="Send message"
                       className={`h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all disabled:opacity-40 disabled:pointer-events-none ${sendBtnClass}`}
                     >
                       {chatLoading ? (

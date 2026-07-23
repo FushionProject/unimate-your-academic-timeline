@@ -144,9 +144,9 @@ function RootComponent() {
         <ThemeProvider>
           <div className="min-h-screen flex flex-col">
             <Navbar />
-            <div className="flex flex-1">
+            <div className="flex flex-1 min-w-0">
               <Sidebar />
-              <div className="flex-1 ml-16 p-6">
+              <div className="flex-1 min-w-0 p-4 sm:p-6 md:ml-16">
                 <DateWidget />
                 <Outlet />
               </div>

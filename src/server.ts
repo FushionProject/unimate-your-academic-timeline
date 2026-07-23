@@ -35,6 +35,70 @@ type GroqChatResponse = {
   }>;
 };
 
+type AuthenticatedUser = {
+  id: string;
+  email?: string;
+};
+
+const MAX_JSON_BODY_BYTES = 1_000_000;
+const MAX_SYLLABUS_CHARS = 80_000;
+const MAX_STUDY_ITEMS = 120;
+const MAX_CHAT_HISTORY = 10;
+const MAX_IMAGE_DATA_URL_CHARS = 2_500_000;
+const STRIPE_WEBHOOK_TOLERANCE_SECONDS = 300;
+
+function rejectLargeRequest(request: Request, maxBytes = MAX_JSON_BODY_BYTES): Response | null {
+  const length = Number(request.headers.get("content-length") || 0);
+  return length > maxBytes ? jsonResponse({ error: "Request body too large" }, 413) : null;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+async function parseJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
+  try {
+    const body = await request.json();
+    if (!body || Array.isArray(body) || typeof body !== "object") {
+      return jsonResponse({ error: "JSON object body is required" }, 400);
+    }
+    return body as Record<string, unknown>;
+  } catch {
+    return jsonResponse({ error: "Invalid JSON body" }, 400);
+  }
+}
+
+async function getUserFromAccessToken(accessToken: string): Promise<AuthenticatedUser | null> {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+
+  try {
+    const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    if (!res.ok) return null;
+    const user = (await res.json()) as AuthenticatedUser;
+    return user.id ? user : null;
+  } catch (error) {
+    console.error("Error validating session:", error);
+    return null;
+  }
+}
+
+async function requireAuthenticatedUser(request: Request): Promise<AuthenticatedUser | Response> {
+  const authHeader = request.headers.get("Authorization");
+  const accessToken = authHeader?.replace(/^Bearer\s+/i, "");
+  if (!accessToken) return jsonResponse({ error: "Sign in required" }, 401);
+
+  const user = await getUserFromAccessToken(accessToken);
+  if (!user) return jsonResponse({ error: "Invalid session" }, 401);
+  return user;
+}
+
 // Handle /api/ask-unimate endpoint
 async function handleAskUniMate(request: Request): Promise<Response> {
   try {
@@ -45,14 +109,24 @@ async function handleAskUniMate(request: Request): Promise<Response> {
       });
     }
 
-    const body = await request.json();
+    const largeRequest = rejectLargeRequest(request);
+    if (largeRequest) return largeRequest;
+
+    const authResult = await requireAuthenticatedUser(request);
+    if (authResult instanceof Response) return authResult;
+
+    const body = await parseJsonBody(request);
+    if (body instanceof Response) return body;
     const { question, conversationHistory, classContext, mode, canvasContext } = body;
 
-    if (!question) {
+    if (!isNonEmptyString(question) || question.length > 4_000) {
       return new Response(JSON.stringify({ error: "Question is required" }), {
         status: 400,
         headers: { "content-type": "application/json" },
       });
+    }
+    if (typeof canvasContext === "string" && canvasContext.length > 30_000) {
+      return jsonResponse({ error: "Class context is too large" }, 413);
     }
 
     const serpApiKey = process.env.SERPAPI_KEY;
@@ -149,7 +223,7 @@ async function handleAskUniMate(request: Request): Promise<Response> {
 
     // Add conversation history if provided
     if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
-      messages.push(...conversationHistory);
+      messages.push(...conversationHistory.slice(-MAX_CHAT_HISTORY));
     }
 
     // Handle different modes
@@ -264,8 +338,21 @@ async function handleDashboardAI(request: Request): Promise<Response> {
       });
     }
 
-    const body = await request.json();
+    const largeRequest = rejectLargeRequest(request);
+    if (largeRequest) return largeRequest;
+
+    const authResult = await requireAuthenticatedUser(request);
+    if (authResult instanceof Response) return authResult;
+
+    const body = await parseJsonBody(request);
+    if (body instanceof Response) return body;
     const { type, academicContext, message, chatHistory } = body;
+    if (typeof academicContext === "string" && academicContext.length > 30_000) {
+      return jsonResponse({ error: "Academic context is too large" }, 413);
+    }
+    if (typeof message === "string" && message.length > 4_000) {
+      return jsonResponse({ error: "Message is too large" }, 413);
+    }
 
     const groqApiKey = process.env.GROQ_API_KEY;
 
@@ -313,7 +400,7 @@ async function handleDashboardAI(request: Request): Promise<Response> {
     const messages: ChatMessage[] = [{ role: "system", content: systemPrompt }];
 
     if (type === "chat" && chatHistory && Array.isArray(chatHistory)) {
-      messages.push(...chatHistory.slice(-10));
+      messages.push(...chatHistory.slice(-MAX_CHAT_HISTORY));
     }
 
     messages.push({ role: "user", content: userMessage });
@@ -407,9 +494,20 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
       return jsonResponse({ error: "Method not allowed" }, 405);
     }
 
-    const { syllabusText } = await request.json();
-    if (!syllabusText) {
+    const largeRequest = rejectLargeRequest(request);
+    if (largeRequest) return largeRequest;
+
+    const authResult = await requireAuthenticatedUser(request);
+    if (authResult instanceof Response) return authResult;
+
+    const body = await parseJsonBody(request);
+    if (body instanceof Response) return body;
+    const { syllabusText } = body;
+    if (!isNonEmptyString(syllabusText)) {
       return jsonResponse({ error: "Syllabus text is required" }, 400);
+    }
+    if (syllabusText.length > MAX_SYLLABUS_CHARS) {
+      return jsonResponse({ error: "Syllabus text is too large" }, 413);
     }
 
     const groqApiKey = process.env.GROQ_API_KEY;
@@ -429,6 +527,10 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
     const items = await callGroqJson(
       groqApiKey,
       `You are a helpful assistant that extracts academic deadlines, exams, quizzes, and assignments from syllabus text.
+            Today's date is ${new Date().toISOString().slice(0, 10)}.
+            This product plans the student's current or upcoming semester.
+            If a date omits a year, infer the nearest upcoming academic occurrence, never a past year.
+            If the syllabus names a term/year (for example Fall 2026), use that year for dates in that term.
             Extract all relevant dates and events. Return the results as a JSON array with the following structure:
             [
               {
@@ -455,9 +557,20 @@ async function handleExtractResources(request: Request): Promise<Response> {
       return jsonResponse({ error: "Method not allowed" }, 405);
     }
 
-    const { syllabusText } = await request.json();
-    if (!syllabusText) {
+    const largeRequest = rejectLargeRequest(request);
+    if (largeRequest) return largeRequest;
+
+    const authResult = await requireAuthenticatedUser(request);
+    if (authResult instanceof Response) return authResult;
+
+    const body = await parseJsonBody(request);
+    if (body instanceof Response) return body;
+    const { syllabusText } = body;
+    if (!isNonEmptyString(syllabusText)) {
       return jsonResponse({ error: "Syllabus text is required" }, 400);
+    }
+    if (syllabusText.length > MAX_SYLLABUS_CHARS) {
+      return jsonResponse({ error: "Syllabus text is too large" }, 413);
     }
 
     const groqApiKey = process.env.GROQ_API_KEY;
@@ -517,9 +630,20 @@ async function handleGenerateStudyMap(request: Request): Promise<Response> {
       return jsonResponse({ error: "Method not allowed" }, 405);
     }
 
-    const { items } = await request.json();
+    const largeRequest = rejectLargeRequest(request);
+    if (largeRequest) return largeRequest;
+
+    const authResult = await requireAuthenticatedUser(request);
+    if (authResult instanceof Response) return authResult;
+
+    const body = await parseJsonBody(request);
+    if (body instanceof Response) return body;
+    const { items } = body;
     if (!items || !Array.isArray(items)) {
       return jsonResponse({ error: "Items array is required" }, 400);
+    }
+    if (items.length > MAX_STUDY_ITEMS) {
+      return jsonResponse({ error: "Too many study items" }, 413);
     }
 
     const groqApiKey = process.env.GROQ_API_KEY;
@@ -597,7 +721,15 @@ async function handleCanvasProxy(request: Request): Promise<Response> {
       return jsonResponse({ error: "Method not allowed" }, 405);
     }
 
-    const { apiUrl, apiToken, path } = await request.json();
+    const largeRequest = rejectLargeRequest(request, 50_000);
+    if (largeRequest) return largeRequest;
+
+    const authResult = await requireAuthenticatedUser(request);
+    if (authResult instanceof Response) return authResult;
+
+    const body = await parseJsonBody(request);
+    if (body instanceof Response) return body;
+    const { apiUrl, apiToken, path } = body;
     if (!apiUrl || !apiToken || !path) {
       return jsonResponse({ error: "apiUrl, apiToken, and path are required" }, 400);
     }
@@ -631,8 +763,8 @@ async function handleCanvasProxy(request: Request): Promise<Response> {
       headers: { Authorization: `Bearer ${apiToken}` },
     });
 
-    const body = await upstream.text();
-    return new Response(body, {
+    const upstreamBody = await upstream.text();
+    return new Response(upstreamBody, {
       status: upstream.status,
       headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
     });
@@ -678,22 +810,33 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
       return jsonResponse({ error: "Method not allowed" }, 405);
     }
 
+    const largeRequest = rejectLargeRequest(request, MAX_IMAGE_DATA_URL_CHARS + 10_000);
+    if (largeRequest) return largeRequest;
+
+    const authResult = await requireAuthenticatedUser(request);
+    if (authResult instanceof Response) return authResult;
+
     const authHeader = request.headers.get("Authorization");
     const accessToken = authHeader?.replace(/^Bearer\s+/i, "");
-    if (!accessToken) {
-      return jsonResponse({ error: "Sign in required" }, 401);
-    }
+    if (!accessToken) return jsonResponse({ error: "Sign in required" }, 401);
 
     const isPro = await getIsProFromToken(accessToken);
     if (!isPro) {
       return jsonResponse({ error: "UniMate Pro required", upgradeRequired: true }, 402);
     }
 
-    const body = await request.json();
+    const body = await parseJsonBody(request);
+    if (body instanceof Response) return body;
     const { imageBase64, question } = body;
 
     if (!imageBase64 || typeof imageBase64 !== "string") {
       return jsonResponse({ error: "imageBase64 is required" }, 400);
+    }
+    if (imageBase64.length > MAX_IMAGE_DATA_URL_CHARS) {
+      return jsonResponse({ error: "Image is too large" }, 413);
+    }
+    if (typeof question === "string" && question.length > 4_000) {
+      return jsonResponse({ error: "Question is too large" }, 413);
     }
 
     const groqApiKey = process.env.GROQ_API_KEY;
@@ -847,17 +990,23 @@ async function verifyStripeSignature(
   signatureHeader: string,
   secret: string,
 ): Promise<boolean> {
-  const parts = Object.fromEntries(
-    signatureHeader.split(",").map((part) => {
+  const parts = signatureHeader.split(",").reduce(
+    (acc, part) => {
       const [key, value] = part.split("=");
-      return [key, value];
-    }),
+      if (key === "t") acc.timestamp = value;
+      if (key === "v1" && value) acc.signatures.push(value);
+      return acc;
+    },
+    { timestamp: "", signatures: [] as string[] },
   );
-  const timestamp = parts.t;
-  const signature = parts.v1;
-  if (!timestamp || !signature) return false;
+  if (!parts.timestamp || parts.signatures.length === 0) return false;
 
-  const signedPayload = `${timestamp}.${payload}`;
+  const timestampSeconds = Number(parts.timestamp);
+  if (!Number.isFinite(timestampSeconds)) return false;
+  const ageSeconds = Math.abs(Date.now() / 1000 - timestampSeconds);
+  if (ageSeconds > STRIPE_WEBHOOK_TOLERANCE_SECONDS) return false;
+
+  const signedPayload = `${parts.timestamp}.${payload}`;
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -871,7 +1020,16 @@ async function verifyStripeSignature(
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  return expectedSignature === signature;
+  return parts.signatures.some((signature) => constantTimeEqual(expectedSignature, signature));
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
 }
 
 // Handle /api/stripe-webhook — the only thing allowed to flip a user's
@@ -903,6 +1061,14 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
 
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
+      if (session.mode !== "subscription") {
+        console.warn("Ignoring non-subscription checkout session");
+        return new Response("ok", { status: 200 });
+      }
+      if (session.payment_status && session.payment_status !== "paid") {
+        console.warn("Ignoring unpaid checkout session");
+        return new Response("ok", { status: 200 });
+      }
       const userId: string | undefined = session.client_reference_id || session.metadata?.user_id;
       const customerId: string | undefined = session.customer;
 
@@ -910,7 +1076,7 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
         const supabaseUrl = process.env.VITE_SUPABASE_URL;
         const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
         if (supabaseUrl && serviceRoleKey) {
-          await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`, {
+          const profileRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`, {
             method: "PATCH",
             headers: {
               apikey: serviceRoleKey,
@@ -920,6 +1086,10 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
             },
             body: JSON.stringify({ is_pro: true, stripe_customer_id: customerId }),
           });
+          if (!profileRes.ok) {
+            console.error("Failed to update pro status:", await profileRes.text());
+            return new Response("Profile update failed", { status: 500 });
+          }
         } else {
           console.error("Cannot update pro status — SUPABASE_SERVICE_ROLE_KEY not configured");
         }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getAuthHeaders } from "../lib/auth-fetch";
 
 const itemSchema = z.object({
   title: z.string(),
@@ -19,6 +20,7 @@ export async function parseSyllabus(data: { syllabusText: string }) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(await getAuthHeaders()),
       },
       body: JSON.stringify({ syllabusText }),
     });

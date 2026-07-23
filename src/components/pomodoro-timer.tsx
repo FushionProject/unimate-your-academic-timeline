@@ -120,11 +120,13 @@ export function PomodoroTimer() {
   }, [isRunning, mode]);
 
   return (
-    <div className="fixed bottom-20 right-4 z-50">
+    <div className="fixed bottom-24 right-4 z-50 sm:bottom-20">
       {/* Collapsed State */}
       {!isExpanded && (
         <button
           onClick={() => setIsExpanded(true)}
+          aria-label="Open Pomodoro timer"
+          title="Pomodoro timer"
           className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
         >
           <Timer className="h-5 w-5" />
@@ -142,6 +144,7 @@ export function PomodoroTimer() {
             </div>
             <button
               onClick={() => setIsExpanded(false)}
+              aria-label="Close Pomodoro timer"
               className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card/60 transition-colors"
             >
               ×
@@ -155,6 +158,7 @@ export function PomodoroTimer() {
                 <button
                   key={m}
                   onClick={() => switchMode(m)}
+                  aria-pressed={mode === m}
                   className={`p-2 rounded-lg text-xs font-medium transition-colors ${
                     mode === m
                       ? "bg-primary/10 text-primary"
@@ -187,12 +191,16 @@ export function PomodoroTimer() {
           <div className="p-4 border-t border-border/60 flex items-center justify-center gap-3">
             <button
               onClick={resetTimer}
+              aria-label="Reset timer"
+              title="Reset timer"
               className="h-10 w-10 rounded-full border border-border text-muted-foreground flex items-center justify-center hover:bg-card/60 transition-colors"
             >
               <RotateCcw className="h-4 w-4" />
             </button>
             <button
               onClick={toggleTimer}
+              aria-label={isRunning ? "Pause timer" : "Start timer"}
+              title={isRunning ? "Pause timer" : "Start timer"}
               className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors"
             >
               {isRunning ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}

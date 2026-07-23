@@ -61,7 +61,7 @@ export function DateWidget() {
 
   return (
     <div className="w-full bg-card/60 border-l-4 border-l-[#F5C518] border-y border-r border-border/60 p-4 mb-6">
-      <div className="flex items-center justify-between gap-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         {/* Date - Left */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <Calendar className="h-5 w-5 text-muted-foreground" />
@@ -77,9 +77,11 @@ export function DateWidget() {
         </div>
 
         {/* Quote - Right */}
-        <div className="flex items-center gap-2 flex-1 justify-end">
+        <div className="flex min-w-0 items-center gap-2 sm:flex-1 sm:justify-end">
           <Quote className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-          <span className="text-sm text-muted-foreground italic">{quote}</span>
+          <span className="min-w-0 text-sm text-muted-foreground italic sm:text-right">
+            {quote}
+          </span>
         </div>
       </div>
     </div>

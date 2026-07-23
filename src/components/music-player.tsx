@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Music,
   Play,
@@ -51,8 +51,9 @@ export function MusicPlayer() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const sourcesRef = useRef<AudioNode[]>([]);
+  const volumeRef = useRef(volume);
 
-  const createWhiteNoise = (ctx: AudioContext) => {
+  const createWhiteNoise = useCallback((ctx: AudioContext) => {
     const bufferSize = 2 * ctx.sampleRate;
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const output = buffer.getChannelData(0);
@@ -63,9 +64,9 @@ export function MusicPlayer() {
     noise.buffer = buffer;
     noise.loop = true;
     return noise;
-  };
+  }, []);
 
-  const createPinkNoise = (ctx: AudioContext) => {
+  const createPinkNoise = useCallback((ctx: AudioContext) => {
     const bufferSize = 2 * ctx.sampleRate;
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const output = buffer.getChannelData(0);
@@ -92,89 +93,112 @@ export function MusicPlayer() {
     noise.buffer = buffer;
     noise.loop = true;
     return noise;
-  };
+  }, []);
 
-  const setupWebAudio = (type: string) => {
-    if (!audioContextRef.current) {
-      const AudioContextConstructor =
-        window.AudioContext || (window as WebAudioWindow).webkitAudioContext;
-      if (!AudioContextConstructor) return;
-      audioContextRef.current = new AudioContextConstructor();
-    }
-    const ctx = audioContextRef.current;
-    const gainNode = ctx.createGain();
-    gainNode.gain.value = volume / 100;
-    gainNodeRef.current = gainNode;
-    sourcesRef.current = [];
-
-    if (type === "rain") {
-      const noise = createWhiteNoise(ctx);
-      const filter = ctx.createBiquadFilter();
-      filter.type = "bandpass";
-      filter.frequency.value = 1000;
-      filter.Q.value = 1;
-      noise.connect(filter);
-      filter.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      noise.start();
-      sourcesRef.current.push(noise);
-    } else if (type === "ocean") {
-      const noise = createWhiteNoise(ctx);
-      const filter = ctx.createBiquadFilter();
-      filter.type = "lowpass";
-      filter.frequency.value = 500;
-      const lfo = ctx.createOscillator();
-      lfo.type = "sine";
-      lfo.frequency.value = 0.1;
-      const lfoGain = ctx.createGain();
-      lfoGain.gain.value = 0.3;
-      lfo.connect(lfoGain);
-      lfoGain.connect(gainNode.gain);
-      noise.connect(filter);
-      filter.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      noise.start();
-      lfo.start();
-      sourcesRef.current.push(noise, lfo);
-    } else if (type === "coffee") {
-      const noise = createPinkNoise(ctx);
-      const filter = ctx.createBiquadFilter();
-      filter.type = "lowpass";
-      filter.frequency.value = 800;
-      const masterGain = ctx.createGain();
-      masterGain.gain.value = 0.15;
-      noise.connect(filter);
-      filter.connect(masterGain);
-      masterGain.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      noise.start();
-      sourcesRef.current.push(noise);
-    } else if (type === "classical") {
-      const frequencies = [220, 261.63, 329.63];
-      frequencies.forEach((freq) => {
-        const osc = ctx.createOscillator();
-        osc.type = "sine";
-        osc.frequency.value = freq;
-        const oscGain = ctx.createGain();
-        oscGain.gain.value = 0.05;
-        osc.connect(oscGain);
-        oscGain.connect(gainNode);
-        gainNode.connect(ctx.destination);
-        osc.start();
-        sourcesRef.current.push(osc);
+  const setupWebAudio = useCallback(
+    (type: string) => {
+      sourcesRef.current.forEach((source) => {
+        if (source instanceof OscillatorNode || source instanceof AudioBufferSourceNode) {
+          try {
+            source.stop();
+          } catch {
+            // Source may already be stopped; continuing keeps station changes smooth.
+          }
+        }
       });
-    }
-  };
+      sourcesRef.current = [];
 
-  const stopWebAudio = () => {
+      if (!audioContextRef.current) {
+        const AudioContextConstructor =
+          window.AudioContext || (window as WebAudioWindow).webkitAudioContext;
+        if (!AudioContextConstructor) return;
+        audioContextRef.current = new AudioContextConstructor();
+      }
+      const ctx = audioContextRef.current;
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = volumeRef.current / 100;
+      gainNodeRef.current = gainNode;
+
+      if (type === "rain") {
+        const noise = createWhiteNoise(ctx);
+        const filter = ctx.createBiquadFilter();
+        filter.type = "bandpass";
+        filter.frequency.value = 1000;
+        filter.Q.value = 1;
+        noise.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        noise.start();
+        sourcesRef.current.push(noise);
+      } else if (type === "ocean") {
+        const noise = createWhiteNoise(ctx);
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.value = 500;
+        const lfo = ctx.createOscillator();
+        lfo.type = "sine";
+        lfo.frequency.value = 0.1;
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.value = 0.3;
+        lfo.connect(lfoGain);
+        lfoGain.connect(gainNode.gain);
+        noise.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        noise.start();
+        lfo.start();
+        sourcesRef.current.push(noise, lfo);
+      } else if (type === "coffee") {
+        const noise = createPinkNoise(ctx);
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.value = 800;
+        const masterGain = ctx.createGain();
+        masterGain.gain.value = 0.15;
+        noise.connect(filter);
+        filter.connect(masterGain);
+        masterGain.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        noise.start();
+        sourcesRef.current.push(noise);
+      } else if (type === "classical") {
+        const frequencies = [220, 261.63, 329.63];
+        frequencies.forEach((freq) => {
+          const osc = ctx.createOscillator();
+          osc.type = "sine";
+          osc.frequency.value = freq;
+          const oscGain = ctx.createGain();
+          oscGain.gain.value = 0.05;
+          osc.connect(oscGain);
+          oscGain.connect(gainNode);
+          gainNode.connect(ctx.destination);
+          osc.start();
+          sourcesRef.current.push(osc);
+        });
+      }
+    },
+    [createPinkNoise, createWhiteNoise],
+  );
+
+  const stopWebAudio = useCallback(() => {
     sourcesRef.current.forEach((source) => {
-      if (source instanceof OscillatorNode) {
-        source.stop();
-      } else if (source instanceof AudioBufferSourceNode) {
-        source.stop();
+      if (source instanceof OscillatorNode || source instanceof AudioBufferSourceNode) {
+        try {
+          source.stop();
+        } catch {
+          // Source may already be stopped by a station switch.
+        }
       }
     });
     sourcesRef.current = [];
+    gainNodeRef.current = null;
+  }, []);
+
+  const selectStation = (station: Station) => {
+    stopWebAudio();
+    audioRef.current?.pause();
+    setSelectedStation(station);
+    setIsPlaying(false);
   };
 
   const togglePlay = () => {
@@ -190,6 +214,7 @@ export function MusicPlayer() {
   };
 
   useEffect(() => {
+    volumeRef.current = volume;
     if (audioRef.current) {
       audioRef.current.volume = volume / 100;
     }
@@ -212,7 +237,7 @@ export function MusicPlayer() {
         stopWebAudio();
       }
     }
-  }, [isPlaying, selectedStation]);
+  }, [isPlaying, selectedStation, setupWebAudio, stopWebAudio]);
 
   useEffect(() => {
     return () => {
@@ -221,14 +246,16 @@ export function MusicPlayer() {
         audioContextRef.current.close();
       }
     };
-  }, []);
+  }, [stopWebAudio]);
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
+    <div className="fixed bottom-8 right-4 z-50 sm:bottom-4">
       {/* Collapsed State */}
       {!isExpanded && (
         <button
           onClick={() => setIsExpanded(true)}
+          aria-label="Open study music"
+          title="Study music"
           className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
         >
           <Music className="h-5 w-5" />
@@ -246,6 +273,7 @@ export function MusicPlayer() {
             </div>
             <button
               onClick={() => setIsExpanded(false)}
+              aria-label="Close study music"
               className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card/60 transition-colors"
             >
               ×
@@ -260,10 +288,8 @@ export function MusicPlayer() {
                 return (
                   <button
                     key={station.id}
-                    onClick={() => {
-                      setSelectedStation(station);
-                      setIsPlaying(false);
-                    }}
+                    onClick={() => selectStation(station)}
+                    aria-pressed={selectedStation.id === station.id}
                     className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
                       selectedStation.id === station.id
                         ? "bg-primary/10 text-primary"
@@ -293,6 +319,8 @@ export function MusicPlayer() {
           <div className="p-4 border-t border-border/60 flex items-center gap-3">
             <button
               onClick={togglePlay}
+              aria-label={isPlaying ? "Pause study music" : "Play study music"}
+              title={isPlaying ? "Pause study music" : "Play study music"}
               className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors"
             >
               {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
@@ -301,6 +329,8 @@ export function MusicPlayer() {
             <div className="flex-1 flex items-center gap-2">
               <button
                 onClick={toggleMute}
+                aria-label={volume === 0 ? "Unmute study music" : "Mute study music"}
+                title={volume === 0 ? "Unmute study music" : "Mute study music"}
                 className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 {volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
@@ -311,6 +341,7 @@ export function MusicPlayer() {
                 max="100"
                 value={volume}
                 onChange={handleVolumeChange}
+                aria-label="Study music volume"
                 className="flex-1 h-1 bg-border rounded-full appearance-none cursor-pointer"
               />
             </div>

@@ -60,15 +60,15 @@ function Results() {
   const addAssignment = useAddAssignment();
 
   useEffect(() => {
-    if (syllabusText) {
+    if (syllabusText && user) {
       extractResources({ syllabusText })
         .then((data) => setResources(data.resources))
         .catch((error) => console.error("Error extracting resources:", error));
     }
-  }, [syllabusText]);
+  }, [syllabusText, user]);
 
   useEffect(() => {
-    if (tab === "study-map" && items && !studyTasks) {
+    if (tab === "study-map" && items && user && !studyTasks) {
       setLoadingStudyMap(true);
       generateStudyMap({ items })
         .then((data) => {
@@ -80,7 +80,7 @@ function Results() {
           setLoadingStudyMap(false);
         });
     }
-  }, [tab, items, studyTasks]);
+  }, [tab, items, studyTasks, user]);
 
   const handleSaveToPlanner = async () => {
     if (!saveCourseName.trim() || !items || items.length === 0) return;
@@ -173,6 +173,7 @@ function Results() {
       <div className="max-w-4xl mx-auto">
         <button
           onClick={() => navigate({ to: "/" })}
+          aria-label="Back to home"
           className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -188,7 +189,7 @@ function Results() {
         {items && items.length > 0 && (
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm mb-6">
             {!user ? (
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-muted-foreground">
                   Sign in to save these {items.length} item{items.length !== 1 ? "s" : ""} to your
                   Course Planner.
@@ -201,10 +202,17 @@ function Results() {
                 </Link>
               </div>
             ) : savedToPlanner ? (
-              <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
-                <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-                Saved {items.length} item{items.length !== 1 ? "s" : ""} to "{saveCourseName}" in
-                your Course Planner.
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
+                  <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+                  Saved {items.length} item{items.length !== 1 ? "s" : ""} to "{saveCourseName}".
+                </div>
+                <Link
+                  to="/dashboard"
+                  className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium bg-primary text-primary-foreground"
+                >
+                  View Dashboard
+                </Link>
               </div>
             ) : (
               <>
@@ -220,6 +228,7 @@ function Results() {
                     value={saveCourseName}
                     onChange={(e) => setSaveCourseName(e.target.value)}
                     placeholder="Course name (e.g. Organic Chemistry)"
+                    aria-label="Course name for saved syllabus items"
                     className="flex-1 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <input
@@ -227,11 +236,13 @@ function Results() {
                     value={saveCourseCode}
                     onChange={(e) => setSaveCourseCode(e.target.value)}
                     placeholder="Course code (optional)"
+                    aria-label="Course code for saved syllabus items"
                     className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:w-48"
                   />
                   <button
                     onClick={handleSaveToPlanner}
                     disabled={!saveCourseName.trim() || saving}
+                    aria-label="Save syllabus items to dashboard planner"
                     className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50 flex-shrink-0"
                   >
                     {saving ? (
@@ -251,7 +262,7 @@ function Results() {
         {/* Semester Heatmap */}
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm mb-6">
           <h2 className="text-lg font-semibold text-foreground mb-3">Semester Heatmap</h2>
-          <div className="grid grid-cols-8 gap-2">
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
             {weekData.map((week) => {
               const getColor = (intensity: number) => {
                 if (intensity === 0) return "#1e3a8a";
@@ -271,9 +282,9 @@ function Results() {
               );
             })}
           </div>
-          <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
+          <div className="mt-3 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span>Week 1</span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span>0 items</span>
               <div className="flex gap-1">
                 <div className="w-4 h-4 rounded" style={{ backgroundColor: "#1e3a8a" }} />
@@ -318,7 +329,13 @@ function Results() {
             {/* Resources & Links Section */}
             <div className="mt-8">
               <h2 className="text-2xl font-bold text-foreground mb-4">Resources & Links</h2>
-              {!resources || resources.length === 0 ? (
+              {!user && syllabusText ? (
+                <div className="text-center py-8 border border-border rounded-xl">
+                  <p className="text-muted-foreground">
+                    Sign in to extract resources from this syllabus.
+                  </p>
+                </div>
+              ) : !resources || resources.length === 0 ? (
                 <div className="text-center py-8 border border-border rounded-xl">
                   <p className="text-muted-foreground">No resources found.</p>
                 </div>
@@ -348,7 +365,11 @@ function Results() {
 
         {tab === "study-map" && (
           <>
-            {loadingStudyMap ? (
+            {!user ? (
+              <div className="text-center py-12 border border-border rounded-xl">
+                <p className="text-muted-foreground">Sign in to generate a study map.</p>
+              </div>
+            ) : loadingStudyMap ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">Generating your study map...</p>
               </div>
@@ -365,7 +386,7 @@ function Results() {
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
+                        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                           <h3 className="font-semibold text-foreground">{task.title}</h3>
                           <span
                             className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${getPriorityColor(task.priority)}`}
@@ -374,7 +395,7 @@ function Results() {
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
                           <span>
                             📅{" "}
                             {new Date(task.start_date + "T12:00:00").toLocaleDateString("en-US", {

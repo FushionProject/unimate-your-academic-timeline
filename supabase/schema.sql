@@ -29,20 +29,47 @@ create index if not exists assignments_course_id_idx on public.assignments(cours
 alter table public.courses enable row level security;
 alter table public.assignments enable row level security;
 
+drop policy if exists "courses_select_own" on public.courses;
+drop policy if exists "courses_insert_own" on public.courses;
+drop policy if exists "courses_update_own" on public.courses;
+drop policy if exists "courses_delete_own" on public.courses;
+drop policy if exists "assignments_select_own" on public.assignments;
+drop policy if exists "assignments_insert_own" on public.assignments;
+drop policy if exists "assignments_update_own" on public.assignments;
+drop policy if exists "assignments_delete_own" on public.assignments;
+
 create policy "courses_select_own" on public.courses
   for select using (auth.uid() = user_id);
 create policy "courses_insert_own" on public.courses
   for insert with check (auth.uid() = user_id);
 create policy "courses_update_own" on public.courses
-  for update using (auth.uid() = user_id);
+  for update using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 create policy "courses_delete_own" on public.courses
   for delete using (auth.uid() = user_id);
 
 create policy "assignments_select_own" on public.assignments
   for select using (auth.uid() = user_id);
 create policy "assignments_insert_own" on public.assignments
-  for insert with check (auth.uid() = user_id);
+  for insert with check (
+    auth.uid() = user_id
+    and exists (
+      select 1
+      from public.courses
+      where courses.id = assignments.course_id
+        and courses.user_id = auth.uid()
+    )
+  );
 create policy "assignments_update_own" on public.assignments
-  for update using (auth.uid() = user_id);
+  for update using (auth.uid() = user_id)
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1
+      from public.courses
+      where courses.id = assignments.course_id
+        and courses.user_id = auth.uid()
+    )
+  );
 create policy "assignments_delete_own" on public.assignments
   for delete using (auth.uid() = user_id);

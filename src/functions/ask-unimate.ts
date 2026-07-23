@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getAuthHeaders } from "../lib/auth-fetch";
 
 const responseSchema = z.object({
   answer: z.string(),
@@ -32,6 +33,7 @@ export async function askUniMate(data: {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(await getAuthHeaders()),
       },
       body: JSON.stringify({ question, conversationHistory, classContext, mode, canvasContext }),
     });

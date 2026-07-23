@@ -14,9 +14,14 @@ import { askUniMate } from "../functions/ask-unimate";
 import ReactMarkdown from "react-markdown";
 import { LogoMark } from "../components/logo-mark";
 import { useCourses, useAssignments, getAcademicContext } from "../lib/courses";
+import { ProtectedRoute } from "../components/protected-route";
 
 export const Route = createFileRoute("/ask")({
-  component: Ask,
+  component: () => (
+    <ProtectedRoute>
+      <Ask />
+    </ProtectedRoute>
+  ),
 });
 
 interface Message {
@@ -37,6 +42,12 @@ interface QuestionHistory {
   answer: string;
   timestamp: string;
 }
+
+const starterPrompts = [
+  "What should I study first this week?",
+  "Explain my next assignment in simpler terms",
+  "Make a study plan for my upcoming exams",
+];
 
 function Ask() {
   const [question, setQuestion] = useState("");
@@ -204,17 +215,31 @@ function Ask() {
   };
 
   return (
-    <div className="h-screen bg-background flex flex-col">
+    <div className="min-h-[calc(100vh-12rem)] bg-background flex flex-col">
       <div className="flex-1 overflow-hidden flex flex-col max-w-4xl mx-auto w-full">
         {/* Conversation Area */}
-        <div className="flex-1 overflow-y-auto px-6 py-8">
+        <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center">
-              <LogoMark className="h-20 w-20 mb-6" />
+            <div className="flex min-h-[22rem] flex-col items-center justify-center text-center">
+              <LogoMark className="h-16 w-16 mb-5 sm:h-20 sm:w-20" />
               <h2 className="font-serif-display text-2xl font-medium text-foreground mb-2">
                 Ask UniMate
               </h2>
-              <p className="text-muted-foreground">Ask anything from your class</p>
+              <p className="max-w-md text-sm text-muted-foreground">
+                Ask about your classes, deadlines, or study plan. UniMate can use your dashboard
+                context when you have courses saved.
+              </p>
+              <div className="mt-5 flex max-w-xl flex-wrap justify-center gap-2">
+                {starterPrompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    onClick={() => handleSend(prompt)}
+                    className="rounded-full border border-border bg-card/70 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="space-y-6">
@@ -274,19 +299,24 @@ function Ask() {
                       </>
                     )}
                     {message.sources && message.sources.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {message.sources.map((source, index) => (
-                          <a
-                            key={index}
-                            href={source.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs rounded-full px-3 py-1 transition-colors bg-primary/10 text-primary hover:bg-primary/20"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            {source.title}
-                          </a>
-                        ))}
+                      <div className="mt-3">
+                        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                          Web references
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {message.sources.map((source, index) => (
+                            <a
+                              key={index}
+                              href={source.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs rounded-full px-3 py-1 transition-colors bg-primary/10 text-primary hover:bg-primary/20"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              {source.title}
+                            </a>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -318,8 +348,8 @@ function Ask() {
         </div>
 
         {/* Input Bar */}
-        <div className="border-t border-border/60 p-4 bg-background/80 backdrop-blur">
-          <div className="flex gap-3 max-w-3xl mx-auto">
+        <div className="border-t border-border/60 bg-background/80 p-3 pb-24 backdrop-blur sm:p-4 sm:pb-4">
+          <div className="mx-auto flex max-w-3xl gap-2 sm:gap-3">
             <input
               type="text"
               value={question}
@@ -331,12 +361,16 @@ function Ask() {
             <button
               onClick={() => handleSend()}
               disabled={loading || !question.trim()}
+              aria-label="Send question"
+              title="Send question"
               className="h-12 w-12 rounded-full flex items-center justify-center transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 bg-primary text-primary-foreground"
             >
               <Send className="h-5 w-5" />
             </button>
             <button
               onClick={() => setShowHistory(true)}
+              aria-label="Open recent questions"
+              title="Recent questions"
               className="h-12 w-12 rounded-full flex items-center justify-center transition-all hover:scale-105 bg-primary/10 text-primary"
             >
               <History className="h-5 w-5" />
@@ -353,6 +387,7 @@ function Ask() {
               <h3 className="text-lg font-medium text-foreground">Setup Your Classes</h3>
               <button
                 onClick={() => setShowClassSetup(false)}
+                aria-label="Close class setup"
                 className="text-muted-foreground hover:text-foreground"
               >
                 <X className="h-5 w-5" />
@@ -372,6 +407,7 @@ function Ask() {
               />
               <button
                 onClick={handleAddClass}
+                aria-label="Add class"
                 className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-primary text-primary-foreground"
               >
                 <Plus className="h-4 w-4" />
@@ -384,7 +420,11 @@ function Ask() {
                   className="inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full bg-primary/10 text-primary"
                 >
                   {cls}
-                  <button onClick={() => handleRemoveClass(cls)} className="hover:text-foreground">
+                  <button
+                    onClick={() => handleRemoveClass(cls)}
+                    aria-label={`Remove ${cls}`}
+                    className="hover:text-foreground"
+                  >
                     <X className="h-3 w-3" />
                   </button>
                 </span>
@@ -408,6 +448,7 @@ function Ask() {
               <h3 className="text-lg font-medium text-foreground">Recent Questions</h3>
               <button
                 onClick={() => setShowHistory(false)}
+                aria-label="Close recent questions"
                 className="text-muted-foreground hover:text-foreground"
               >
                 <X className="h-5 w-5" />

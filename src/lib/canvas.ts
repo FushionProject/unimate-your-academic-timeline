@@ -1,5 +1,6 @@
 // Canvas LMS Integration
 // All data stored in localStorage, no server-side storage
+import { getAuthHeaders } from "./auth-fetch";
 
 export interface CanvasConfig {
   apiUrl: string;
@@ -98,11 +99,12 @@ export function clearCanvasData(): void {
 
 // All Canvas requests go through our server-side proxy (/api/canvas-proxy)
 // because the Canvas REST API doesn't send CORS headers for browser requests.
-function canvasProxyFetch(apiUrl: string, apiToken: string, path: string): Promise<Response> {
+async function canvasProxyFetch(apiUrl: string, apiToken: string, path: string): Promise<Response> {
   return fetch("/api/canvas-proxy", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(await getAuthHeaders()),
     },
     body: JSON.stringify({ apiUrl: apiUrl.replace(/\/$/, ""), apiToken, path }),
   });

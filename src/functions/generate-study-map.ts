@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getAuthHeaders } from "../lib/auth-fetch";
 
 const studyTaskSchema = z.object({
   title: z.string(),
@@ -29,6 +30,7 @@ export async function generateStudyMap(data: { items: SyllabusItem[] }) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(await getAuthHeaders()),
       },
       body: JSON.stringify({ items }),
     });

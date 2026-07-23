@@ -25,7 +25,7 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-[10px] bg-background/80 border-b border-border/60">
-      <div className="mx-auto flex max-w-6xl items-center justify-center px-6 py-4 gap-8">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 gap-4 sm:px-6 md:justify-center md:gap-8">
         <Link to="/">
           <Logo />
         </Link>
@@ -40,7 +40,7 @@ export function Navbar() {
             to="/planner"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
-            Syllabus
+            Upload Syllabus
           </Link>
           <Link
             to="/dashboard"
@@ -72,7 +72,7 @@ export function Navbar() {
           {user ? (
             <button
               onClick={handleSignOut}
-              className="hidden sm:inline-flex h-9 items-center rounded-full border border-border bg-card/60 px-4 text-sm font-medium text-foreground transition hover:bg-card"
+              className="inline-flex h-9 items-center rounded-full border border-border bg-card/60 px-3 text-sm font-medium text-foreground transition hover:bg-card sm:px-4"
               title={user.email ?? undefined}
             >
               Sign out
@@ -80,13 +80,36 @@ export function Navbar() {
           ) : (
             <Link
               to="/signin"
-              className="hidden sm:inline-flex h-9 items-center rounded-full border border-border bg-card/60 px-4 text-sm font-medium text-foreground transition hover:bg-card"
+              className="inline-flex h-9 items-center rounded-full border border-border bg-card/60 px-3 text-sm font-medium text-foreground transition hover:bg-card sm:px-4"
             >
               Sign in
             </Link>
           )}
         </div>
       </div>
+      <nav className="flex gap-3 overflow-x-auto border-t border-border/40 px-4 py-2 text-sm md:hidden">
+        <Link to="/" className="whitespace-nowrap text-muted-foreground hover:text-foreground">
+          Home
+        </Link>
+        <Link
+          to="/planner"
+          className="whitespace-nowrap text-muted-foreground hover:text-foreground"
+        >
+          Upload
+        </Link>
+        <Link
+          to="/dashboard"
+          className="whitespace-nowrap text-muted-foreground hover:text-foreground"
+        >
+          Dashboard
+        </Link>
+        <Link to="/notes" className="whitespace-nowrap text-muted-foreground hover:text-foreground">
+          Notes
+        </Link>
+        <Link to="/ask" className="whitespace-nowrap text-muted-foreground hover:text-foreground">
+          Ask UniMate
+        </Link>
+      </nav>
     </header>
   );
 }

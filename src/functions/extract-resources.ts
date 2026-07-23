@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getAuthHeaders } from "../lib/auth-fetch";
 
 const resourceSchema = z.object({
   type: z.enum(["portal", "textbook", "office_hours", "contact"]),
@@ -19,6 +20,7 @@ export async function extractResources(data: { syllabusText: string }) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(await getAuthHeaders()),
       },
       body: JSON.stringify({ syllabusText }),
     });

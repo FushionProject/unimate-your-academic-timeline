@@ -25,6 +25,7 @@ function TabButton({
   return (
     <button
       onClick={onClick}
+      aria-pressed={active}
       className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition ${
         active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
       }`}
@@ -98,7 +99,8 @@ function Planner() {
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-foreground mb-2">Upload Syllabus</h1>
           <p className="text-muted-foreground">
-            Drop in your syllabus and UniMate maps your entire semester in seconds.
+            Paste text for the fastest start, or upload a text-based PDF. You can review everything
+            before saving it to your dashboard.
           </p>
         </div>
 
@@ -151,6 +153,7 @@ function Planner() {
                       ref={inputRef}
                       type="file"
                       accept="application/pdf"
+                      aria-label="Choose syllabus PDF"
                       className="hidden"
                       onChange={(e) => {
                         const f = e.target.files?.[0];
@@ -174,11 +177,18 @@ function Planner() {
                     </p>
                   </div>
                   {pdfError && <p className="mt-2 text-xs text-destructive">{pdfError}</p>}
+                  {!pdfText && !extractingPdf && !pdfError && (
+                    <p className="mt-3 text-center text-xs text-muted-foreground">
+                      If your PDF is scanned or hard to read, switch to Paste text for a smoother
+                      first run.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <textarea
                   ref={textareaRef}
                   placeholder="Paste your syllabus text here..."
+                  aria-label="Syllabus text"
                   className="w-full h-48 rounded-xl border border-border bg-secondary/40 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                 />
               )}
@@ -193,9 +203,8 @@ function Planner() {
               </button>
 
               <p className="mt-3 text-center text-xs text-muted-foreground">
-                Parsed deadlines land on your{" "}
-                <span className="font-medium text-foreground">Dashboard</span> — add or edit courses
-                and assignments there anytime.
+                Next step: review the timeline, then save the items to your{" "}
+                <span className="font-medium text-foreground">Dashboard</span>.
               </p>
             </div>
           </div>
