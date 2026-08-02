@@ -1,5 +1,5 @@
 // Canvas LMS Integration
-// All data stored in localStorage, no server-side storage
+// All data stored in sessionStorage, no server-side storage
 import { getAuthHeaders } from "./auth-fetch";
 
 export interface CanvasConfig {
@@ -63,10 +63,10 @@ const CANVAS_EVENTS_KEY = "canvasEvents";
 const CANVAS_TODOS_KEY = "canvasTodos";
 const CANVAS_ENROLLMENTS_KEY = "canvasEnrollments";
 
-// Get Canvas config from localStorage
+// Get Canvas config from sessionStorage
 export function getCanvasConfig(): CanvasConfig | null {
   try {
-    const config = localStorage.getItem(CANVAS_CONFIG_KEY);
+    const config = sessionStorage.getItem(CANVAS_CONFIG_KEY);
     return config ? JSON.parse(config) : null;
   } catch (error) {
     console.error("Error reading Canvas config:", error);
@@ -74,10 +74,10 @@ export function getCanvasConfig(): CanvasConfig | null {
   }
 }
 
-// Save Canvas config to localStorage
+// Save Canvas config to sessionStorage
 export function saveCanvasConfig(config: CanvasConfig): void {
   try {
-    localStorage.setItem(CANVAS_CONFIG_KEY, JSON.stringify(config));
+    sessionStorage.setItem(CANVAS_CONFIG_KEY, JSON.stringify(config));
   } catch (error) {
     console.error("Error saving Canvas config:", error);
   }
@@ -86,12 +86,12 @@ export function saveCanvasConfig(config: CanvasConfig): void {
 // Clear Canvas config and data
 export function clearCanvasData(): void {
   try {
-    localStorage.removeItem(CANVAS_CONFIG_KEY);
-    localStorage.removeItem(CANVAS_COURSES_KEY);
-    localStorage.removeItem(CANVAS_ASSIGNMENTS_KEY);
-    localStorage.removeItem(CANVAS_EVENTS_KEY);
-    localStorage.removeItem(CANVAS_TODOS_KEY);
-    localStorage.removeItem(CANVAS_ENROLLMENTS_KEY);
+    sessionStorage.removeItem(CANVAS_CONFIG_KEY);
+    sessionStorage.removeItem(CANVAS_COURSES_KEY);
+    sessionStorage.removeItem(CANVAS_ASSIGNMENTS_KEY);
+    sessionStorage.removeItem(CANVAS_EVENTS_KEY);
+    sessionStorage.removeItem(CANVAS_TODOS_KEY);
+    sessionStorage.removeItem(CANVAS_ENROLLMENTS_KEY);
   } catch (error) {
     console.error("Error clearing Canvas data:", error);
   }
@@ -152,7 +152,7 @@ export async function fetchCanvasData(): Promise<{ success: boolean; error?: str
     );
     if (!coursesResponse.ok) throw new Error("Failed to fetch courses");
     const courses: CanvasCourse[] = await coursesResponse.json();
-    localStorage.setItem(CANVAS_COURSES_KEY, JSON.stringify(courses));
+    sessionStorage.setItem(CANVAS_COURSES_KEY, JSON.stringify(courses));
 
     // Fetch upcoming events
     const eventsResponse = await canvasProxyFetch(
@@ -162,13 +162,13 @@ export async function fetchCanvasData(): Promise<{ success: boolean; error?: str
     );
     if (!eventsResponse.ok) throw new Error("Failed to fetch events");
     const events: CanvasEvent[] = await eventsResponse.json();
-    localStorage.setItem(CANVAS_EVENTS_KEY, JSON.stringify(events));
+    sessionStorage.setItem(CANVAS_EVENTS_KEY, JSON.stringify(events));
 
     // Fetch todos
     const todosResponse = await canvasProxyFetch(apiUrl, apiToken, "/api/v1/users/self/todo");
     if (!todosResponse.ok) throw new Error("Failed to fetch todos");
     const todos: CanvasTodo[] = await todosResponse.json();
-    localStorage.setItem(CANVAS_TODOS_KEY, JSON.stringify(todos));
+    sessionStorage.setItem(CANVAS_TODOS_KEY, JSON.stringify(todos));
 
     // Fetch enrollments (grades) for each course
     const enrollments: CanvasEnrollment[] = [];
@@ -187,7 +187,7 @@ export async function fetchCanvasData(): Promise<{ success: boolean; error?: str
         console.error(`Failed to fetch enrollment for course ${course.id}:`, error);
       }
     }
-    localStorage.setItem(CANVAS_ENROLLMENTS_KEY, JSON.stringify(enrollments));
+    sessionStorage.setItem(CANVAS_ENROLLMENTS_KEY, JSON.stringify(enrollments));
 
     // Fetch assignments for each course
     const assignments: CanvasAssignment[] = [];
@@ -206,7 +206,7 @@ export async function fetchCanvasData(): Promise<{ success: boolean; error?: str
         console.error(`Failed to fetch assignments for course ${course.id}:`, error);
       }
     }
-    localStorage.setItem(CANVAS_ASSIGNMENTS_KEY, JSON.stringify(assignments));
+    sessionStorage.setItem(CANVAS_ASSIGNMENTS_KEY, JSON.stringify(assignments));
 
     return { success: true };
   } catch (error) {
@@ -217,7 +217,7 @@ export async function fetchCanvasData(): Promise<{ success: boolean; error?: str
 // Get cached Canvas data
 export function getCanvasCourses(): CanvasCourse[] {
   try {
-    const data = localStorage.getItem(CANVAS_COURSES_KEY);
+    const data = sessionStorage.getItem(CANVAS_COURSES_KEY);
     return data ? JSON.parse(data) : [];
   } catch (error) {
     return [];
@@ -226,7 +226,7 @@ export function getCanvasCourses(): CanvasCourse[] {
 
 export function getCanvasAssignments(): CanvasAssignment[] {
   try {
-    const data = localStorage.getItem(CANVAS_ASSIGNMENTS_KEY);
+    const data = sessionStorage.getItem(CANVAS_ASSIGNMENTS_KEY);
     return data ? JSON.parse(data) : [];
   } catch (error) {
     return [];
@@ -235,7 +235,7 @@ export function getCanvasAssignments(): CanvasAssignment[] {
 
 export function getCanvasEvents(): CanvasEvent[] {
   try {
-    const data = localStorage.getItem(CANVAS_EVENTS_KEY);
+    const data = sessionStorage.getItem(CANVAS_EVENTS_KEY);
     return data ? JSON.parse(data) : [];
   } catch (error) {
     return [];
@@ -244,7 +244,7 @@ export function getCanvasEvents(): CanvasEvent[] {
 
 export function getCanvasTodos(): CanvasTodo[] {
   try {
-    const data = localStorage.getItem(CANVAS_TODOS_KEY);
+    const data = sessionStorage.getItem(CANVAS_TODOS_KEY);
     return data ? JSON.parse(data) : [];
   } catch (error) {
     return [];
@@ -253,7 +253,7 @@ export function getCanvasTodos(): CanvasTodo[] {
 
 export function getCanvasEnrollments(): CanvasEnrollment[] {
   try {
-    const data = localStorage.getItem(CANVAS_ENROLLMENTS_KEY);
+    const data = sessionStorage.getItem(CANVAS_ENROLLMENTS_KEY);
     return data ? JSON.parse(data) : [];
   } catch (error) {
     return [];

@@ -31,8 +31,11 @@ function Upgrade() {
           Authorization: `Bearer ${session.access_token}`,
         },
       });
-      const data = await res.json();
+      const data = (await res.json()) as { error?: string; url?: string };
       if (!res.ok) throw new Error(data.error || "Failed to start checkout");
+      if (!data.url || !data.url.startsWith("https://checkout.stripe.com/")) {
+        throw new Error("Checkout did not return a valid secure payment link.");
+      }
       window.location.href = data.url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -74,11 +77,15 @@ function Upgrade() {
         ) : (
           <>
             {success && (
-              <p className="mb-4 text-sm text-green-600">
-                Payment received — activating your account...
+              <p className="mb-4 text-sm text-green-600" role="status" aria-live="polite">
+                Checkout complete — confirming your Pro access...
               </p>
             )}
-            {canceled && <p className="mb-4 text-sm text-muted-foreground">Checkout canceled.</p>}
+            {canceled && (
+              <p className="mb-4 text-sm text-muted-foreground" role="status">
+                Checkout canceled. You were not upgraded.
+              </p>
+            )}
             <ul className="text-sm text-left text-muted-foreground mb-6 space-y-2">
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
@@ -101,7 +108,11 @@ function Upgrade() {
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               Upgrade to Pro
             </button>
-            {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+            {error && (
+              <p className="mt-2 text-xs text-destructive" role="alert">
+                {error}
+              </p>
+            )}
           </>
         )}
       </div>

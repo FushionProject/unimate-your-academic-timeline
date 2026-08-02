@@ -13,7 +13,6 @@ const responseSchema = z.object({
 
 export async function extractResources(data: { syllabusText: string }) {
   const { syllabusText } = data;
-  console.log("extractResources called with:", syllabusText.substring(0, 100));
 
   try {
     const response = await fetch("/api/extract-resources", {

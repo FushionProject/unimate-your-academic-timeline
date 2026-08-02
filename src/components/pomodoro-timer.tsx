@@ -5,8 +5,8 @@ type TimerMode = "focus" | "shortBreak" | "longBreak";
 
 const MODES = {
   focus: { duration: 25 * 60, label: "Focus" },
-  shortBreak: { duration: 5 * 60, label: "Short Break" },
-  longBreak: { duration: 15 * 60, label: "Long Break" },
+  shortBreak: { duration: 5 * 60, label: "Break" },
+  longBreak: { duration: 15 * 60, label: "Long break" },
 };
 
 const STUDY_QUOTES = [
@@ -33,7 +33,8 @@ export function PomodoroTimer() {
   const [mode, setMode] = useState<TimerMode>("focus");
   const [timeLeft, setTimeLeft] = useState(MODES.focus.duration);
   const [pomodorosCompleted, setPomodorosCompleted] = useState(0);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [celebration, setCelebration] = useState("");
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const playChime = () => {
     const AudioContextConstructor =
@@ -88,6 +89,7 @@ export function PomodoroTimer() {
             playChime();
 
             if (mode === "focus") {
+              setCelebration("Focus session complete — nice work. Take a real break.");
               setPomodorosCompleted((prev) => {
                 const newCount = prev + 1;
                 if (newCount % 4 === 0) {
@@ -98,6 +100,7 @@ export function PomodoroTimer() {
                 return newCount;
               });
             } else {
+              setCelebration("Break complete — ready when you are.");
               switchMode("focus");
             }
 
@@ -119,14 +122,31 @@ export function PomodoroTimer() {
     };
   }, [isRunning, mode]);
 
+  useEffect(() => {
+    if (!celebration) return;
+    const timeout = window.setTimeout(() => setCelebration(""), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [celebration]);
+
+  useEffect(() => {
+    if (!isExpanded) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsExpanded(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isExpanded]);
+
   return (
     <div className="fixed bottom-24 right-4 z-50 sm:bottom-20">
       {/* Collapsed State */}
       {!isExpanded && (
         <button
           onClick={() => setIsExpanded(true)}
-          aria-label="Open Pomodoro timer"
-          title="Pomodoro timer"
+          aria-label="Open focus timer"
+          aria-expanded="false"
+          aria-controls="pomodoro-panel"
+          title="Focus timer"
           className="h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
         >
           <Timer className="h-5 w-5" />
@@ -135,16 +155,21 @@ export function PomodoroTimer() {
 
       {/* Expanded State */}
       {isExpanded && (
-        <div className="bg-background border border-border/60 rounded-2xl shadow-2xl w-72 overflow-hidden">
+        <div
+          id="pomodoro-panel"
+          role="region"
+          aria-label="Focus timer"
+          className="bg-background border border-border/60 rounded-2xl shadow-2xl w-72 overflow-hidden"
+        >
           {/* Header */}
           <div className="p-4 border-b border-border/60 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Timer className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-foreground">Pomodoro</span>
+              <span className="text-sm font-medium text-foreground">Focus timer</span>
             </div>
             <button
               onClick={() => setIsExpanded(false)}
-              aria-label="Close Pomodoro timer"
+              aria-label="Close focus timer"
               className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card/60 transition-colors"
             >
               ×
@@ -173,7 +198,11 @@ export function PomodoroTimer() {
 
           {/* Timer Display */}
           <div className="px-4 py-6 text-center">
-            <div className="text-5xl font-bold text-foreground mb-2 font-mono">
+            <div
+              role="timer"
+              aria-label={`${MODES[mode].label}: ${formatTime(timeLeft)} remaining`}
+              className="text-5xl font-bold text-foreground mb-2 font-mono tabular-nums"
+            >
               {formatTime(timeLeft)}
             </div>
             <div className="text-sm text-muted-foreground">{MODES[mode].label}</div>
@@ -183,8 +212,15 @@ export function PomodoroTimer() {
           <div className="px-4 py-2 border-t border-border/60 text-center">
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <Clock className="h-4 w-4" />
-              <span>{pomodorosCompleted} pomodoros completed</span>
+              <span>
+                {pomodorosCompleted} {pomodorosCompleted === 1 ? "session" : "sessions"} completed
+              </span>
             </div>
+            {celebration && (
+              <p className="mt-2 text-xs font-medium text-primary" role="status" aria-live="polite">
+                {celebration}
+              </p>
+            )}
           </div>
 
           {/* Controls */}

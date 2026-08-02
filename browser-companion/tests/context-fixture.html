@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UniMate Context Extractor Fixture</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 40px;
+      }
+      [data-scenario] {
+        display: none;
+      }
+      .question {
+        max-width: 720px;
+        padding: 24px;
+        border: 1px solid #ddd;
+      }
+      canvas {
+        width: 640px;
+        height: 320px;
+        background: linear-gradient(135deg, #234, #8bd);
+      }
+      #results {
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <nav>Dashboard Courses Calendar Inbox History Help</nav>
+
+    <article data-scenario="article">
+      <h1>How photosynthesis stores solar energy</h1>
+      <p id="highlight-target">
+        Chlorophyll absorbs light energy and helps convert carbon dioxide and water into glucose.
+      </p>
+      <p>Oxygen is released as a byproduct during the light-dependent reactions.</p>
+      <p>
+        In the Calvin cycle, plants use chemical energy carried by ATP and NADPH to assemble
+        carbohydrate molecules. This process supports growth while linking atmospheric carbon to the
+        organic compounds used throughout an ecosystem.
+      </p>
+    </article>
+
+    <main data-scenario="canvas" id="canvas-dynamic-root"></main>
+
+    <section data-scenario="numbered">
+      <h1>College algebra practice</h1>
+      <div class="question">
+        <p>1. Solve x + 4 = 9.</p>
+        <label><input type="radio" name="q1" />x = 3</label>
+        <label><input type="radio" name="q1" />x = 5</label>
+      </div>
+      <div class="question">
+        <p>2. Factor x² + 5x + 6.</p>
+        <label><input type="radio" name="q2" />(x + 1)(x + 6)</label>
+        <label><input type="radio" name="q2" />(x + 2)(x + 3)</label>
+        <p role="status">Remember to find two numbers whose product is 6.</p>
+      </div>
+      <div class="question">
+        <p>3. Simplify 4(x - 2).</p>
+        <label><input type="radio" name="q3" />4x - 8</label>
+        <label><input type="radio" name="q3" />4x - 2</label>
+      </div>
+    </section>
+
+    <section data-scenario="visual">
+      <h1>Analyze the diagram</h1>
+      <canvas width="640" height="320" aria-label="Unlabeled geometry diagram"></canvas>
+    </section>
+
+    <section data-scenario="iframe">
+      <h1>Embedded assignment</h1>
+      <iframe
+        id="same-origin-frame"
+        srcdoc="<main><h2>Iframe question</h2><p>What is the derivative of x squared?</p><label><input type='radio' name='d' value='2x'>2x</label><label><input type='radio' name='d' value='x'>x</label></main>"
+      ></iframe>
+    </section>
+
+    <section data-scenario="shadow">
+      <h1>Component assignment</h1>
+      <div id="shadow-host"></div>
+    </section>
+
+    <h2>Fixture results</h2>
+    <pre id="results">Running…</pre>
+
+    <script src="../context-extractor.js"></script>
+    <script>
+      const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+      function showScenario(name) {
+        for (const element of document.querySelectorAll("[data-scenario]")) {
+          element.style.display = element.dataset.scenario === name ? "block" : "none";
+        }
+        document.getSelection().removeAllRanges();
+      }
+
+      function expect(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+
+      async function runContextFixtureTests() {
+        const extractor = window.UniMateContextExtractor;
+        const results = [];
+
+        showScenario("article");
+        let context = extractor.extractRenderedContext(document);
+        expect(context.visiblePageText.includes("photosynthesis"), "article heading missing");
+        expect(
+          !context.visiblePageText.includes("Dashboard Courses"),
+          "navigation clutter included",
+        );
+        results.push("PASS normal article");
+        const mismatchDecision = extractor.decideScreenshot(
+          context,
+          "Explain mitochondrial electron transport membrane complexes",
+        );
+        expect(
+          mismatchDecision.useScreenshot,
+          "prompt/context mismatch did not trigger screenshot",
+        );
+        results.push(`PASS prompt-aware screenshot fallback (${mismatchDecision.reason})`);
+
+        const range = document.createRange();
+        range.selectNodeContents(document.querySelector("#highlight-target"));
+        document.getSelection().addRange(range);
+        context = extractor.extractRenderedContext(document);
+        expect(context.highlightedText.includes("Chlorophyll"), "highlighted paragraph missing");
+        expect(context.nearbyText.includes("photosynthesis"), "nearby heading missing");
+        results.push("PASS highlighted paragraph + nearby heading");
+
+        showScenario("numbered");
+        context = extractor.extractRenderedContext(document);
+        const focusedNumberTwo = extractor.buildFocusedContextPacket(
+          context,
+          "What's the answer to number 2?",
+        );
+        expect(
+          focusedNumberTwo.relevance.matchedQuestionNumber === 2,
+          "number 2 reference did not match",
+        );
+        for (const text of [
+          "2. Factor x² + 5x + 6.",
+          "(x + 1)(x + 6)",
+          "(x + 2)(x + 3)",
+          "product is 6",
+        ]) {
+          expect(
+            focusedNumberTwo.visiblePageText.includes(text),
+            `number 2 context missing: ${text}`,
+          );
+        }
+        expect(
+          !focusedNumberTwo.visiblePageText.includes("3. Simplify"),
+          "number 3 leaked into focused number 2 context",
+        );
+        expect(
+          !extractor.decideScreenshot(focusedNumberTwo, "What's the answer to number 2?")
+            .useScreenshot,
+          "matched number 2 unexpectedly required screenshot",
+        );
+        const missingNumber = extractor.decideScreenshot(context, "What's the answer to number 7?");
+        expect(
+          missingNumber.useScreenshot && missingNumber.reason === "referenced-item-not-found",
+          "missing numbered item did not trigger precise fallback",
+        );
+        results.push("PASS focused numbered-question matching + missing-item fallback");
+
+        showScenario("canvas");
+        setTimeout(() => {
+          document.querySelector("#canvas-dynamic-root").innerHTML = `
+            <article class="question" role="group" aria-labelledby="question-title">
+              <h2 id="question-title">Question 4</h2>
+              <p>Which organelle is responsible for cellular respiration?</p>
+              <label><input type="radio" name="organelle" value="nucleus">Nucleus</label>
+              <label><input type="radio" name="organelle" value="mitochondrion" checked>Mitochondrion</label>
+              <label><input type="radio" name="organelle" value="ribosome">Ribosome</label>
+              <label><input type="radio" name="organelle" value="chloroplast">Chloroplast</label>
+              <p role="alert">Incorrect</p>
+              <p>0 / 1 pts</p>
+            </article>`;
+        }, 30);
+        await wait(60);
+        context = extractor.extractRenderedContext(document);
+        for (const text of [
+          "Which organelle is responsible for cellular respiration?",
+          "Nucleus",
+          "Mitochondrion",
+          "Ribosome",
+          "Chloroplast",
+          "Incorrect",
+          "0 / 1 pts",
+        ]) {
+          expect(context.visiblePageText.includes(text), `Canvas content missing: ${text}`);
+        }
+        expect(context.visiblePageText.includes("(selected)"), "selected radio answer missing");
+        expect(
+          !extractor.decideScreenshot(context, "Why was cellular respiration marked incorrect?")
+            .useScreenshot,
+          "complete Canvas DOM unexpectedly required screenshot",
+        );
+        results.push("PASS dynamic Canvas-style quiz + radio choices + feedback");
+
+        showScenario("iframe");
+        const iframe = document.querySelector("#same-origin-frame");
+        if (!iframe.contentDocument?.body?.textContent)
+          await new Promise((resolve) => iframe.addEventListener("load", resolve, { once: true }));
+        context = extractor.extractRenderedContext(document);
+        expect(
+          context.visiblePageText.includes("derivative of x squared"),
+          "same-origin iframe missing",
+        );
+        expect(
+          context.visiblePageText.includes("Answer option: 2x"),
+          "iframe radio option missing",
+        );
+        results.push("PASS accessible same-origin iframe");
+
+        showScenario("shadow");
+        const shadow =
+          document.querySelector("#shadow-host").shadowRoot ||
+          document.querySelector("#shadow-host").attachShadow({ mode: "open" });
+        shadow.innerHTML = `<section><h2>Shadow quiz</h2><p>Visible content inside an open shadow root</p><label><input type="checkbox" checked>Reviewed feedback</label></section>`;
+        context = extractor.extractRenderedContext(document);
+        expect(context.visiblePageText.includes("Shadow quiz"), "open shadow heading missing");
+        expect(context.visiblePageText.includes("Reviewed feedback"), "shadow checkbox missing");
+        results.push("PASS open shadow root");
+
+        showScenario("visual");
+        context = extractor.extractRenderedContext(document);
+        const visualDecision = extractor.decideScreenshot(context, "What does this diagram show?");
+        expect(visualDecision.useScreenshot, "diagram-heavy page did not trigger screenshot");
+        results.push(`PASS diagram screenshot fallback (${visualDecision.reason})`);
+
+        document.querySelector("#results").textContent = results.join("\n");
+        return { passed: results.length, results };
+      }
+
+      window.fixturePromise = runContextFixtureTests().catch((error) => {
+        document.querySelector("#results").textContent = `FAIL ${error.message}`;
+        throw error;
+      });
+    </script>
+  </body>
+</html>

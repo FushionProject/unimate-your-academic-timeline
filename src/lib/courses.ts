@@ -39,6 +39,7 @@ export function useCourses() {
       const { data, error } = await requireSupabase()
         .from("courses")
         .select("*")
+        .eq("user_id", user!.id)
         .order("created_at", { ascending: true });
       if (error) throw error;
       return data;
@@ -76,7 +77,12 @@ export function useRemoveCourse() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (courseId: string) => {
-      const { error } = await requireSupabase().from("courses").delete().eq("id", courseId);
+      if (!user) throw new Error("You must be signed in.");
+      const { error } = await requireSupabase()
+        .from("courses")
+        .delete()
+        .eq("id", courseId)
+        .eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -97,6 +103,7 @@ export function useAssignments() {
       const { data, error } = await requireSupabase()
         .from("assignments")
         .select("*")
+        .eq("user_id", user!.id)
         .order("due_at", { ascending: true });
       if (error) throw error;
       return data;
@@ -134,10 +141,12 @@ export function useToggleAssignment() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: { id: string; completed: boolean }) => {
+      if (!user) throw new Error("You must be signed in.");
       const { error } = await requireSupabase()
         .from("assignments")
         .update({ completed: !input.completed })
-        .eq("id", input.id);
+        .eq("id", input.id)
+        .eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -151,7 +160,12 @@ export function useRemoveAssignment() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (assignmentId: string) => {
-      const { error } = await requireSupabase().from("assignments").delete().eq("id", assignmentId);
+      if (!user) throw new Error("You must be signed in.");
+      const { error } = await requireSupabase()
+        .from("assignments")
+        .delete()
+        .eq("id", assignmentId)
+        .eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -184,7 +198,11 @@ export function getUpcomingAssignments(assignments: Assignment[], days: number =
     .sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime());
 }
 
-export function getAcademicContext(courses: Course[], assignments: Assignment[]): string {
+export function getAcademicContext(
+  courses: Course[],
+  assignments: Assignment[],
+  assignmentLimit = 7,
+): string {
   if (courses.length === 0) return "";
 
   let context = "Current Courses:\n";
@@ -196,9 +214,12 @@ export function getAcademicContext(courses: Course[], assignments: Assignment[])
     context += "\n";
   });
 
-  const upcoming = getUpcomingAssignments(assignments, 7);
+  const upcoming = assignments
+    .filter((a) => !a.completed && a.due_at)
+    .sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime())
+    .slice(0, assignmentLimit);
   if (upcoming.length > 0) {
-    context += "\nUpcoming Assignments (next 7 days):\n";
+    context += "\nNext Saved Assignments:\n";
     upcoming.forEach((a) => {
       const course = courses.find((c) => c.id === a.course_id);
       const dueDate = new Date(a.due_at).toLocaleDateString();

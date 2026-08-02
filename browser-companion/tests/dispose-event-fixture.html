@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UniMate disposal-event audit fixture</title>
+  </head>
+  <body>
+    <h1>UniMate disposal-event audit fixture</h1>
+    <p>A normal webpage dispatches the public event used by the extension.</p>
+    <script>
+      setTimeout(() => {
+        document.dispatchEvent(new CustomEvent("unimate-companion:dispose"));
+      }, 1_000);
+    </script>
+  </body>
+</html>

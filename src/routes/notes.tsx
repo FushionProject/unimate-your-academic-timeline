@@ -16,11 +16,16 @@ import {
   Hash,
   BookOpen,
 } from "lucide-react";
-import { useTheme } from "../components/theme-provider";
 import { useCourses } from "../lib/courses";
+import { ProtectedRoute } from "../components/protected-route";
+import { useAuth } from "../lib/auth-context";
 
 export const Route = createFileRoute("/notes")({
-  component: Notes,
+  component: () => (
+    <ProtectedRoute>
+      <Notes />
+    </ProtectedRoute>
+  ),
 });
 
 interface NoteFormatting {
@@ -47,9 +52,10 @@ interface Note {
 }
 
 function Notes() {
-  const { theme } = useTheme();
+  const { user } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [hasLoadedNotes, setHasLoadedNotes] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [formatting, setFormatting] = useState<NoteFormatting>({
@@ -65,8 +71,10 @@ function Notes() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<string>("");
+  const [saveStatus, setSaveStatus] = useState("");
 
   const { data: manualCourses = [] } = useCourses();
+  const notesStorageKey = user ? `unimateNotes:${user.id}` : null;
 
   const tagColors = [
     "#FEF3C7",
@@ -99,23 +107,42 @@ function Notes() {
   ];
 
   useEffect(() => {
-    const saved = localStorage.getItem("unimateNotes");
-    if (saved) {
-      const parsedNotes = JSON.parse(saved);
-      setNotes(parsedNotes);
-      if (parsedNotes.length > 0) {
-        setSelectedNoteId(parsedNotes[0].id);
-        setTitle(parsedNotes[0].title);
-        setBody(parsedNotes[0].body);
-        setFormatting(parsedNotes[0].formatting);
-        setTags(parsedNotes[0].tags || []);
+    if (!notesStorageKey) return;
+    setHasLoadedNotes(false);
+    try {
+      const saved = localStorage.getItem(notesStorageKey);
+      if (saved) {
+        const parsedNotes = JSON.parse(saved);
+        setNotes(parsedNotes);
+        if (parsedNotes.length > 0) {
+          setSelectedNoteId(parsedNotes[0].id);
+          setTitle(parsedNotes[0].title);
+          setBody(parsedNotes[0].body);
+          setFormatting(parsedNotes[0].formatting);
+          setTags(parsedNotes[0].tags || []);
+          setSelectedCourse(parsedNotes[0].course || "");
+        }
+      } else {
+        setNotes([]);
+        setSelectedNoteId(null);
+        setTitle("");
+        setBody("");
+        setTags([]);
       }
+    } catch {
+      setNotes([]);
+      setSelectedNoteId(null);
+      setTitle("");
+      setBody("");
+      setTags([]);
     }
-  }, []);
+    setHasLoadedNotes(true);
+  }, [notesStorageKey]);
 
   useEffect(() => {
-    localStorage.setItem("unimateNotes", JSON.stringify(notes));
-  }, [notes]);
+    if (!notesStorageKey || !hasLoadedNotes) return;
+    localStorage.setItem(notesStorageKey, JSON.stringify(notes));
+  }, [notes, notesStorageKey, hasLoadedNotes]);
 
   const handleCreateNote = () => {
     const newNote: Note = {
@@ -154,6 +181,7 @@ function Notes() {
         setBody(updatedNotes[0].body);
         setFormatting(updatedNotes[0].formatting);
         setTags(updatedNotes[0].tags || []);
+        setSelectedCourse(updatedNotes[0].course || "");
       } else {
         setSelectedNoteId(null);
         setTitle("");
@@ -188,6 +216,7 @@ function Notes() {
         : note,
     );
     setNotes(updatedNotes);
+    setSaveStatus("Saved");
   };
 
   const handleSelectNote = (note: Note) => {
@@ -197,6 +226,7 @@ function Notes() {
     setFormatting(note.formatting);
     setTags(note.tags || []);
     setSelectedCourse(note.course || "");
+    setSaveStatus("");
   };
 
   const handleAddTag = () => {
@@ -243,18 +273,22 @@ function Notes() {
   const selectedNote = notes.find((note) => note.id === selectedNoteId);
 
   return (
-    <div className="min-h-[calc(100vh-12rem)] bg-background">
+    <div className="min-h-[calc(100vh-12rem)] bg-background" aria-busy={!hasLoadedNotes}>
       <div className="flex min-h-[calc(100vh-12rem)] flex-col overflow-hidden rounded-xl border border-border/60 lg:flex-row">
         {/* Left Panel - Notes List */}
         <div className="flex max-h-[18rem] w-full flex-col border-b border-border/60 lg:max-h-none lg:w-80 lg:border-b-0 lg:border-r">
           <div className="p-4 border-b border-border/60">
             <button
+              type="button"
               onClick={handleCreateNote}
               className="w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
             >
               <Plus className="h-4 w-4" />
               New Note
             </button>
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+              Saved in this browser
+            </p>
           </div>
 
           {/* Search Bar */}
@@ -262,6 +296,7 @@ function Notes() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
+                aria-label="Search notes"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -314,9 +349,18 @@ function Notes() {
                 <div
                   key={note.id}
                   onClick={() => handleSelectNote(note)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleSelectNote(note);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selectedNoteId === note.id}
                   className={`p-4 border-b border-border/60 cursor-pointer transition-colors ${
                     selectedNoteId === note.id ? "bg-primary/10" : "hover:bg-card/60"
-                  }`}
+                  } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
@@ -385,8 +429,12 @@ function Notes() {
                 <input
                   type="text"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    setSaveStatus("");
+                  }}
                   placeholder="Note title..."
+                  aria-label="Note title"
                   className={`flex-1 text-lg font-medium bg-transparent border-none focus:outline-none text-foreground placeholder:text-muted-foreground`}
                 />
                 <button
@@ -396,6 +444,13 @@ function Notes() {
                   <Save className="h-4 w-4" />
                   Save
                 </button>
+                <span
+                  className="min-w-10 text-xs text-muted-foreground"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {saveStatus}
+                </span>
               </div>
 
               {/* Course Selector */}
@@ -405,6 +460,7 @@ function Notes() {
                   <select
                     value={selectedCourse}
                     onChange={(e) => setSelectedCourse(e.target.value)}
+                    aria-label="Note course"
                     className="flex-1 text-sm bg-transparent border-none focus:outline-none cursor-pointer text-foreground"
                   >
                     <option value="">No course</option>
@@ -459,6 +515,7 @@ function Notes() {
                         fontFamily: e.target.value as FontFamily,
                       })
                     }
+                    aria-label="Note font family"
                     className="text-xs bg-transparent border-none focus:outline-none cursor-pointer text-foreground"
                   >
                     <option value="sans-serif">Sans</option>
@@ -478,6 +535,7 @@ function Notes() {
                         fontSize: e.target.value as FontSize,
                       })
                     }
+                    aria-label="Note font size"
                     className="text-xs bg-transparent border-none focus:outline-none cursor-pointer text-foreground"
                   >
                     <option value="14px">Small</option>
@@ -561,9 +619,17 @@ function Notes() {
               >
                 <textarea
                   value={body}
-                  onChange={(e) => setBody(e.target.value)}
+                  onChange={(e) => {
+                    setBody(e.target.value);
+                    setSaveStatus("");
+                  }}
                   placeholder="Start writing your note..."
-                  className={`flex-1 resize-none bg-transparent border-none focus:outline-none text-foreground placeholder:text-muted-foreground leading-relaxed`}
+                  aria-label="Note body"
+                  className={`flex-1 resize-none border-none bg-transparent leading-relaxed focus:outline-none ${
+                    formatting.backgroundColor === "#1F2937"
+                      ? "text-white placeholder:text-white/55"
+                      : "text-foreground placeholder:text-muted-foreground"
+                  }`}
                   style={{
                     fontFamily: formatting.fontFamily,
                     fontSize: formatting.fontSize,
@@ -572,21 +638,30 @@ function Notes() {
                     textDecoration: formatting.underline ? "underline" : "none",
                   }}
                 />
-                <div className="text-xs text-muted-foreground mt-2">
+                <div
+                  className={`mt-2 text-xs ${formatting.backgroundColor === "#1F2937" ? "text-white/65" : "text-muted-foreground"}`}
+                >
                   {wordCount} words · {charCount} characters
                 </div>
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center">
-                <p className="text-muted-foreground mb-4">No note selected</p>
+            <div className="flex flex-1 items-center justify-center px-6 py-16">
+              <div className="max-w-sm text-center">
+                <BookOpen className="mx-auto h-8 w-8 text-primary" aria-hidden />
+                <h2 className="mt-4 text-lg font-semibold text-foreground">
+                  A clear page for your next idea
+                </h2>
+                <p className="mb-5 mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Capture lecture notes, study questions, or the explanation you want to remember.
+                </p>
                 <button
+                  type="button"
                   onClick={handleCreateNote}
                   className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   <Plus className="h-4 w-4" />
-                  Create your first note
+                  Create a note
                 </button>
               </div>
             </div>

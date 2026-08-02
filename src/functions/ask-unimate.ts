@@ -13,6 +13,26 @@ const responseSchema = z.object({
   relatedConcepts: z.array(z.string()).optional(),
 });
 
+const errorSchema = z.object({
+  error: z.string(),
+  code: z.string().optional(),
+  phase: z.string().optional(),
+});
+
+export class UniMateApiError extends Error {
+  status: number;
+  code?: string;
+  phase?: string;
+
+  constructor(message: string, status: number, code?: string, phase?: string) {
+    super(message);
+    this.name = "UniMateApiError";
+    this.status = status;
+    this.code = code;
+    this.phase = phase;
+  }
+}
+
 type ConversationMessage = {
   role: "user" | "assistant";
   content: string;
@@ -26,29 +46,25 @@ export async function askUniMate(data: {
   canvasContext?: string;
 }) {
   const { question, conversationHistory, classContext, mode = "normal", canvasContext } = data;
-  console.log("askUniMate called with:", { question, mode });
 
-  try {
-    const response = await fetch("/api/ask-unimate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await getAuthHeaders()),
-      },
-      body: JSON.stringify({ question, conversationHistory, classContext, mode, canvasContext }),
-    });
+  const response = await fetch("/api/ask-unimate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(await getAuthHeaders()),
+    },
+    body: JSON.stringify({ question, conversationHistory, classContext, mode, canvasContext }),
+  });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("API error:", errorText);
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    const responseData = await response.json();
-    const validatedData = responseSchema.parse(responseData);
-    return validatedData;
-  } catch (error) {
-    console.error("Error in askUniMate:", error);
-    throw error;
+  if (!response.ok) {
+    const parsed = errorSchema.safeParse(await response.json().catch(() => null));
+    throw new UniMateApiError(
+      parsed.success ? parsed.data.error : "UniMate couldn't finish that response.",
+      response.status,
+      parsed.success ? parsed.data.code : undefined,
+      parsed.success ? parsed.data.phase : undefined,
+    );
   }
+
+  return responseSchema.parse(await response.json());
 }

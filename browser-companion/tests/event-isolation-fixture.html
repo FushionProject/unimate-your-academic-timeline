@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>UniMate event isolation fixture</title>
+  </head>
+  <body>
+    <form id="host-form">
+      <input id="host-input" />
+      <button type="submit">Host submit</button>
+    </form>
+    <div id="host-output">Host page</div>
+    <pre id="results">Running…</pre>
+
+    <script>
+      const hostEvents = {};
+      let hostSubmits = 0;
+      let companionSends = 0;
+      const debugEnabled = new URLSearchParams(location.search).has("debug");
+      const watchedEvents = [
+        "beforeinput",
+        "click",
+        "input",
+        "keydown",
+        "keypress",
+        "keyup",
+        "mousedown",
+        "mouseup",
+        "pointerdown",
+        "pointerup",
+        "touchend",
+        "touchmove",
+        "touchstart",
+        "wheel",
+      ];
+      for (const type of watchedEvents) {
+        document.addEventListener(type, () => {
+          hostEvents[type] = (hostEvents[type] || 0) + 1;
+        });
+      }
+      document.querySelector("#host-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        hostSubmits += 1;
+      });
+
+      const nativeAttachShadow = Element.prototype.attachShadow;
+      Element.prototype.attachShadow = function (options) {
+        const result = nativeAttachShadow.call(this, options);
+        if (this.id === "unimate-companion-host") window.__companionTestShadow = result;
+        return result;
+      };
+
+      window.chrome = {
+        runtime: {
+          lastError: null,
+          getURL(path) {
+            return `../${path}`;
+          },
+          onMessage: { addListener() {} },
+          sendMessage(request, callback) {
+            if (request.type === "AUTH_STATE") {
+              callback({
+                ok: true,
+                data: {
+                  configured: true,
+                  authenticated: true,
+                  isPro: true,
+                  debug: debugEnabled,
+                },
+              });
+            } else if (request.type === "LOAD_MESSAGES") {
+              callback({ ok: true, data: [] });
+            } else if (request.type === "SEND_CHAT") {
+              companionSends += 1;
+              callback({
+                ok: true,
+                data: {
+                  user: { role: "user", message: request.message },
+                  assistant: { role: "assistant", message: "Fixture answer" },
+                  contextMode: "text",
+                },
+              });
+            } else {
+              callback({ ok: true, data: {} });
+            }
+          },
+        },
+      };
+    </script>
+    <script src="../context-extractor.js"></script>
+    <script src="../content.js"></script>
+    <script>
+      const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+      const expect = (condition, message) => {
+        if (!condition) throw new Error(message);
+      };
+      const emit = (target, type, init = {}) => {
+        const EventType =
+          type === "wheel" ? WheelEvent : type.startsWith("key") ? KeyboardEvent : Event;
+        return target.dispatchEvent(
+          new EventType(type, { bubbles: true, composed: true, cancelable: true, ...init }),
+        );
+      };
+
+      async function runEventIsolationTests() {
+        const results = [];
+        const shadow = window.__companionTestShadow;
+        expect(shadow, "closed Shadow DOM was not created");
+        const mascot = shadow.querySelector(".um-mascot");
+        mascot.click();
+        await wait(30);
+
+        let input = shadow.querySelector(".um-input");
+        expect(input && shadow.activeElement === input, "chat input did not receive focus");
+        const alphabet = "abcdefghijklmnopqrstuvwxyz";
+        for (const key of alphabet) {
+          emit(input, "keydown", { key });
+          emit(input, "keypress", { key });
+          input.value += key;
+          emit(input, "beforeinput", { data: key });
+          emit(input, "input");
+          emit(input, "keyup", { key });
+        }
+        for (const key of ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "]) {
+          emit(input, "keydown", { key });
+          emit(input, "keyup", { key });
+        }
+        expect(
+          watchedEvents.every((type) => (hostEvents[type] || 0) === 0),
+          `host received panel events: ${JSON.stringify(hostEvents)}`,
+        );
+        results.push("PASS alphabet/arrows/space stay inside companion");
+
+        input.value = "Send once";
+        emit(input, "keydown", { key: "Enter" });
+        await wait(10);
+        expect(companionSends === 1, `Enter sent ${companionSends} requests`);
+        expect(hostSubmits === 0, "Enter submitted the host form");
+        expect(!shadow.querySelector(".um-debug"), "diagnostics must never render in the UI");
+        results.push("PASS Enter submits companion exactly once");
+        results.push("PASS diagnostics omitted from the UI");
+
+        input = shadow.querySelector(".um-input");
+        input.value = "line one";
+        emit(input, "keydown", { key: "Enter", shiftKey: true });
+        expect(companionSends === 1, "Shift+Enter submitted instead of preserving input behavior");
+        results.push("PASS Shift+Enter does not submit");
+
+        const closeButton = shadow.querySelector(".um-close");
+        const sendButton = shadow.querySelector(".um-send");
+        sendButton.focus();
+        emit(sendButton, "keydown", { key: "Tab" });
+        expect(shadow.activeElement === closeButton, "Tab did not wrap to first control");
+        closeButton.focus();
+        emit(closeButton, "keydown", { key: "Tab", shiftKey: true });
+        expect(shadow.activeElement === sendButton, "Shift+Tab did not wrap to last control");
+        results.push("PASS Tab and Shift+Tab remain in companion");
+
+        const messages = shadow.querySelector(".um-messages");
+        const wheelAllowed = emit(messages, "wheel", { deltaY: 100 });
+        expect(!wheelAllowed, "wheel at chat boundary was not contained");
+        expect((hostEvents.wheel || 0) === 0, "wheel leaked to host page");
+        results.push("PASS wheel remains in conversation surface");
+
+        emit(input, "keydown", { key: "Escape" });
+        expect(
+          !shadow.querySelector(".um-panel").classList.contains("open"),
+          "Escape did not close",
+        );
+        expect(shadow.activeElement === mascot, "focus did not return to mascot");
+        results.push("PASS Escape closes and restores focus");
+
+        const beforeClosedKey = hostEvents.keydown || 0;
+        emit(document.querySelector("#host-input"), "keydown", { key: "g" });
+        expect(
+          (hostEvents.keydown || 0) === beforeClosedKey + 1,
+          "closed extension blocked host key",
+        );
+        expect(hostSubmits === 0, "extension control activated host form");
+        results.push("PASS closed companion leaves host keyboard untouched");
+
+        document.querySelector("#results").textContent = results.join("\n");
+        return results;
+      }
+
+      window.fixturePromise = runEventIsolationTests().catch((error) => {
+        document.querySelector("#results").textContent = `FAIL ${error.message}`;
+        throw error;
+      });
+    </script>
+  </body>
+</html>

@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -80,17 +81,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "UniMate — Academic planning, organized clearly." },
+      { title: "UniMate — Your all-in-one student assistant." },
       {
         name: "description",
         content:
-          "Upload your syllabus. Get every deadline, exam, and assignment mapped into a clean visual timeline — exportable to any calendar.",
+          "Keep classes, deadlines, notes, and AI study help together with UniMate, your all-in-one student assistant.",
       },
       { name: "author", content: "UniMate" },
-      { property: "og:title", content: "UniMate — Academic planning, organized clearly." },
+      { property: "og:title", content: "UniMate — Your all-in-one student assistant." },
       {
         property: "og:description",
-        content: "Turn any syllabus into a semester-long calendar in 10 seconds.",
+        content: "Keep classes, deadlines, notes, and AI study help together in one place.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -137,22 +138,38 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const isPublicPage =
+    pathname === "/" ||
+    pathname === "/signin" ||
+    pathname === "/signup" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password";
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ThemeProvider>
           <div className="min-h-screen flex flex-col">
+            <a
+              href="#main-content"
+              className="fixed left-4 top-3 z-[100] -translate-y-20 rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-transform focus:translate-y-0"
+            >
+              Skip to content
+            </a>
             <Navbar />
-            <div className="flex flex-1 min-w-0">
-              <Sidebar />
-              <div className="flex-1 min-w-0 p-4 sm:p-6 md:ml-16">
-                <DateWidget />
+            <div className="flex min-w-0 flex-1">
+              {!isPublicPage && <Sidebar />}
+              <div
+                id="main-content"
+                className={`min-w-0 flex-1 ${isPublicPage ? "" : "p-4 sm:p-6 md:ml-16"}`}
+              >
+                {!isPublicPage && <DateWidget />}
                 <Outlet />
               </div>
             </div>
-            <PomodoroTimer />
-            <MusicPlayer />
+            {!isPublicPage && <PomodoroTimer />}
+            {!isPublicPage && <MusicPlayer />}
             {/* <ScreenAssistant /> — Hidden for now, future rollout */}
           </div>
         </ThemeProvider>

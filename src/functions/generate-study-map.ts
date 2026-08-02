@@ -23,7 +23,6 @@ type SyllabusItem = {
 
 export async function generateStudyMap(data: { items: SyllabusItem[] }) {
   const { items } = data;
-  console.log("generateStudyMap called with items:", items);
 
   try {
     const response = await fetch("/api/generate-study-map", {
