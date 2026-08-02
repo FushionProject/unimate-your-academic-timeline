@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getAuthHeaders } from "../lib/auth-fetch";
 
 const itemSchema = z.object({
   title: z.string(),
@@ -12,13 +13,13 @@ const responseSchema = z.object({
 
 export async function parseSyllabus(data: { syllabusText: string }) {
   const { syllabusText } = data;
-  console.log("parseSyllabus called with:", syllabusText.substring(0, 100));
 
   try {
     const response = await fetch("/api/parse-syllabus", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(await getAuthHeaders()),
       },
       body: JSON.stringify({ syllabusText }),
     });

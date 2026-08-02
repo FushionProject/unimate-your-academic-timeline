@@ -1,12 +1,26 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { Loader2, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../lib/auth-context";
 import { isSupabaseConfigured } from "../lib/supabase";
 
 export const Route = createFileRoute("/signup")({
   component: SignUp,
 });
+
+function friendlyAuthError(message: string) {
+  const lower = message.toLowerCase();
+  if (lower.includes("weak") || lower.includes("password")) {
+    return "Use a stronger password with at least 6 characters.";
+  }
+  if (lower.includes("already") || lower.includes("registered")) {
+    return "An account already exists for this email. Try signing in instead.";
+  }
+  if (lower.includes("rate") || lower.includes("too many")) {
+    return "Too many signup attempts. Wait a moment, then try again.";
+  }
+  return message || "We could not create your account. Please try again.";
+}
 
 function SignUp() {
   const { signUp } = useAuth();
@@ -16,15 +30,16 @@ function SignUp() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error, needsConfirmation } = await signUp(email, password);
+    const { error, needsConfirmation } = await signUp(email.trim(), password);
     setLoading(false);
     if (error) {
-      setError(error);
+      setError(friendlyAuthError(error));
     } else if (needsConfirmation) {
       setNeedsConfirmation(true);
     } else {
@@ -34,30 +49,35 @@ function SignUp() {
 
   if (needsConfirmation) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
-        <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card/90 backdrop-blur-xl p-8 text-center shadow-[var(--shadow-card)]">
+      <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-background px-4 py-12 sm:px-6">
+        <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card p-6 text-center shadow-[var(--shadow-card)] sm:p-8">
           <CheckCircle2 className="h-10 w-10 text-green-500 mx-auto mb-4" />
           <h1 className="text-xl font-semibold text-foreground mb-2">Check your email</h1>
           <p className="text-sm text-muted-foreground">
             We sent a confirmation link to <span className="text-foreground">{email}</span>. Click
-            it to activate your account, then sign in.
+            it to activate your account, then come back here to sign in. If it does not show up,
+            check your spam folder.
           </p>
           <Link
             to="/signin"
             className="mt-6 inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium bg-primary text-primary-foreground"
           >
-            Go to Sign in
+            Continue to sign in
           </Link>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card/90 backdrop-blur-xl p-8 shadow-[var(--shadow-card)]">
-        <h1 className="text-2xl font-bold text-foreground mb-1">Create an account</h1>
-        <p className="text-sm text-muted-foreground mb-6">Get started with UniMate.</p>
+    <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-background px-4 py-12 sm:px-6">
+      <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-card)] sm:p-8">
+        <h1 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">
+          Create your account
+        </h1>
+        <p className="mb-7 text-sm leading-6 text-muted-foreground">
+          Bring your classes, deadlines, notes, and study help together.
+        </p>
 
         {!isSupabaseConfigured && (
           <div className="mb-4 rounded-lg bg-yellow-100 px-3 py-2 text-xs text-yellow-800">
@@ -65,42 +85,80 @@ function SignUp() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
-            className="w-full rounded-lg border border-border bg-secondary/40 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-          <input
-            type="password"
-            required
-            minLength={6}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password (min. 6 characters)"
-            className="w-full rounded-lg border border-border bg-secondary/40 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-          {error && <p className="text-xs text-destructive">{error}</p>}
+        <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading}>
+          <div className="space-y-1.5">
+            <label htmlFor="signup-email" className="text-sm font-medium text-foreground">
+              Email
+            </label>
+            <input
+              id="signup-email"
+              type="email"
+              required
+              autoComplete="email"
+              autoFocus
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="signup-password" className="text-sm font-medium text-foreground">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                id="signup-password"
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={6}
+                autoComplete="new-password"
+                aria-describedby="signup-password-hint"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Create a password"
+                className="w-full rounded-lg border border-border bg-background py-3 pl-4 pr-20 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                title={showPassword ? "Hide password" : "Show password"}
+                className="absolute inset-y-0 right-9 grid w-10 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <p id="signup-password-hint" className="text-xs text-muted-foreground">
+              Use at least 6 characters.
+            </p>
+          </div>
+          {error && (
+            <p
+              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              role="alert"
+            >
+              {error}
+            </p>
+          )}
           <button
             type="submit"
             disabled={loading}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            Sign up
+            {loading ? "Creating account..." : "Sign up"}
           </button>
         </form>
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
           Already have an account?{" "}
-          <Link to="/signin" className="text-foreground underline">
+          <Link to="/signin" className="font-medium text-foreground underline underline-offset-4">
             Sign in
           </Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }

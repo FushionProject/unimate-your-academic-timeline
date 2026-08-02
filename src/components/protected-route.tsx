@@ -15,8 +15,11 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-background px-4 text-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">
+          {loading ? "Checking your UniMate session..." : "Taking you to sign in..."}
+        </p>
       </div>
     );
   }

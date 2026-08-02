@@ -1,12 +1,10 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { ArrowLeft, Save, CheckCircle2, Loader2 } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ArrowLeft, CalendarDays, CheckCircle2, Loader2, Save, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { z } from "zod";
-import { useState, useEffect } from "react";
-import { extractResources } from "../functions/extract-resources";
-import { generateStudyMap } from "../functions/generate-study-map";
-import { useAddCourse, useAddAssignment } from "../lib/courses";
+import { useAddAssignment, useAddCourse, useAssignments, useCourses } from "../lib/courses";
 import { useAuth } from "../lib/auth-context";
-import { SyllabusTimeline } from "../components/syllabus-timeline";
+import { SYLLABUS_RESULT_STORAGE_PREFIX } from "../lib/syllabus-results";
 
 const itemSchema = z.object({
   title: z.string(),
@@ -16,26 +14,12 @@ const itemSchema = z.object({
 
 type SyllabusItem = z.infer<typeof itemSchema>;
 
-type CourseResource = {
-  type: string;
-  title: string;
-  details?: string;
-};
-
-type StudyTask = {
-  title: string;
-  description: string;
-  start_date: string;
-  end_date: string;
-  estimated_hours: number;
-  priority: "high" | "medium" | "low";
-  related_to: string;
-};
-
-const searchSchema = z.object({
+const storedResultSchema = z.object({
   items: z.array(itemSchema),
   syllabusText: z.string().optional(),
 });
+
+const searchSchema = z.object({ resultId: z.string().optional() });
 
 export const Route = createFileRoute("/results")({
   component: Results,
@@ -45,355 +29,262 @@ export const Route = createFileRoute("/results")({
 function Results() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { items, syllabusText } = Route.useSearch();
-  const [tab, setTab] = useState<"timeline" | "study-map">("timeline");
-  const [resources, setResources] = useState<CourseResource[] | null>(null);
-  const [studyTasks, setStudyTasks] = useState<StudyTask[] | null>(null);
-  const [loadingResources, setLoadingResources] = useState(false);
-  const [loadingStudyMap, setLoadingStudyMap] = useState(false);
-  const [saveCourseName, setSaveCourseName] = useState("");
-  const [saveCourseCode, setSaveCourseCode] = useState("");
-  const [savedToPlanner, setSavedToPlanner] = useState(false);
-  const [saveError, setSaveError] = useState("");
+  const { resultId } = Route.useSearch();
+  const [items, setItems] = useState<SyllabusItem[]>(() => {
+    if (!resultId || typeof window === "undefined") return [];
+    const stored = sessionStorage.getItem(`${SYLLABUS_RESULT_STORAGE_PREFIX}${resultId}`);
+    if (!stored) return [];
+    try {
+      return storedResultSchema.parse(JSON.parse(stored)).items;
+    } catch {
+      return [];
+    }
+  });
+  const [courseName, setCourseName] = useState("");
+  const [courseCode, setCourseCode] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [saved, setSaved] = useState(false);
+  const { data: courses = [] } = useCourses();
+  const { data: assignments = [] } = useAssignments();
   const addCourse = useAddCourse();
   const addAssignment = useAddAssignment();
+  const hasIncompleteItems = items.some((item) => !item.title.trim() || !item.due_date);
 
-  useEffect(() => {
-    if (syllabusText) {
-      extractResources({ syllabusText })
-        .then((data) => setResources(data.resources))
-        .catch((error) => console.error("Error extracting resources:", error));
-    }
-  }, [syllabusText]);
+  const updateItem = (index: number, patch: Partial<SyllabusItem>) => {
+    setItems((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)),
+    );
+  };
 
-  useEffect(() => {
-    if (tab === "study-map" && items && !studyTasks) {
-      setLoadingStudyMap(true);
-      generateStudyMap({ items })
-        .then((data) => {
-          setStudyTasks(data.study_tasks);
-          setLoadingStudyMap(false);
-        })
-        .catch((error) => {
-          console.error("Error generating study map:", error);
-          setLoadingStudyMap(false);
-        });
-    }
-  }, [tab, items, studyTasks]);
-
-  const handleSaveToPlanner = async () => {
-    if (!saveCourseName.trim() || !items || items.length === 0) return;
-    setSaveError("");
+  const saveSemester = async () => {
+    if (!user || !courseName.trim() || items.length === 0 || hasIncompleteItems) return;
     setSaving(true);
+    setSaveMessage("");
     try {
-      const course = await addCourse.mutateAsync({
-        name: saveCourseName.trim(),
-        course_code: saveCourseCode.trim(),
-      });
-      await Promise.all(
-        items.map((item) =>
-          addAssignment.mutateAsync({
-            name: item.title,
-            course_id: course.id,
-            due_at: new Date(item.due_date + "T12:00:00").toISOString(),
-          }),
-        ),
+      const normalizedName = courseName.trim().toLowerCase();
+      const normalizedCode = courseCode.trim().toLowerCase();
+      const existingCourse = courses.find(
+        (course) =>
+          course.name.trim().toLowerCase() === normalizedName ||
+          (normalizedCode && course.course_code.trim().toLowerCase() === normalizedCode),
       );
-      setSavedToPlanner(true);
+      const course =
+        existingCourse ||
+        (await addCourse.mutateAsync({
+          name: courseName.trim(),
+          course_code: courseCode.trim(),
+        }));
+
+      let added = 0;
+      let skipped = 0;
+      for (const item of items) {
+        const dueAt = new Date(`${item.due_date}T12:00:00`).toISOString();
+        const duplicate = assignments.some(
+          (assignment) =>
+            assignment.course_id === course.id &&
+            assignment.name.trim().toLowerCase() === item.title.trim().toLowerCase() &&
+            new Date(assignment.due_at).toDateString() === new Date(dueAt).toDateString(),
+        );
+        if (duplicate) {
+          skipped += 1;
+          continue;
+        }
+        await addAssignment.mutateAsync({
+          name: item.title.trim(),
+          course_id: course.id,
+          due_at: dueAt,
+        });
+        added += 1;
+      }
+      setSaved(true);
+      setSaveMessage(
+        `${added} item${added === 1 ? "" : "s"} added to the semester map${skipped ? `; ${skipped} duplicate${skipped === 1 ? " was" : "s were"} skipped` : ""}.`,
+      );
+      if (resultId) sessionStorage.removeItem(`${SYLLABUS_RESULT_STORAGE_PREFIX}${resultId}`);
     } catch (error) {
-      console.error("Error saving to planner:", error);
-      setSaveError(error instanceof Error ? error.message : "Failed to save. Please try again.");
+      setSaveMessage(error instanceof Error ? error.message : "The semester could not be saved.");
     } finally {
       setSaving(false);
     }
   };
 
-  // Calculate semester week intensity from items
-  const calculateWeekIntensity = (items: SyllabusItem[]) => {
-    if (!items || items.length === 0) return [];
-
-    // Infer semester start from the earliest date
-    const dates = items.map((item) => new Date(item.due_date + "T12:00:00").getTime());
-    const semesterStart = Math.min(...dates);
-    const semesterStartDate = new Date(semesterStart);
-
-    // Calculate week number for each item based on semester start
-    const weekMap = new Map<number, number>();
-
-    items.forEach((item) => {
-      const itemDate = new Date(item.due_date + "T12:00:00");
-      const timeDiff = itemDate.getTime() - semesterStartDate.getTime();
-      const weekNumber = Math.floor(timeDiff / (7 * 24 * 60 * 60 * 1000)) + 1;
-      const currentCount = weekMap.get(weekNumber) || 0;
-      weekMap.set(weekNumber, currentCount + 1);
-    });
-
-    // Create 16 weeks with intensity counts
-    const weeks = Array.from({ length: 16 }, (_, i) => ({
-      week: i + 1,
-      intensity: weekMap.get(i + 1) || 0,
-    }));
-
-    return weeks;
-  };
-
-  const weekData = items ? calculateWeekIntensity(items) : [];
-
-  const getResourceIcon = (type: string) => {
-    switch (type) {
-      case "portal":
-        return "🌐";
-      case "textbook":
-        return "📚";
-      case "office_hours":
-        return "🕐";
-      case "contact":
-        return "📧";
-      default:
-        return "📄";
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return "bg-red-100 text-red-800 border-red-200";
-      case "medium":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "low":
-        return "bg-green-100 text-green-800 border-green-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-background p-4 sm:p-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-background px-4 py-8 sm:px-6 sm:py-12">
+      <div className="mx-auto max-w-5xl">
         <button
-          onClick={() => navigate({ to: "/" })}
-          className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          type="button"
+          onClick={() => navigate({ to: "/planner" })}
+          className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Home
+          <ArrowLeft className="h-4 w-4" /> Back to syllabus
         </button>
 
-        <h1 className="text-3xl font-bold text-foreground mb-2">Your Semester Timeline</h1>
-        <p className="text-muted-foreground mb-6">
-          {items?.length || 0} items extracted from your syllabus
-        </p>
-
-        {/* Save to Course Planner */}
-        {items && items.length > 0 && (
-          <div className="rounded-xl border border-border bg-card p-4 shadow-sm mb-6">
-            {!user ? (
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">
-                  Sign in to save these {items.length} item{items.length !== 1 ? "s" : ""} to your
-                  Course Planner.
-                </p>
-                <Link
-                  to="/signin"
-                  className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium bg-primary text-primary-foreground flex-shrink-0"
-                >
-                  Sign in
-                </Link>
-              </div>
-            ) : savedToPlanner ? (
-              <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
-                <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-                Saved {items.length} item{items.length !== 1 ? "s" : ""} to "{saveCourseName}" in
-                your Course Planner.
-              </div>
-            ) : (
-              <>
-                <h3 className="text-sm font-semibold text-foreground mb-1">
-                  Save to Course Planner
-                </h3>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Add these {items.length} items to your dashboard by saving them under a course.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    value={saveCourseName}
-                    onChange={(e) => setSaveCourseName(e.target.value)}
-                    placeholder="Course name (e.g. Organic Chemistry)"
-                    className="flex-1 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <input
-                    type="text"
-                    value={saveCourseCode}
-                    onChange={(e) => setSaveCourseCode(e.target.value)}
-                    placeholder="Course code (optional)"
-                    className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:w-48"
-                  />
-                  <button
-                    onClick={handleSaveToPlanner}
-                    disabled={!saveCourseName.trim() || saving}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50 flex-shrink-0"
-                  >
-                    {saving ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="h-4 w-4" />
-                    )}
-                    Save to Planner
-                  </button>
-                </div>
-                {saveError && <p className="mt-2 text-xs text-destructive">{saveError}</p>}
-              </>
-            )}
+        {items.length === 0 && !saved ? (
+          <div className="rounded-3xl border border-border bg-card p-10 text-center shadow-[var(--shadow-card)]">
+            <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground" />
+            <h1 className="mt-4 text-2xl font-bold text-foreground">No timeline found</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Upload or paste a syllabus to extract its dated items.
+            </p>
+            <Link
+              to="/planner"
+              className="mt-5 inline-flex rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+            >
+              Upload syllabus
+            </Link>
           </div>
-        )}
-
-        {/* Semester Heatmap */}
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm mb-6">
-          <h2 className="text-lg font-semibold text-foreground mb-3">Semester Heatmap</h2>
-          <div className="grid grid-cols-8 gap-2">
-            {weekData.map((week) => {
-              const getColor = (intensity: number) => {
-                if (intensity === 0) return "#1e3a8a";
-                if (intensity === 1) return "#93c5fd";
-                if (intensity === 2) return "#f97316";
-                return "#dc2626";
-              };
-              return (
-                <div
-                  key={week.week}
-                  className="aspect-square rounded-lg flex items-center justify-center text-xs font-medium transition-all hover:scale-105"
-                  style={{ backgroundColor: getColor(week.intensity) }}
-                  title={`Week ${week.week}: ${week.intensity} item(s)`}
-                >
-                  {week.week}
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
-            <span>Week 1</span>
-            <div className="flex items-center gap-2">
-              <span>0 items</span>
-              <div className="flex gap-1">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: "#1e3a8a" }} />
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: "#93c5fd" }} />
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: "#f97316" }} />
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: "#dc2626" }} />
-              </div>
-              <span>3+ items</span>
-            </div>
-            <span>Week 16</span>
-          </div>
-        </div>
-
-        {/* Tab System */}
-        <div className="flex items-center gap-1 rounded-2xl bg-secondary/60 p-1 mb-6">
-          <button
-            onClick={() => setTab("timeline")}
-            className={`flex-1 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-              tab === "timeline"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Timeline
-          </button>
-          <button
-            onClick={() => setTab("study-map")}
-            className={`flex-1 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-              tab === "study-map"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Study Map
-          </button>
-        </div>
-
-        {tab === "timeline" && (
+        ) : (
           <>
-            <SyllabusTimeline items={items ?? []} />
+            <header className="mb-7">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+                Review first
+              </p>
+              <h1 className="mt-2 text-3xl font-bold text-foreground">
+                Confirm your semester timeline
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                Fix titles or dates and remove anything UniMate misunderstood. Only the items below
+                will be saved to your pressure map.
+              </p>
+            </header>
 
-            {/* Resources & Links Section */}
-            <div className="mt-8">
-              <h2 className="text-2xl font-bold text-foreground mb-4">Resources & Links</h2>
-              {!resources || resources.length === 0 ? (
-                <div className="text-center py-8 border border-border rounded-xl">
-                  <p className="text-muted-foreground">No resources found.</p>
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  {resources.map((resource, index) => (
-                    <div
-                      key={index}
-                      className="rounded-xl border border-border bg-card p-4 shadow-sm hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 flex-1">
-                          <span className="text-2xl">{getResourceIcon(resource.type)}</span>
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-foreground">{resource.title}</h3>
-                            <p className="text-sm text-muted-foreground mt-1">{resource.details}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {tab === "study-map" && (
-          <>
-            {loadingStudyMap ? (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">Generating your study map...</p>
-              </div>
-            ) : !studyTasks || studyTasks.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">No study tasks generated.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {studyTasks.map((task, index) => (
-                  <div
-                    key={index}
-                    className="rounded-xl border border-border bg-card p-4 shadow-sm hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-semibold text-foreground">{task.title}</h3>
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${getPriorityColor(task.priority)}`}
-                          >
-                            {task.priority}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>
-                            📅{" "}
-                            {new Date(task.start_date + "T12:00:00").toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })}{" "}
-                            -{" "}
-                            {new Date(task.end_date + "T12:00:00").toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </span>
-                          <span>⏱️ {task.estimated_hours}h</span>
-                          <span>📝 {task.related_to}</span>
-                        </div>
-                      </div>
-                    </div>
+            {!saved && (
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_320px]">
+                <section className="rounded-3xl border border-border/60 bg-card/80 p-5 shadow-[var(--shadow-card)] sm:p-6">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <h2 className="font-semibold text-foreground">Extracted dates</h2>
+                    <span className="text-xs text-muted-foreground" aria-live="polite">
+                      {items.length} {items.length === 1 ? "item" : "items"}
+                    </span>
                   </div>
-                ))}
+                  <div className="max-h-[650px] space-y-3 overflow-y-auto pr-1">
+                    {items.map((item, index) => (
+                      <div
+                        key={`${item.title}-${index}`}
+                        className="rounded-2xl border border-border/60 bg-background/65 p-4"
+                      >
+                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_130px_145px_auto] sm:items-center">
+                          <input
+                            value={item.title}
+                            onChange={(event) => updateItem(index, { title: event.target.value })}
+                            aria-label={`Title for extracted item ${index + 1}`}
+                            aria-invalid={!item.title.trim()}
+                            className="min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          />
+                          <select
+                            value={item.type}
+                            onChange={(event) =>
+                              updateItem(index, {
+                                type: event.target.value as SyllabusItem["type"],
+                              })
+                            }
+                            aria-label={`Type for ${item.title}`}
+                            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            <option value="assignment">Assignment</option>
+                            <option value="quiz">Quiz</option>
+                            <option value="exam">Exam</option>
+                            <option value="deadline">Other date</option>
+                          </select>
+                          <input
+                            type="date"
+                            value={item.due_date}
+                            onChange={(event) =>
+                              updateItem(index, { due_date: event.target.value })
+                            }
+                            aria-label={`Date for ${item.title}`}
+                            aria-invalid={!item.due_date}
+                            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setItems((current) =>
+                                current.filter((_, itemIndex) => itemIndex !== index),
+                              )
+                            }
+                            aria-label={`Remove ${item.title}`}
+                            className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <aside className="h-fit rounded-3xl border border-border/60 bg-card/80 p-5 shadow-[var(--shadow-card)]">
+                  <h2 className="font-semibold text-foreground">Save as a course</h2>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    These dates will become one course on your dashboard.
+                  </p>
+                  <div className="mt-4 space-y-2.5">
+                    <input
+                      value={courseName}
+                      onChange={(event) => setCourseName(event.target.value)}
+                      placeholder="Course name"
+                      aria-label="Course name"
+                      className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm"
+                    />
+                    <input
+                      value={courseCode}
+                      onChange={(event) => setCourseCode(event.target.value)}
+                      placeholder="Course code (optional)"
+                      aria-label="Course code"
+                      className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm"
+                    />
+                    {user ? (
+                      <button
+                        type="button"
+                        onClick={saveSemester}
+                        disabled={
+                          saving || !courseName.trim() || items.length === 0 || hasIncompleteItems
+                        }
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-45"
+                      >
+                        {saving ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4" />
+                        )}{" "}
+                        Save semester map
+                      </button>
+                    ) : (
+                      <Link
+                        to="/signin"
+                        className="inline-flex w-full items-center justify-center rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+                      >
+                        Sign in to save
+                      </Link>
+                    )}
+                  </div>
+                  {saveMessage && (
+                    <p className="mt-3 text-xs text-muted-foreground" role="status">
+                      {saveMessage}
+                    </p>
+                  )}
+                  {hasIncompleteItems && (
+                    <p className="mt-3 text-xs text-destructive" role="alert">
+                      Add a title and date to every item before saving.
+                    </p>
+                  )}
+                </aside>
+              </div>
+            )}
+
+            {saved && (
+              <div className="rounded-3xl border border-[#F5C518]/40 bg-[#F5C518]/10 p-8 text-center">
+                <CheckCircle2 className="mx-auto h-9 w-9 text-primary" />
+                <h2 className="mt-4 text-xl font-bold text-foreground">Semester map saved</h2>
+                <p className="mt-2 text-sm text-muted-foreground">{saveMessage}</p>
+                <Link
+                  to="/dashboard"
+                  className="mt-5 inline-flex rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+                >
+                  View dashboard
+                </Link>
               </div>
             )}
           </>

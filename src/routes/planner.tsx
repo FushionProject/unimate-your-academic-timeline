@@ -4,6 +4,7 @@ import { Upload, FileText, Sparkles, Loader2 } from "lucide-react";
 import { parseSyllabus } from "../functions/parse-syllabus";
 import { extractPdfText } from "../lib/pdf";
 import { ProtectedRoute } from "../components/protected-route";
+import { createSyllabusResultId, SYLLABUS_RESULT_STORAGE_PREFIX } from "../lib/syllabus-results";
 
 export const Route = createFileRoute("/planner")({
   component: () => (
@@ -25,6 +26,7 @@ function TabButton({
   return (
     <button
       onClick={onClick}
+      aria-pressed={active}
       className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition ${
         active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
       }`}
@@ -42,6 +44,7 @@ function Planner() {
   const [pdfText, setPdfText] = useState("");
   const [extractingPdf, setExtractingPdf] = useState(false);
   const [pdfError, setPdfError] = useState("");
+  const [processingError, setProcessingError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const navigate = useNavigate();
@@ -73,20 +76,27 @@ function Planner() {
   const handleMapSemester = async () => {
     const syllabusText = tab === "pdf" ? pdfText : textareaRef.current?.value || "";
     if (!syllabusText.trim()) {
-      console.log("No syllabus text provided");
       return;
     }
 
     setLoading(true);
+    setProcessingError("");
     try {
       const result = await parseSyllabus({ syllabusText });
-      console.log("Parsed syllabus result:", result);
+      const resultId = createSyllabusResultId();
+      sessionStorage.setItem(
+        `${SYLLABUS_RESULT_STORAGE_PREFIX}${resultId}`,
+        JSON.stringify({ items: result.items, syllabusText }),
+      );
       navigate({
         to: "/results",
-        search: { items: result.items, syllabusText },
+        search: { resultId },
       });
     } catch (error) {
       console.error("Error parsing syllabus:", error);
+      setProcessingError(
+        "We couldn't map that syllabus yet. Check the text and try again in a moment.",
+      );
     } finally {
       setLoading(false);
     }
@@ -94,11 +104,17 @@ function Planner() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-4xl px-6 py-24">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Upload Syllabus</h1>
+      <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-20">
+        <div className="mb-8 text-center">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+            Build your timeline
+          </p>
+          <h1 className="mb-2 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+            Add your syllabus
+          </h1>
           <p className="text-muted-foreground">
-            Drop in your syllabus and UniMate maps your entire semester in seconds.
+            Paste text for the fastest start, or upload a text-based PDF. You can review everything
+            before saving it to your dashboard.
           </p>
         </div>
 
@@ -129,6 +145,9 @@ function Planner() {
               {tab === "pdf" ? (
                 <div>
                   <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Choose or drop a syllabus PDF"
                     onDragOver={(e) => {
                       e.preventDefault();
                       setDragOver(true);
@@ -141,16 +160,23 @@ function Planner() {
                       if (f) handlePdfFile(f);
                     }}
                     onClick={() => inputRef.current?.click()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        inputRef.current?.click();
+                      }
+                    }}
                     className={`group relative cursor-pointer rounded-2xl border-2 border-dashed transition-all ${
                       dragOver
                         ? "border-primary bg-primary/5"
                         : "border-border hover:border-primary/60 hover:bg-secondary/40"
-                    } px-6 py-12 text-center`}
+                    } px-6 py-12 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}
                   >
                     <input
                       ref={inputRef}
                       type="file"
                       accept="application/pdf"
+                      aria-label="Choose syllabus PDF"
                       className="hidden"
                       onChange={(e) => {
                         const f = e.target.files?.[0];
@@ -165,7 +191,7 @@ function Planner() {
                       )}
                     </div>
                     <p className="mt-4 text-sm font-medium text-foreground">
-                      {extractingPdf ? "Reading PDF..." : filename || "Drop your PDF here"}
+                      {extractingPdf ? "Reading your PDF…" : filename || "Drop your PDF here"}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {pdfText
@@ -173,12 +199,23 @@ function Planner() {
                         : "or click to browse"}
                     </p>
                   </div>
-                  {pdfError && <p className="mt-2 text-xs text-destructive">{pdfError}</p>}
+                  {pdfError && (
+                    <p className="mt-3 text-sm text-destructive" role="alert">
+                      {pdfError}
+                    </p>
+                  )}
+                  {!pdfText && !extractingPdf && !pdfError && (
+                    <p className="mt-3 text-center text-xs text-muted-foreground">
+                      If your PDF is scanned or hard to read, switch to Paste text for a smoother
+                      first run.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <textarea
                   ref={textareaRef}
-                  placeholder="Paste your syllabus text here..."
+                  placeholder="Paste your syllabus text here…"
+                  aria-label="Syllabus text"
                   className="w-full h-48 rounded-xl border border-border bg-secondary/40 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                 />
               )}
@@ -188,14 +225,29 @@ function Planner() {
                 disabled={loading || extractingPdf || (tab === "pdf" && !pdfText)}
                 className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold transition-transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed bg-[#F5C518] text-[#1a1a1a]"
               >
-                {loading ? "Processing..." : "Map My Semester"}
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Building your timeline…
+                  </>
+                ) : (
+                  "Review timeline"
+                )}
                 {!loading && <Sparkles className="h-4 w-4" />}
               </button>
 
+              {processingError && (
+                <p
+                  className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-center text-sm text-destructive"
+                  role="alert"
+                >
+                  {processingError}
+                </p>
+              )}
+
               <p className="mt-3 text-center text-xs text-muted-foreground">
-                Parsed deadlines land on your{" "}
-                <span className="font-medium text-foreground">Dashboard</span> — add or edit courses
-                and assignments there anytime.
+                Next step: review the timeline, then save the items to your{" "}
+                <span className="font-medium text-foreground">Dashboard</span>.
               </p>
             </div>
           </div>

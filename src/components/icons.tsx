@@ -97,6 +97,17 @@ export function IconNotes(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconBulletin(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <rect x="3.5" y="4" width="17" height="16" rx="2" fill="currentColor" fillOpacity={FILL} />
+      <rect x="3.5" y="4" width="17" height="16" rx="2" />
+      <path d="M7.5 8h9M7.5 12h6M7.5 16h4" />
+      <path d="m16.5 13.5 1 1 2-2" />
+    </Base>
+  );
+}
+
 export function IconAsk(props: SVGProps<SVGSVGElement>) {
   return (
     <Base {...props}>

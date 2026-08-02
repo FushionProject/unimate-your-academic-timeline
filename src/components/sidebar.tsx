@@ -4,6 +4,7 @@ import {
   IconHome,
   IconSyllabus,
   IconDashboard,
+  IconBulletin,
   IconNotes,
   IconAsk,
   IconFlame,
@@ -18,21 +19,25 @@ export function Sidebar() {
 
   const menuItems = [
     { icon: IconHome, label: "Home", to: "/" },
-    { icon: IconSyllabus, label: "Syllabus", to: "/planner" },
+    { icon: IconSyllabus, label: "Upload Syllabus", to: "/planner" },
     { icon: IconDashboard, label: "Dashboard", to: "/dashboard" },
+    { icon: IconBulletin, label: "Bulletin Board", to: "/bulletin" },
     { icon: IconNotes, label: "Notes", to: "/notes" },
     { icon: IconAsk, label: "Ask UniMate", to: "/ask" },
   ];
 
   return (
-    <div
-      className={`fixed left-0 top-0 h-full bg-black text-white transition-all duration-300 ease-in-out z-[60] ${
+    <aside
+      aria-label="Application sidebar"
+      className={`fixed left-0 top-0 hidden h-full bg-black text-white transition-all duration-300 ease-in-out z-[60] md:block ${
         isExpanded ? "w-64" : "w-16"
       }`}
     >
       {/* Toggle Button */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
+        aria-label={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
+        title={isExpanded ? "Collapse sidebar" : "Expand sidebar"}
         className="absolute -right-3 top-6 h-6 w-6 rounded-full bg-black border-2 border-white flex items-center justify-center hover:bg-gray-800 transition-colors"
       >
         {isExpanded ? (
@@ -43,12 +48,19 @@ export function Sidebar() {
       </button>
 
       {/* Menu Items */}
-      <nav className="flex flex-col gap-2 p-4 mt-16 flex-1">
+      <nav aria-label="Workspace navigation" className="mt-16 flex flex-1 flex-col gap-2 p-4">
         {menuItems.map((item) => (
           <Link
             key={item.to}
             to={item.to}
-            className="flex items-center gap-4 px-3 py-3 rounded-lg hover:bg-gray-800 transition-colors group"
+            activeOptions={item.to === "/" ? { exact: true } : undefined}
+            aria-label={item.label}
+            title={!isExpanded ? item.label : undefined}
+            activeProps={{
+              className: "bg-[#F5C518] text-black hover:bg-[#F5C518]",
+              "aria-current": "page",
+            }}
+            className="group flex items-center gap-4 rounded-lg px-3 py-3 transition-colors hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F5C518] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />
             {isExpanded && (
@@ -70,6 +82,6 @@ export function Sidebar() {
           )}
         </div>
       </div>
-    </div>
+    </aside>
   );
 }

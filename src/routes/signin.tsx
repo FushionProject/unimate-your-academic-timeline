@@ -1,12 +1,23 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useAuth } from "../lib/auth-context";
 import { isSupabaseConfigured } from "../lib/supabase";
 
 export const Route = createFileRoute("/signin")({
   component: SignIn,
 });
+
+function friendlyAuthError(message: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes("invalid login") || lower.includes("invalid credentials")) {
+    return "That email or password did not match. Check both and try again.";
+  }
+  if (lower.includes("email not confirmed")) {
+    return "Check your email confirmation link before signing in.";
+  }
+  return message;
+}
 
 function SignIn() {
   const { signIn } = useAuth();
@@ -15,25 +26,34 @@ function SignIn() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setEmailConfirmed(params.get("confirmed") === "1");
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await signIn(email, password);
+    const { error } = await signIn(email.trim(), password);
     setLoading(false);
     if (error) {
-      setError(error);
+      setError(friendlyAuthError(error));
     } else {
       navigate({ to: "/dashboard" });
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card/90 backdrop-blur-xl p-8 shadow-[var(--shadow-card)]">
-        <h1 className="text-2xl font-bold text-foreground mb-1">Sign in</h1>
-        <p className="text-sm text-muted-foreground mb-6">Welcome back to UniMate.</p>
+    <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-background px-4 py-12 sm:px-6">
+      <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-card)] sm:p-8">
+        <h1 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">Welcome back</h1>
+        <p className="mb-7 text-sm leading-6 text-muted-foreground">
+          Sign in to pick up where you left off.
+        </p>
 
         {!isSupabaseConfigured && (
           <div className="mb-4 rounded-lg bg-yellow-100 px-3 py-2 text-xs text-yellow-800">
@@ -41,41 +61,98 @@ function SignIn() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
-            className="w-full rounded-lg border border-border bg-secondary/40 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            className="w-full rounded-lg border border-border bg-secondary/40 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-          {error && <p className="text-xs text-destructive">{error}</p>}
+        {emailConfirmed && (
+          <div
+            className="mb-4 flex items-start gap-2 rounded-lg bg-green-100 px-3 py-2 text-sm text-green-800"
+            role="status"
+          >
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            Email confirmed. Sign in to continue.
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading}>
+          <div className="space-y-1.5">
+            <label htmlFor="signin-email" className="text-sm font-medium text-foreground">
+              Email
+            </label>
+            <input
+              id="signin-email"
+              type="email"
+              required
+              autoComplete="email"
+              autoFocus
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "signin-error" : undefined}
+              className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="signin-password" className="text-sm font-medium text-foreground">
+                Password
+              </label>
+              <Link
+                to="/forgot-password"
+                className="text-sm font-medium text-foreground underline underline-offset-4"
+              >
+                Forgot password?
+              </Link>
+            </div>
+            <div className="relative">
+              <input
+                id="signin-password"
+                type={showPassword ? "text" : "password"}
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                aria-invalid={Boolean(error)}
+                aria-describedby={error ? "signin-error" : undefined}
+                className="w-full rounded-lg border border-border bg-background py-3 pl-4 pr-20 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                title={showPassword ? "Hide password" : "Show password"}
+                className="absolute inset-y-0 right-9 grid w-10 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+          {error && (
+            <p
+              id="signin-error"
+              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              role="alert"
+            >
+              {error}
+            </p>
+          )}
           <button
             type="submit"
             disabled={loading}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            Sign in
+            {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
           Don't have an account?{" "}
-          <Link to="/signup" className="text-foreground underline">
-            Sign up
+          <Link to="/signup" className="font-medium text-foreground underline underline-offset-4">
+            Create one
           </Link>
         </p>
       </div>
-    </div>
+    </main>
   );
 }

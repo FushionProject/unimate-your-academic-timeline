@@ -166,12 +166,33 @@ html.dark {
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-feature-settings: "ss01", "cv11";
+    text-rendering: optimizeLegibility;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: rgba(245, 197, 24, 0.35);
   }
 
   .font-serif-display {
     font-family: var(--font-serif);
     letter-spacing: -0.02em;
     font-weight: 400;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -271,4 +292,12 @@ html.dark {
 
 .animate-tri-gradient {
   animation: tri-gradient 8s linear infinite;
+}
+
+.scrollbar-hidden {
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
 }

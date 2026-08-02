@@ -13,8 +13,10 @@ import { Route as UpgradeRouteImport } from './routes/upgrade'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as ResultsRouteImport } from './routes/results'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PlannerRouteImport } from './routes/planner'
 import { Route as NotesRouteImport } from './routes/notes'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as BulletinRouteImport } from './routes/bulletin'
 import { Route as AskRouteImport } from './routes/ask'
@@ -40,6 +42,11 @@ const ResultsRoute = ResultsRouteImport.update({
   path: '/results',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PlannerRoute = PlannerRouteImport.update({
   id: '/planner',
   path: '/planner',
@@ -48,6 +55,11 @@ const PlannerRoute = PlannerRouteImport.update({
 const NotesRoute = NotesRouteImport.update({
   id: '/notes',
   path: '/notes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -76,8 +88,10 @@ export interface FileRoutesByFullPath {
   '/ask': typeof AskRoute
   '/bulletin': typeof BulletinRoute
   '/dashboard': typeof DashboardRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/notes': typeof NotesRoute
   '/planner': typeof PlannerRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
@@ -88,8 +102,10 @@ export interface FileRoutesByTo {
   '/ask': typeof AskRoute
   '/bulletin': typeof BulletinRoute
   '/dashboard': typeof DashboardRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/notes': typeof NotesRoute
   '/planner': typeof PlannerRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
@@ -101,8 +117,10 @@ export interface FileRoutesById {
   '/ask': typeof AskRoute
   '/bulletin': typeof BulletinRoute
   '/dashboard': typeof DashboardRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/notes': typeof NotesRoute
   '/planner': typeof PlannerRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
@@ -115,8 +133,10 @@ export interface FileRouteTypes {
     | '/ask'
     | '/bulletin'
     | '/dashboard'
+    | '/forgot-password'
     | '/notes'
     | '/planner'
+    | '/reset-password'
     | '/results'
     | '/signin'
     | '/signup'
@@ -127,8 +147,10 @@ export interface FileRouteTypes {
     | '/ask'
     | '/bulletin'
     | '/dashboard'
+    | '/forgot-password'
     | '/notes'
     | '/planner'
+    | '/reset-password'
     | '/results'
     | '/signin'
     | '/signup'
@@ -139,8 +161,10 @@ export interface FileRouteTypes {
     | '/ask'
     | '/bulletin'
     | '/dashboard'
+    | '/forgot-password'
     | '/notes'
     | '/planner'
+    | '/reset-password'
     | '/results'
     | '/signin'
     | '/signup'
@@ -152,8 +176,10 @@ export interface RootRouteChildren {
   AskRoute: typeof AskRoute
   BulletinRoute: typeof BulletinRoute
   DashboardRoute: typeof DashboardRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   NotesRoute: typeof NotesRoute
   PlannerRoute: typeof PlannerRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   ResultsRoute: typeof ResultsRoute
   SigninRoute: typeof SigninRoute
   SignupRoute: typeof SignupRoute
@@ -190,6 +216,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResultsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/planner': {
       id: '/planner'
       path: '/planner'
@@ -202,6 +235,13 @@ declare module '@tanstack/react-router' {
       path: '/notes'
       fullPath: '/notes'
       preLoaderRoute: typeof NotesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -240,8 +280,10 @@ const rootRouteChildren: RootRouteChildren = {
   AskRoute: AskRoute,
   BulletinRoute: BulletinRoute,
   DashboardRoute: DashboardRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   NotesRoute: NotesRoute,
   PlannerRoute: PlannerRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   ResultsRoute: ResultsRoute,
   SigninRoute: SigninRoute,
   SignupRoute: SignupRoute,
