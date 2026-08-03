@@ -81,6 +81,7 @@ export function ScreenAssistant() {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session?.access_token ?? ""}`,
+          "X-UniMate-Request-Id": crypto.randomUUID(),
         },
         body: JSON.stringify({ imageBase64: photo, question }),
       });

@@ -51,6 +51,7 @@ export async function askUniMate(data: {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "X-UniMate-Request-Id": crypto.randomUUID(),
       ...(await getAuthHeaders()),
     },
     body: JSON.stringify({ question, conversationHistory, classContext, mode, canvasContext }),

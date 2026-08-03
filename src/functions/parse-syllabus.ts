@@ -14,27 +14,20 @@ const responseSchema = z.object({
 export async function parseSyllabus(data: { syllabusText: string }) {
   const { syllabusText } = data;
 
-  try {
-    const response = await fetch("/api/parse-syllabus", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await getAuthHeaders()),
-      },
-      body: JSON.stringify({ syllabusText }),
-    });
+  const response = await fetch("/api/parse-syllabus", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-UniMate-Request-Id": crypto.randomUUID(),
+      ...(await getAuthHeaders()),
+    },
+    body: JSON.stringify({ syllabusText }),
+  });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("API error:", errorText);
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    const responseData = await response.json();
-    const validatedData = responseSchema.parse(responseData);
-    return validatedData;
-  } catch (error) {
-    console.error("Error in parseSyllabus:", error);
-    throw error;
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
   }
+
+  const responseData = await response.json();
+  return responseSchema.parse(responseData);
 }
