@@ -1,167 +1,131 @@
 # UniMate Release Candidate Integration Report
 
-## Release-candidate branch
+## Release candidate
 
 - Branch: `release-candidate/v1`
 - Base: local `main` at `9e5faab85619b30749e595c10ff94b4b0529b8ee`
-- Current HEAD: `251b67e32c8e019f308c6de343677e794c1bf2c4`
-- Deployment performed: no
-- Push performed: no
-- Stripe live mode enabled: no
+- Final tested integration content commit: `b315b01`
+- Deployment or push performed: no
 - Supabase SQL applied: no
+- Stripe live mode or live credentials enabled: no
 
-## Integration status
+## Integrated branches and commits
 
-Integration stopped after the third approved branch because ESLint failed after conflict resolution. The stop requirement was honored. Stripe production and launch documentation were not merged.
+1. `codex/production-hardening` at `7e9967f31554bbaa7618c2c6dbcc0ae0c3297e0b`
+   - Merge commit: `c55cd37`
+   - Supabase review document: `aa97931`
+2. `codex/browser-companion-sync` at `ed1aef59eae9d1a1bd07a7c862c6ebd6543e6a9d`
+   - Merge commit: `b2526a7`
+3. `codex/ai-capacity-controls-saved` at `a368bcfb5c39748764903f8d3b5e6aad4bd9b22a`
+   - Merge commit: `251b67e`
+4. Release-candidate formatting correction
+   - Commit: `4b2614c`
+5. `codex/stripe-production` at `4a6a1d6f867da17bc4cda8c61239e4491aa71547`
+   - Merge commit: `ea9165b`
+6. `codex/docs-launch` at `df51333de1f8252f717ad123fc0ef2371f0ee825`
+   - Merge commit: `c597ca8`
+   - Current-document cleanup and Stripe sandbox checklist: `b315b01`
 
-## Exact commits integrated
+Explicitly excluded: `codex/dependency-upgrades`, `codex/uncommitted-launch-work-backup`, duplicate legacy branches, `tmp/`, build artifacts, secrets, and local configuration.
 
-### 1. Production hardening
+## Formatting fix
 
-- Source branch: `codex/production-hardening`
-- Source commit: `7e9967f31554bbaa7618c2c6dbcc0ae0c3297e0b`
-- Merge commit: `c55cd37`
-- Additional review-document commit: `aa97931`
+`src/server.ts:2018` had one over-indented `request` argument introduced during the AI-capacity conflict resolution. Commit `4b2614c` changes indentation only. Before Stripe integration, formatting, ESLint, build, capacity tests, the complete Companion suite, grounding assertions, five runtime-stability runs, and `git diff --check` all passed.
 
-### 2. Browser Companion synchronization
+## Conflicts and resolutions
 
-- Source branch: `codex/browser-companion-sync`
-- Source commit: `ed1aef59eae9d1a1bd07a7c862c6ebd6543e6a9d`
-- Merge commit: `b2526a7`
+### Branch split reports
 
-### 3. AI capacity controls
+Production hardening and Companion synchronization both supplied `BRANCH_SPLIT_REPORT.md`. They were retained under specific names:
 
-- Source branch: `codex/ai-capacity-controls-saved`
-- Source commit: `a368bcfb5c39748764903f8d3b5e6aad4bd9b22a`
-- Merge commit: `251b67e32c8e019f308c6de343677e794c1bf2c4`
+- `PRODUCTION_HARDENING_BRANCH_SPLIT_REPORT.md`
+- `BROWSER_COMPANION_SYNC_BRANCH_SPLIT_REPORT.md`
 
-## Approved branches not integrated
+Stripe's report was similarly retained as `STRIPE_PRODUCTION_BRANCH_SPLIT_REPORT.md`.
 
-- `codex/stripe-production` at `4a6a1d6f867da17bc4cda8c61239e4491aa71547`
-- `codex/docs-launch` at `df51333de1f8252f717ad123fc0ef2371f0ee825`
+### AI capacity and production hardening in `src/server.ts`
 
-The following were also not merged, as required:
+The resolution retained Canvas timeouts and response bounds, hardened response headers, configurable AI models, quota reservation/completion, entitlement lookup, usage summary, AI-off routing, and bounded rate-limit state. Shared constants and helpers were deduplicated.
 
-- `codex/dependency-upgrades`
-- `codex/uncommitted-launch-work-backup`
-- legacy and duplicate branches
-- `tmp/`
-- local configuration, secrets, caches, and build output
+### Stripe and existing server controls in `src/server.ts`
 
-## Conflicts encountered
+The Stripe merge overlapped shared rate-limit, entitlement, and development-override helpers. The resolution retained the existing hardened helper implementations, expanded the billing profile lookup to include `stripe_customer_id`, and added Stripe's checkout, portal, reconciliation, webhook, and lifecycle handlers. A first build exposed duplicate helper declarations; these were removed without changing the intended behavior, after which lint, build, billing tests, and whitespace checks passed.
 
-### Browser Companion: branch split report filename
+### Documentation cleanup
 
-Both production hardening and Browser Companion synchronization added `BRANCH_SPLIT_REPORT.md`.
+The docs branch merged cleanly. Historical preservation, lineage, merge-order, and superseded hardening reports were then removed from the release candidate. Current `ARCHITECTURE.md` and the Companion README now explicitly state that SQL remains unapplied and Stripe remains test-only.
 
-Resolution:
+## Principal files and behavior included
 
-- Preserved the production report as `PRODUCTION_HARDENING_BRANCH_SPLIT_REPORT.md`.
-- Preserved the Companion report as `BROWSER_COMPANION_SYNC_BRANCH_SPLIT_REPORT.md`.
-- No application behavior changed.
-
-### AI capacity: `src/server.ts`
-
-The conflict involved shared constants, request rate limiting, entitlement lookup, bounded response headers, Canvas hardening, AI-capacity helpers, and AI-off routing.
-
-Resolution intent:
-
-- Kept Canvas timeout and response-size controls from production hardening.
-- Kept the full response security-header set from production hardening.
-- Kept model configuration, capacity reservation/completion, entitlement-tier lookup, usage summary, and AI-off routing from AI capacity.
-- Deduplicated the shared rate-limit map and constants.
-- Kept AI capacity's `cache-control: no-store` addition on 429 responses.
-
-No deliberate product behavior was added. However, this resolution introduced a whitespace-formatting lint error at `src/server.ts:2018`, so integration stopped before further changes.
-
-## Files changed relative to main
-
-- `.env.example`
-- AI capacity reports, limits, runbook, migration, and rollback SQL
-- Browser Companion background, content, manifest, and related tests
-- Production-hardening and Companion split reports
-- `SUPABASE_RELEASE_MIGRATION_REVIEW.md`
-- `package.json`
-- Companion configuration and secret-scan scripts
-- screen assistant and AI request functions
-- `src/lib/ai-capacity.ts`
-- authentication and Canvas helpers
-- `src/server.ts`
-- `supabase/profiles.sql`
-- `supabase/schema.sql`
+- Hardened API authentication, origin validation, Canvas proxy restrictions, request bounds, security headers, and sanitized failures.
+- Trusted website-to-extension authentication synchronization and more resilient Companion messaging.
+- AI quota configuration, duplicate and burst protection, circuit breakers, degraded modes, privacy-safe usage reporting, and migration/rollback SQL.
+- Stripe test-mode Checkout, customer portal, subscription reconciliation, lifecycle webhooks, entitlement synchronization, and UUID-based development override.
+- Current architecture, AI-capacity, billing, Supabase migration-review, and Stripe sandbox documentation.
 
 No dependency lockfile update is included.
 
-## Validation results
+## Final automated verification
 
-### After production hardening
+| Check | Result |
+| --- | --- |
+| Prettier formatting | Pass |
+| ESLint | Pass: 0 errors; 8 pre-existing Fast Refresh warnings |
+| Production client and SSR build | Pass |
+| Dashboard tests | Pass |
+| Complete Browser Companion suite | Pass |
+| Grounding assertions | Pass: 55 assertions |
+| Runtime stability | Pass: 5 consecutive runs |
+| AI capacity tests | Pass |
+| Rate-limit, duplicate, and concurrency assertions | Pass through capacity and Companion suites |
+| Provider outage/degraded-mode assertions | Pass through capacity and AI release-guard suites |
+| Billing safeguards | Pass |
+| Production-hardening guards | Pass |
+| Secret scan | Pass: 192 repository files checked; values not printed |
+| `git diff --check` | Pass |
+| Dependency audit | Completed: 11 findings (7 high, 2 moderate, 2 low) |
 
-- Production build: pass
-- ESLint: pass with 8 existing warnings and 0 errors
-- Browser Companion suite: pass
-- Existing billing safeguards: pass
-- `git diff --check`: pass
-
-### After Browser Companion synchronization
-
-- Production build: pass
-- ESLint: pass with 8 existing warnings and 0 errors
-- Complete Browser Companion suite: pass
-- Runtime stability repeated 5 times: pass all 5
-- Trusted origin symbols and website authentication messages: confirmed present
-- `git diff --check`: pass
-
-### After AI capacity controls
-
-- Production build: pass
-- AI capacity tests: pass
-- Quota and rate-limit assertions: pass through the capacity suite
-- Duplicate and concurrency assertions: pass through capacity and Companion suites
-- Grounding assertions: pass
-- Provider/outage and degraded-mode assertions: pass through capacity and release-guard suites
-- Browser Companion suite: pass
-- Runtime stability repeated 5 times: pass all 5
-- `git diff --check`: pass
-- ESLint: **fail** — one `prettier/prettier` whitespace error at `src/server.ts:2018`; 8 existing Fast Refresh warnings
-
-Because ESLint failed, no Stripe or documentation integration was attempted.
+The build still emits a large-chunk warning. The dependency audit identifies remediations in Babel, Vite/esbuild, Wrangler/Miniflare, js-yaml, PostCSS, Sharp/libvips, Undici, and ws. The dependency-upgrades branch was intentionally not integrated, so these findings require separate review rather than an automatic lockfile change.
 
 ## Supabase migration status
 
-- Production-hardening SQL changes are present in source but unapplied.
-- AI durable-usage migration and rollback SQL are present but unapplied.
-- Durable database-backed quotas remain unavailable until the migration and RLS are manually reviewed and applied.
-- No migration command was run.
-- Manual procedure and rollback considerations are documented in `SUPABASE_RELEASE_MIGRATION_REVIEW.md`.
+- `SUPABASE_USAGE_MIGRATION.sql` and `SUPABASE_USAGE_ROLLBACK.sql` are present but unapplied.
+- Changes represented in `supabase/schema.sql` and `supabase/profiles.sql` are also unapplied.
+- No SQL or migration command was run during integration.
+- `AI_DURABLE_QUOTAS_ENABLED=false` remains the documented default, so durable quotas are disabled until the migration is reviewed, staged, verified, and explicitly enabled.
+- Risks, rollback considerations, and the manual procedure are in `SUPABASE_RELEASE_MIGRATION_REVIEW.md`.
 
 ## Stripe sandbox status
 
-- Stripe production branch not integrated because the prior AI integration lint check failed.
-- Stripe remains in the baseline/test-mode state inherited from `main`.
-- No live credentials were enabled and no charge was attempted.
-- `STRIPE_SANDBOX_MANUAL_TESTS.md` was not created because the Stripe integration stage was not reached.
+- Stripe remains strictly test-only; `.env.example` keeps `STRIPE_LIVE_MODE_ENABLED=false`.
+- The server rejects live-key configuration unless live mode is explicitly enabled.
+- No Stripe credentials were added, no live charge was made, and no production webhook was configured.
+- Automated billing safeguards pass.
+- The required hands-on lifecycle matrix is documented in `STRIPE_SANDBOX_MANUAL_TESTS.md` and has not been executed against a real Stripe sandbox during this Git integration.
 
-## Remaining manual steps
+## Current documentation included
 
-1. Review and correct only the formatting error at `src/server.ts:2018`.
-2. Re-run production build, ESLint, capacity tests, complete Companion suite, repeated runtime tests, and `git diff --check`.
-3. Only after all checks pass, integrate `codex/stripe-production`.
-4. Produce and execute the Stripe sandbox manual test plan without live charges.
-5. Integrate only current, non-contradictory documentation from `codex/docs-launch`.
-6. Run the complete final release-candidate validation.
-7. Review both Supabase SQL sets manually; do not apply them as part of Git integration.
+- `ARCHITECTURE.md`
+- `AI_CAPACITY_REPORT.md`
+- `AI_USAGE_LIMITS.md`
+- `AI_PRODUCTION_RUNBOOK.md`
+- `BILLING_IMPLEMENTATION.md`
+- `STRIPE_SANDBOX_MANUAL_TESTS.md`
+- `SUPABASE_RELEASE_MIGRATION_REVIEW.md`
+- `browser-companion/README.md`
+- This integration report and the three branch-specific split reports
 
-## Remaining launch blockers
+## Remaining manual actions and launch blockers
 
-- ESLint failure in the integrated AI/server conflict resolution.
-- Stripe lifecycle branch not yet integrated.
-- Stripe sandbox lifecycle matrix not run.
-- Documentation branch not yet reviewed or integrated.
-- Supabase production state, migrations, RLS, and rollback not manually verified.
-- Durable quotas cannot be considered active before migration deployment.
+1. Review the dependency audit and intentionally integrate or supersede the isolated dependency-upgrades work; seven high-severity findings remain.
+2. Review the Supabase SQL against the live schema, apply it to staging only, verify RLS/RPC behavior and rollback, and then decide whether to deploy it. Durable quotas cannot be treated as active before this is complete.
+3. Execute every Stripe test-mode scenario in `STRIPE_SANDBOX_MANUAL_TESTS.md`, including duplicate webhook delivery, cancellations, failed renewal, test clocks, portal isolation, and website/Companion entitlement.
+4. Perform signed-in desktop, mobile, and unpacked-Chrome-extension walkthroughs against the intended staging configuration.
+5. Manually confirm environment values, trusted origins, provider ceilings, circuit-breaker thresholds, webhook destination, and no-live-key policy before any deployment review.
+6. Review the large client/SSR chunks before higher-scale launch; this is a performance warning, not a build failure.
 
 ## Safe to push for review?
 
-No. The branch is useful as an integration checkpoint, but it is incomplete and currently fails ESLint. It should not be presented as a release-ready review branch.
+Yes. The branch is clean, contains no scanned secrets or generated output, passes its automated release suites, and is suitable for remote code review. It is **not** approved for deployment or public launch until the dependency, migration, Stripe sandbox, and manual browser checks above are completed.
 
-**STOPPED — INTEGRATION FAILURE**
+**BLOCKED — MANUAL ACTION REQUIRED**
