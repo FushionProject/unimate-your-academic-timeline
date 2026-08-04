@@ -15,14 +15,16 @@ alter table public.profiles enable row level security;
 
 -- Users may only ever read their own row. No insert/update/delete policies
 -- are granted to the authenticated role on purpose.
+drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles
-  for select using (auth.uid() = id);
+  for select to authenticated
+  using ((select auth.uid()) = id);
 
 -- Auto-create a profiles row whenever a new account is created.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
-security definer set search_path = public
+security definer set search_path = ''
 as $$
 begin
   insert into public.profiles (id, is_pro)
@@ -31,6 +33,12 @@ begin
   return new;
 end;
 $$;
+
+-- Trigger functions do not need to be callable through the Data API.
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+
+revoke insert, update, delete on public.profiles from anon, authenticated;
+grant select on public.profiles to authenticated;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created

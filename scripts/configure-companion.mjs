@@ -34,10 +34,31 @@ const config = {
 };
 
 const missing = Object.entries(config)
-  .filter(([key, value]) => key !== "UNIMATE_API_URL" && !value)
+  .filter(([key, value]) => !["UNIMATE_API_URL", "COMPANION_DEBUG"].includes(key) && !value)
   .map(([key]) => key);
+const validHttpsUrl = (value) => {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+const validApiUrl = (() => {
+  try {
+    const url = new URL(config.UNIMATE_API_URL);
+    return (
+      url.protocol === "https:" ||
+      (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname))
+    );
+  } catch {
+    return false;
+  }
+})();
 if (missing.length) {
   console.error(`Missing ${missing.join(", ")} in .env.local.`);
+  process.exitCode = 1;
+} else if (!validHttpsUrl(config.SUPABASE_URL) || !validApiUrl) {
+  console.error("Companion URLs must use HTTPS; localhost HTTP is allowed only for development.");
   process.exitCode = 1;
 } else {
   fs.writeFileSync(
