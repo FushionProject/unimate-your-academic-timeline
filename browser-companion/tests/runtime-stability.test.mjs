@@ -148,7 +148,7 @@ function createHarness() {
       const href = String(url);
       state.requests.push({ href, options });
       if (href.endsWith("/auth/v1/user")) return json(session.user);
-      if (href.includes("/rest/v1/profiles")) return json([{ is_pro: true }]);
+      if (href.includes("/api/billing-status")) return json({ isPro: true });
       if (href.includes("/rest/v1/companion_preferences")) {
         return options.method === "POST"
           ? json({}, 201)

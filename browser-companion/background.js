@@ -246,18 +246,22 @@ async function getValidSession() {
 }
 
 async function getProfile(session) {
-  const userId = session.user?.id;
   const response = await fetchWithTimeout(
-    `${config.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=is_pro&limit=1`,
-    { headers: jsonHeaders(session.access_token) },
+    `${config.UNIMATE_API_URL.replace(/\/$/, "")}/api/billing-status?reconcile=false`,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    },
     ENTITLEMENT_TIMEOUT_MS,
     new CompanionError("UniMate Pro verification timed out.", {
       code: "ENTITLEMENT_TIMEOUT",
       phase: "entitlement",
     }),
   );
-  const rows = await parseResponse(response, "entitlement");
-  return { isPro: rows[0]?.is_pro === true };
+  const billing = await parseResponse(response, "entitlement");
+  return { isPro: billing.isPro === true };
 }
 
 async function authState() {
