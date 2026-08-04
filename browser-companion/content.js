@@ -282,9 +282,13 @@
     }
   }
 
-  function handleBrowserChatChanged() {
-    if (state.open && !state.busy && state.auth?.isPro) {
-      void refreshMessagesOnOpen();
+  async function handleBrowserChatChanged() {
+    if (!(state.open && !state.busy && state.auth?.isPro)) return;
+    try {
+      const result = await send({ type: "WEBSITE_ORIGIN_CHECK" });
+      if (result?.trusted) await refreshMessagesOnOpen();
+    } catch {
+      // Website-to-extension signals are optional and fail closed.
     }
   }
 
@@ -563,10 +567,17 @@
   }
 
   async function handleWebsiteSignOut() {
-    // This page event deliberately carries no session or user data. Host-page
-    // code can only request the safe, destructive action of clearing this
-    // extension installation's current session.
-    await handleSignOut();
+    try {
+      await send({ type: "WEBSITE_SIGN_OUT" });
+      state.auth = { configured: true, authenticated: false, isPro: false };
+      state.messages = [];
+      state.activeConversationId = null;
+      state.activeConversationTitle = "Browser Companion";
+      state.conversationStartIndex = 0;
+      if (state.open) renderAuth();
+    } catch {
+      // Untrusted host pages cannot sign the extension out by spoofing a DOM event.
+    }
   }
 
   function syncWebsiteAuthState() {
@@ -772,13 +783,13 @@
   });
   syncWebsiteAuthState();
 
-  function refreshVisibleCompanion() {
+  function refreshVisiblePanel() {
     if (document.visibilityState === "visible" && state.open && !state.busy && state.auth?.isPro) {
       void refreshMessagesOnOpen();
     }
   }
-  addEventListener("focus", refreshVisibleCompanion);
-  addEventListener("visibilitychange", refreshVisibleCompanion);
+  addEventListener("focus", refreshVisiblePanel);
+  document.addEventListener("visibilitychange", refreshVisiblePanel);
 
   let currentPageUrl = location.href;
   function updatePageBoundary() {
@@ -790,7 +801,7 @@
   }
   const urlObserver = new MutationObserver(updatePageBoundary);
   urlObserver.observe(document.documentElement, { childList: true, subtree: true });
-  const urlPoll = setInterval(updatePageBoundary, 500);
+  const urlPoll = setInterval(updatePageBoundary, 1_000);
   addEventListener("popstate", updatePageBoundary);
   addEventListener("hashchange", updatePageBoundary);
   addEventListener("pageshow", updatePageBoundary);
@@ -804,8 +815,8 @@
     document.removeEventListener("unimate-auth-signed-out", handleWebsiteSignOut);
     document.removeEventListener("unimate-browser-chat-changed", handleBrowserChatChanged);
     websiteAuthObserver.disconnect();
-    removeEventListener("focus", refreshVisibleCompanion);
-    removeEventListener("visibilitychange", refreshVisibleCompanion);
+    removeEventListener("focus", refreshVisiblePanel);
+    document.removeEventListener("visibilitychange", refreshVisiblePanel);
     removeEventListener("popstate", updatePageBoundary);
     removeEventListener("hashchange", updatePageBoundary);
     removeEventListener("pageshow", updatePageBoundary);
