@@ -37,6 +37,16 @@ function configured() {
   return Boolean(config.SUPABASE_URL && config.SUPABASE_ANON_KEY && config.UNIMATE_API_URL);
 }
 
+function isTrustedUniMatePage(sender) {
+  try {
+    const configuredOrigin = new URL(config.UNIMATE_API_URL).origin;
+    const senderOrigin = new URL(String(sender.tab?.url || "")).origin;
+    return configuredOrigin === senderOrigin;
+  } catch {
+    return false;
+  }
+}
+
 async function readSession() {
   const result = await chrome.storage.local.get(STORAGE_KEY);
   return result[STORAGE_KEY] || null;
@@ -896,6 +906,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return signIn(String(request.email || ""), String(request.password || ""));
       case "SIGN_OUT":
         return signOut();
+      case "WEBSITE_SIGN_OUT":
+        if (!isTrustedUniMatePage(sender)) {
+          throw new CompanionError("This page cannot control the UniMate session.", {
+            code: "UNTRUSTED_WEBSITE",
+            phase: "auth",
+          });
+        }
+        return signOut();
+      case "WEBSITE_ORIGIN_CHECK":
+        return { trusted: isTrustedUniMatePage(sender) };
       case "LOAD_MESSAGES": {
         const session = await requireProSession();
         return loadMessages(session);
