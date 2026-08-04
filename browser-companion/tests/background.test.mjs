@@ -47,7 +47,7 @@ const context = vm.createContext({
   fetch: async (url, options = {}) => {
     const href = String(url);
     if (href.endsWith("/auth/v1/user")) return json(storedSession.user);
-    if (href.includes("/rest/v1/profiles")) return json([{ is_pro: profileIsPro }]);
+    if (href.includes("/api/billing-status")) return json({ isPro: profileIsPro });
     if (href.includes("/rest/v1/companion_preferences")) {
       return options.method === "POST"
         ? json({}, 201)
