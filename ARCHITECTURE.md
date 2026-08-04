@@ -617,37 +617,32 @@ Purpose:
 
 ## Stripe Status
 
-Stripe is partially implemented and functional at the code level:
+Stripe subscriptions are lifecycle-complete at the code level and remain locked to test mode:
 
 - Checkout session creation exists.
 - Webhook verification exists.
-- Pro entitlement update exists.
+- Subscription lifecycle entitlement synchronization exists.
 - Upgrade page exists.
 - Pro-gated screenshot analysis exists.
+- Customer billing portal and authenticated billing reconciliation exist.
+- Duplicate-subscription prevention and Checkout idempotency exist.
 
 Required Stripe environment variables:
 
 - `STRIPE_SECRET_KEY`
 - `STRIPE_PRICE_ID`
 - `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_LIVE_MODE_ENABLED` (must remain `false` until explicit launch approval)
+- `STRIPE_PAST_DUE_GRACE_ENABLED`
 
 Required Supabase variable for webhook updates:
 
 - `SUPABASE_SERVICE_ROLE_KEY`
 
-Current limitations:
-
-- No subscription cancellation/downgrade handling yet.
-- No handling for `customer.subscription.deleted`, `customer.subscription.updated`, payment failure, refunds, or chargebacks.
-- Webhook currently only upgrades on `checkout.session.completed`.
-- No local Stripe CLI test script is checked into the repo.
-
-Recommended next Stripe events:
-
-- `customer.subscription.deleted`: set `is_pro = false`.
-- `customer.subscription.updated`: sync active/trialing/past_due/canceled state.
-- `invoice.payment_failed`: optionally mark account past due or notify user.
-- `checkout.session.completed`: keep current upgrade path.
+The implementation handles Checkout completion, asynchronous payment results,
+subscription creation/update/deletion/pause/resume, and invoice paid/failed/action-required
+events. See `BILLING_IMPLEMENTATION.md` for policy, configuration, and the required
+Stripe sandbox release gate.
 
 ## Environment Variables
 
@@ -737,9 +732,11 @@ Production secrets should be configured in Cloudflare/Workers, for example throu
 
 The repo currently has local modifications from the audit/fix pass. They are not staged or committed unless a later workflow does that.
 
-### Stripe Downgrade Lifecycle Missing
+### Stripe Live Activation Is Gated
 
-Users can be upgraded to Pro, but there is no complete subscription lifecycle sync yet. Cancellations and failed payments do not currently set `is_pro` back to false.
+The subscription lifecycle is implemented, but live billing remains explicitly disabled.
+Complete the Stripe sandbox matrix in `BILLING_IMPLEMENTATION.md` before setting the
+live-mode flag or installing live credentials.
 
 ### Canvas Token Storage
 
