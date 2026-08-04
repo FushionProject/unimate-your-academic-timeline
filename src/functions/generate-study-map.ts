@@ -24,27 +24,20 @@ type SyllabusItem = {
 export async function generateStudyMap(data: { items: SyllabusItem[] }) {
   const { items } = data;
 
-  try {
-    const response = await fetch("/api/generate-study-map", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await getAuthHeaders()),
-      },
-      body: JSON.stringify({ items }),
-    });
+  const response = await fetch("/api/generate-study-map", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-UniMate-Request-Id": crypto.randomUUID(),
+      ...(await getAuthHeaders()),
+    },
+    body: JSON.stringify({ items }),
+  });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("API error:", errorText);
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    const responseData = await response.json();
-    const validatedData = responseSchema.parse(responseData);
-    return validatedData;
-  } catch (error) {
-    console.error("Error in generateStudyMap:", error);
-    throw error;
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
   }
+
+  const responseData = await response.json();
+  return responseSchema.parse(responseData);
 }

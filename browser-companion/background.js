@@ -14,8 +14,10 @@ const ENTITLEMENT_TIMEOUT_MS = 8000;
 const PERSISTENCE_TIMEOUT_MS = 8000;
 const AI_TIMEOUT_MS = 45000;
 const completedChatRequests = new Map();
+const inFlightChatRequests = new Map();
 const pendingChatPersistence = new Map();
 const MAX_REQUEST_CACHE = 100;
+const MAX_PENDING_PERSISTENCE = 100;
 
 class CompanionError extends Error {
   constructor(message, { code = "COMPANION_ERROR", phase = "runtime", retryAfterMs = 0 } = {}) {
@@ -585,7 +587,7 @@ function sanitizePageContext(pageContext, sender) {
   };
 }
 
-async function callTextChat(session, message, pageContext, history) {
+async function callTextChat(session, message, pageContext, history, requestId) {
   const response = await fetchBackendWithBoundedRetry(
     `${config.UNIMATE_API_URL.replace(/\/$/, "")}/api/dashboard-ai`,
     {
@@ -593,6 +595,7 @@ async function callTextChat(session, message, pageContext, history) {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${session.access_token}`,
+        "X-UniMate-Request-Id": requestId,
       },
       body: JSON.stringify({
         // Dedicated companion type so the backend applies strict grounding +
@@ -612,7 +615,7 @@ async function callTextChat(session, message, pageContext, history) {
   };
 }
 
-async function callScreenshotChat(session, message, pageContext, imageDataUrl, history) {
+async function callScreenshotChat(session, message, pageContext, imageDataUrl, history, requestId) {
   const response = await fetchBackendWithBoundedRetry(
     `${config.UNIMATE_API_URL.replace(/\/$/, "")}/api/analyze-screenshot`,
     {
@@ -620,6 +623,7 @@ async function callScreenshotChat(session, message, pageContext, imageDataUrl, h
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${session.access_token}`,
+        "X-UniMate-Request-Id": requestId,
       },
       // The backend builds the grounded prompt from these labelled fields. We
       // send the student's raw question plus structured page provenance — no
@@ -779,16 +783,8 @@ async function runtimeDiagnostics(sender) {
   };
 }
 
-async function sendChat(payload, sender) {
-  await requirePrivacyConsent();
-  const session = await requireProSession();
+async function executeChat(payload, sender, session, requestId, requestKey) {
   const conversationId = await ensureActiveConversation(session);
-  const requestId =
-    typeof payload.requestId === "string" && payload.requestId.length <= 100
-      ? payload.requestId
-      : crypto.randomUUID();
-  const requestKey = `${session.user.id}:${requestId}`;
-  if (completedChatRequests.has(requestKey)) return completedChatRequests.get(requestKey);
   const history = Array.isArray(payload.history) ? payload.history : [];
   const pageContext = sanitizePageContext(payload.context, sender);
   let answer;
@@ -803,6 +799,7 @@ async function sendChat(payload, sender) {
         pageContext,
         image,
         history,
+        requestId,
       );
       answer = result.answer;
       pipelineDiagnostics = result.pipelineDiagnostics;
@@ -824,7 +821,7 @@ async function sendChat(payload, sender) {
       ) {
         throw error;
       }
-      const result = await callTextChat(session, payload.message, pageContext, history);
+      const result = await callTextChat(session, payload.message, pageContext, history, requestId);
       answer = result.answer;
       pipelineDiagnostics = result.pipelineDiagnostics;
       contextMode = "text-fallback";
@@ -863,12 +860,15 @@ async function sendChat(payload, sender) {
       userMessage: payload.message,
       assistantMessage: answer,
     });
+    if (pendingChatPersistence.size > MAX_PENDING_PERSISTENCE) {
+      pendingChatPersistence.delete(pendingChatPersistence.keys().next().value);
+    }
   }
   const diagnostics = {
     activeTabUrl: pageContext.pageUrl || "",
     extractedBlockCount:
       pageContext.metrics?.extractedBlockCount || pageContext.blocks?.length || 0,
-    selectedText: String(pageContext.highlightedText || "").slice(0, 300),
+    selectedTextLength: String(pageContext.highlightedText || "").length,
     matchedItem:
       pageContext.relevance?.matchedQuestionNumber || pageContext.relevance?.bestBlockId || null,
     contextCharacterCount: String(pageContext.visiblePageText || "").length,
@@ -891,6 +891,26 @@ async function sendChat(payload, sender) {
     completedChatRequests.delete(completedChatRequests.keys().next().value);
   }
   return response;
+}
+
+async function sendChat(payload, sender) {
+  await requirePrivacyConsent();
+  const session = await requireProSession();
+  const requestId =
+    typeof payload.requestId === "string" && payload.requestId.length <= 100
+      ? payload.requestId
+      : crypto.randomUUID();
+  const requestKey = `${session.user.id}:${requestId}`;
+  if (completedChatRequests.has(requestKey)) return completedChatRequests.get(requestKey);
+  if (inFlightChatRequests.has(requestKey)) return inFlightChatRequests.get(requestKey);
+
+  const request = executeChat(payload, sender, session, requestId, requestKey);
+  inFlightChatRequests.set(requestKey, request);
+  try {
+    return await request;
+  } finally {
+    inFlightChatRequests.delete(requestKey);
+  }
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

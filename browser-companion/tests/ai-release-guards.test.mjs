@@ -13,7 +13,7 @@ check(
   !/returning mock data|mockResponses/.test(source),
 );
 check("missing AI configuration is typed", /code: "AI_NOT_CONFIGURED"/.test(source));
-check("missing search configuration is typed", /code: "SEARCH_NOT_CONFIGURED"/.test(source));
+check("unavailable search is typed", /code: "SEARCH_UNAVAILABLE"/.test(source));
 check(
   "provider calls share a bounded timeout",
   /AI_PROVIDER_TIMEOUT_MS/.test(source) && /fetchWithTimeout/.test(source),
@@ -37,9 +37,9 @@ check(
   /Related concepts are optional\. Never fail or retry/.test(source),
 );
 check(
-  "simpler and deeper follow-ups skip redundant web search",
-  /const needsWebSearch = mode !== "simpler" && mode !== "deeper"/.test(source) &&
-    /if \(needsWebSearch && serpApiKey\)/.test(source),
+  "stable questions and follow-ups skip redundant web search",
+  /needsWebSearch\(String\(question\)\)/.test(source) &&
+    /if \(searchRequired && serpApiKey\)/.test(source),
 );
 
 console.log(`PASS ${passed} AI release guard assertions`);
