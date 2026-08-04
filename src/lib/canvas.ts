@@ -123,8 +123,7 @@ export async function testCanvasConnection(
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
-      return { success: false, error: `Canvas API error: ${response.status} - ${errorText}` };
+      return { success: false, error: `Canvas API error: ${response.status}` };
     }
 
     const courses: CanvasCourse[] = await response.json();

@@ -47,7 +47,7 @@ const context = vm.createContext({
   fetch: async (url, options = {}) => {
     const href = String(url);
     if (href.endsWith("/auth/v1/user")) return json(storedSession.user);
-    if (href.includes("/rest/v1/profiles")) return json([{ is_pro: profileIsPro }]);
+    if (href.includes("/api/billing-status")) return json({ isPro: profileIsPro });
     if (href.includes("/rest/v1/companion_preferences")) {
       return options.method === "POST"
         ? json({}, 201)
@@ -314,13 +314,15 @@ const stablePayload = {
   context: pageContext,
   history: [],
 };
-const firstStableResult = await sendChat(stablePayload, sender);
-const secondStableResult = await sendChat(stablePayload, sender);
+const [firstStableResult, secondStableResult] = await Promise.all([
+  sendChat(stablePayload, sender),
+  sendChat(stablePayload, sender),
+]);
 assert.equal(secondStableResult.requestId, firstStableResult.requestId);
 assert.equal(
   captureCount,
   capturesBeforeDedupe + 1,
-  "a retry with the same request ID must not capture, call AI, or persist twice",
+  "concurrent retries with the same request ID must not capture, call AI, or persist twice",
 );
 
 console.log("PASS screenshot-first routing and text fallback");

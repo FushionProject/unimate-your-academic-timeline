@@ -72,9 +72,14 @@ const MAX_STUDY_ITEMS = 120;
 const MAX_CHAT_HISTORY = 10;
 const MAX_IMAGE_DATA_URL_CHARS = 2_500_000;
 const STRIPE_WEBHOOK_TOLERANCE_SECONDS = 300;
+const MAX_STRIPE_WEBHOOK_BYTES = 512_000;
+const MAX_STRIPE_SIGNATURE_CHARS = 8_000;
+const STRIPE_API_TIMEOUT_MS = 15_000;
 const SUPABASE_AUTH_TIMEOUT_MS = 8_000;
 const SUPABASE_ENTITLEMENT_TIMEOUT_MS = 8_000;
 const AI_PROVIDER_TIMEOUT_MS = 45_000;
+const CANVAS_API_TIMEOUT_MS = 12_000;
+const MAX_CANVAS_RESPONSE_BYTES = 2_000_000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_RATE_LIMIT_ENTRIES = 20_000;
 const DEFAULT_GROQ_TEXT_MODEL = "llama-3.3-70b-versatile";
@@ -92,9 +97,34 @@ function configuredGroqModel(value: string | undefined, fallback: string): strin
 
 type BillingProfile = {
   is_pro: boolean;
+  stripe_customer_id?: string | null;
 };
 
-type CompanionErrorPhase = "authentication" | "entitlement" | "search" | "ai";
+type StripeSubscription = {
+  id: string;
+  customer: string | { id?: string };
+  status: string;
+  cancel_at_period_end?: boolean;
+  current_period_end?: number;
+  metadata?: Record<string, string>;
+  items?: { data?: Array<{ price?: { id?: string } }> };
+};
+
+type BillingState =
+  | "free"
+  | "active"
+  | "trialing"
+  | "past_due"
+  | "canceling"
+  | "canceled"
+  | "unpaid"
+  | "paused"
+  | "incomplete"
+  | "development_override"
+  | "legacy"
+  | "not_configured";
+
+type CompanionErrorPhase = "authentication" | "entitlement" | "search" | "ai" | "upstream";
 
 class CompanionUpstreamError extends Error {
   code: string;
@@ -324,47 +354,6 @@ async function parseJsonBody(
   } catch {
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
-}
-
-function developmentProOverride(userId: string): boolean {
-  if (process.env.ALLOW_DEV_PRO_OVERRIDES !== "true") return false;
-  if (process.env.STRIPE_LIVE_MODE_ENABLED === "true") return false;
-  if (process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")) return false;
-  const allowedIds = (process.env.DEV_PRO_USER_IDS || "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-  return allowedIds.includes(userId);
-}
-
-async function readBillingProfile(
-  userId: string,
-  accessToken: string,
-  clientSignal?: AbortSignal,
-): Promise<BillingProfile | null> {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-  const response = await fetchWithTimeout(
-    `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=is_pro&limit=1`,
-    {
-      headers: {
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${accessToken}`,
-      },
-    },
-    SUPABASE_ENTITLEMENT_TIMEOUT_MS,
-    new CompanionUpstreamError(
-      "ENTITLEMENT_TIMEOUT",
-      "entitlement",
-      504,
-      "Entitlement lookup timed out.",
-    ),
-    clientSignal,
-  );
-  if (!response.ok) return null;
-  const rows = (await response.json()) as BillingProfile[];
-  return rows[0] || null;
 }
 
 function enforceUserRateLimit(
@@ -649,10 +638,7 @@ async function requireCompanionEntitlement(
 async function handleAskUniMate(request: Request): Promise<Response> {
   try {
     if (request.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        status: 405,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "Method not allowed" }, 405, { allow: "POST" });
     }
 
     const largeRequest = rejectLargeRequest(request);
@@ -951,10 +937,7 @@ async function groqTextCompletion(
 async function handleDashboardAI(request: Request): Promise<Response> {
   try {
     if (request.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        status: 405,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "Method not allowed" }, 405, { allow: "POST" });
     }
 
     const largeRequest = rejectLargeRequest(request);
@@ -963,6 +946,9 @@ async function handleDashboardAI(request: Request): Promise<Response> {
     const body = await parseJsonBody(request);
     if (body instanceof Response) return body;
     const { type, academicContext, message, chatHistory, pageContext } = body;
+    if (academicContext !== undefined && typeof academicContext !== "string") {
+      return jsonResponse({ error: "Academic context must be text" }, 400);
+    }
     if (typeof academicContext === "string" && academicContext.length > 30_000) {
       return jsonResponse({ error: "Academic context is too large" }, 413);
     }
@@ -1089,10 +1075,7 @@ async function handleDashboardAI(request: Request): Promise<Response> {
       systemPrompt = `You are UniMate, an AI academic advisor for college students. You have the student's academic data below and can help with coursework questions, study strategies, grade analysis, and academic planning. Be helpful, specific, and concise (under 200 words per response).\n\n${academicContext}`;
       userMessage = message || "Hello";
     } else {
-      return new Response(JSON.stringify({ error: "Invalid type" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
+      return jsonResponse({ error: "Invalid type" }, 400);
     }
 
     const messages: ChatMessage[] = [{ role: "system", content: systemPrompt }];
@@ -1406,11 +1389,20 @@ async function handleCanvasProxy(request: Request): Promise<Response> {
 
     const authResult = await requireAuthenticatedUser(request);
     if (authResult instanceof Response) return authResult;
+    const rateLimited = enforceUserRateLimit(authResult.id, "canvas-proxy", 120);
+    if (rateLimited) return rateLimited;
 
-    const body = await parseJsonBody(request);
+    const body = await parseJsonBody(request, 50_000);
     if (body instanceof Response) return body;
     const { apiUrl, apiToken, path } = body;
-    if (!apiUrl || !apiToken || !path) {
+    if (
+      !isNonEmptyString(apiUrl) ||
+      apiUrl.length > 2_000 ||
+      !isNonEmptyString(apiToken) ||
+      apiToken.length > 4_000 ||
+      !isNonEmptyString(path) ||
+      path.length > 8_000
+    ) {
       return jsonResponse({ error: "apiUrl, apiToken, and path are required" }, 400);
     }
 
@@ -1423,7 +1415,12 @@ async function handleCanvasProxy(request: Request): Promise<Response> {
 
     // Only forward https requests to Canvas /api/v1/ paths — this is not a
     // general-purpose proxy.
-    if (canvasUrl.protocol !== "https:") {
+    if (
+      canvasUrl.protocol !== "https:" ||
+      canvasUrl.username ||
+      canvasUrl.password ||
+      canvasUrl.port
+    ) {
       return jsonResponse({ error: "Canvas URL must use https" }, 400);
     }
     const hostname = canvasUrl.hostname;
@@ -1435,20 +1432,46 @@ async function handleCanvasProxy(request: Request): Promise<Response> {
     ) {
       return jsonResponse({ error: "Invalid Canvas host" }, 400);
     }
-    if (typeof path !== "string" || !path.startsWith("/api/v1/")) {
+    let targetUrl: URL;
+    try {
+      targetUrl = new URL(path, canvasUrl.origin);
+    } catch {
+      return jsonResponse({ error: "Invalid Canvas API path" }, 400);
+    }
+    if (targetUrl.origin !== canvasUrl.origin || !targetUrl.pathname.startsWith("/api/v1/")) {
       return jsonResponse({ error: "Only Canvas /api/v1/ paths are allowed" }, 400);
     }
 
-    const upstream = await fetch(`${canvasUrl.origin}${path}`, {
-      headers: { Authorization: `Bearer ${apiToken}` },
-    });
-
-    const upstreamBody = await upstream.text();
+    const upstream = await fetchWithTimeout(
+      targetUrl,
+      {
+        headers: { Authorization: `Bearer ${apiToken}` },
+        redirect: "manual",
+      },
+      CANVAS_API_TIMEOUT_MS,
+      new CompanionUpstreamError(
+        "CANVAS_TIMEOUT",
+        "upstream",
+        504,
+        "Canvas took too long to respond.",
+      ),
+      request.signal,
+    );
+    if (upstream.status >= 300 && upstream.status < 400) {
+      return jsonResponse({ error: "Canvas redirects are not permitted through this proxy." }, 502);
+    }
+    const upstreamLength = Number(upstream.headers.get("content-length") || 0);
+    if (upstreamLength > MAX_CANVAS_RESPONSE_BYTES) {
+      return jsonResponse({ error: "Canvas response is too large" }, 413);
+    }
+    const upstreamBody = await readStreamTextLimited(upstream.body, MAX_CANVAS_RESPONSE_BYTES);
+    if (upstreamBody instanceof Response) return upstreamBody;
     return new Response(upstreamBody, {
       status: upstream.status,
       headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
     });
   } catch (error) {
+    if (error instanceof CompanionUpstreamError) return companionErrorResponse(error);
     console.error("Error in handleCanvasProxy:", error);
     return jsonResponse({ error: "Internal server error" }, 500);
   }
@@ -1652,78 +1675,413 @@ async function handleAiUsageSummary(request: Request): Promise<Response> {
   }
 }
 
-// Handle /api/create-checkout-session — starts a Stripe Checkout flow for
-// UniMate Pro. Calls Stripe's REST API directly with fetch rather than the
-// Stripe Node SDK, since that SDK's Cloudflare Workers compatibility isn't
-// something that can be verified without running it against a real request.
+function stripeConfiguration():
+  | { secretKey: string; priceId: string; liveMode: boolean }
+  | Response {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const priceId = process.env.STRIPE_PRICE_ID;
+  if (!secretKey || !priceId) {
+    return jsonResponse({ error: "Payments are temporarily unavailable." }, 503);
+  }
+
+  const liveMode = secretKey.startsWith("sk_live_");
+  if (liveMode && process.env.STRIPE_LIVE_MODE_ENABLED !== "true") {
+    console.error("A live Stripe key was rejected because live billing is not explicitly enabled");
+    return jsonResponse({ error: "Live billing is disabled." }, 503);
+  }
+  if (!liveMode && !secretKey.startsWith("sk_test_")) {
+    return jsonResponse({ error: "Stripe test-mode configuration is invalid." }, 503);
+  }
+  return { secretKey, priceId, liveMode };
+}
+
+function developmentProOverride(userId: string): boolean {
+  if (process.env.ALLOW_DEV_PRO_OVERRIDES !== "true") return false;
+  if (process.env.STRIPE_LIVE_MODE_ENABLED === "true") return false;
+  if (process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")) return false;
+  const allowedIds = (process.env.DEV_PRO_USER_IDS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return allowedIds.includes(userId);
+}
+
+async function stripeRequest(
+  path: string,
+  config: { secretKey: string },
+  init: RequestInit = {},
+  idempotencyKey?: string,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), STRIPE_API_TIMEOUT_MS);
+  try {
+    return await fetch(`https://api.stripe.com/v1${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${config.secretKey}`,
+        ...(init.body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+        ...init.headers,
+      },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readBillingProfile(
+  userId: string,
+  accessToken: string,
+  clientSignal?: AbortSignal,
+): Promise<BillingProfile | null> {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+  const response = await fetchWithTimeout(
+    `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=is_pro,stripe_customer_id&limit=1`,
+    {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+    SUPABASE_ENTITLEMENT_TIMEOUT_MS,
+    new CompanionUpstreamError(
+      "ENTITLEMENT_TIMEOUT",
+      "entitlement",
+      504,
+      "Billing profile lookup timed out.",
+    ),
+    clientSignal,
+  );
+  if (!response.ok) return null;
+  const rows = (await response.json()) as BillingProfile[];
+  return rows[0] || null;
+}
+
+async function patchBillingProfile(
+  userId: string,
+  values: Partial<BillingProfile>,
+): Promise<boolean> {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) return false;
+  const response = await fetchWithTimeout(
+    `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(values),
+    },
+    SUPABASE_ENTITLEMENT_TIMEOUT_MS,
+    new CompanionUpstreamError(
+      "ENTITLEMENT_TIMEOUT",
+      "entitlement",
+      504,
+      "Billing profile update timed out.",
+    ),
+  );
+  return response.ok;
+}
+
+async function readBillingProfileAsServiceRole(userId: string): Promise<BillingProfile | null> {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) return null;
+  const response = await fetchWithTimeout(
+    `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=is_pro,stripe_customer_id&limit=1`,
+    { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } },
+    SUPABASE_ENTITLEMENT_TIMEOUT_MS,
+    new CompanionUpstreamError(
+      "ENTITLEMENT_TIMEOUT",
+      "entitlement",
+      504,
+      "Billing profile lookup timed out.",
+    ),
+  );
+  if (!response.ok) return null;
+  const rows = (await response.json()) as BillingProfile[];
+  return rows[0] || null;
+}
+
+async function findUserIdsByStripeCustomer(customerId: string): Promise<string[]> {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) return [];
+  const response = await fetchWithTimeout(
+    `${supabaseUrl}/rest/v1/profiles?stripe_customer_id=eq.${encodeURIComponent(customerId)}&select=id&limit=2`,
+    { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } },
+    SUPABASE_ENTITLEMENT_TIMEOUT_MS,
+    new CompanionUpstreamError(
+      "ENTITLEMENT_TIMEOUT",
+      "entitlement",
+      504,
+      "Stripe customer ownership lookup timed out.",
+    ),
+  );
+  if (!response.ok) return [];
+  const rows = (await response.json()) as Array<{ id?: string }>;
+  return rows.flatMap((row) => (row.id ? [row.id] : []));
+}
+
+function subscriptionHasConfiguredPrice(
+  subscription: StripeSubscription,
+  priceId: string,
+): boolean {
+  return Boolean(subscription.items?.data?.some((item) => item.price?.id === priceId));
+}
+
+function stripeCustomerId(value: StripeSubscription["customer"]): string | null {
+  return typeof value === "string" ? value : value?.id || null;
+}
+
+function subscriptionEntitled(status: string): boolean {
+  if (status === "active" || status === "trialing") return true;
+  return status === "past_due" && process.env.STRIPE_PAST_DUE_GRACE_ENABLED !== "false";
+}
+
+function billingStateForSubscription(subscription: StripeSubscription): BillingState {
+  if (subscription.status === "active" && subscription.cancel_at_period_end) return "canceling";
+  if (
+    ["active", "trialing", "past_due", "canceled", "unpaid", "paused", "incomplete"].includes(
+      subscription.status,
+    )
+  ) {
+    return subscription.status as BillingState;
+  }
+  return "free";
+}
+
+async function listCustomerSubscriptions(
+  customerId: string,
+  config: { secretKey: string; priceId: string },
+): Promise<StripeSubscription[]> {
+  const query = new URLSearchParams({ customer: customerId, status: "all", limit: "20" });
+  const response = await stripeRequest(`/subscriptions?${query}`, config);
+  if (!response.ok) throw new Error(`Stripe subscription lookup failed (${response.status})`);
+  const payload = (await response.json()) as { data?: StripeSubscription[] };
+  return (payload.data || []).filter((subscription) =>
+    subscriptionHasConfiguredPrice(subscription, config.priceId),
+  );
+}
+
+function preferredSubscription(subscriptions: StripeSubscription[]): StripeSubscription | null {
+  const rank = ["active", "trialing", "past_due", "unpaid", "paused", "incomplete"];
+  return (
+    [...subscriptions].sort((left, right) => {
+      const leftRank = rank.indexOf(left.status);
+      const rightRank = rank.indexOf(right.status);
+      return (leftRank < 0 ? rank.length : leftRank) - (rightRank < 0 ? rank.length : rightRank);
+    })[0] || null
+  );
+}
+
+async function createPortalUrl(
+  customerId: string,
+  returnUrl: string,
+  config: { secretKey: string },
+): Promise<string | null> {
+  const response = await stripeRequest("/billing_portal/sessions", config, {
+    method: "POST",
+    body: new URLSearchParams({ customer: customerId, return_url: returnUrl }).toString(),
+  });
+  if (!response.ok) return null;
+  const payload = (await response.json()) as { url?: string };
+  if (!payload.url) return null;
+  const url = new URL(payload.url);
+  return url.protocol === "https:" && url.hostname === "billing.stripe.com" ? payload.url : null;
+}
+
+async function handleBillingStatus(request: Request): Promise<Response> {
+  if (request.method !== "GET") return jsonResponse({ error: "Method not allowed" }, 405);
+  const authHeader = request.headers.get("Authorization");
+  const accessToken = authHeader?.replace(/^Bearer\s+/i, "");
+  if (!accessToken) return jsonResponse({ error: "Sign in required" }, 401);
+  const authResult = await requireAuthenticatedUser(request);
+  if (authResult instanceof Response) return authResult;
+  const rateLimited = enforceUserRateLimit(authResult.id, "billing-status", 60);
+  if (rateLimited) return rateLimited;
+
+  if (developmentProOverride(authResult.id)) {
+    return jsonResponse({ isPro: true, state: "development_override", canManage: false });
+  }
+
+  const profile = await readBillingProfile(authResult.id, accessToken, request.signal);
+  if (!profile) return jsonResponse({ error: "Billing profile is unavailable." }, 503);
+  const shouldReconcile = new URL(request.url).searchParams.get("reconcile") !== "false";
+  if (!shouldReconcile) {
+    return jsonResponse({
+      isPro: profile.is_pro,
+      state: profile.is_pro ? "active" : "free",
+      canManage: Boolean(profile.stripe_customer_id),
+    });
+  }
+  const config = stripeConfiguration();
+  if (config instanceof Response) {
+    return jsonResponse({
+      isPro: profile.is_pro,
+      state: profile.is_pro ? "legacy" : "not_configured",
+      canManage: false,
+    });
+  }
+  if (!profile.stripe_customer_id) {
+    return jsonResponse({
+      isPro: profile.is_pro,
+      state: profile.is_pro ? "legacy" : "free",
+      canManage: false,
+    });
+  }
+
+  try {
+    const subscription = preferredSubscription(
+      await listCustomerSubscriptions(profile.stripe_customer_id, config),
+    );
+    if (!subscription) {
+      if (profile.is_pro) await patchBillingProfile(authResult.id, { is_pro: false });
+      return jsonResponse({ isPro: false, state: "canceled", canManage: true });
+    }
+    const isPro = subscriptionEntitled(subscription.status);
+    if (profile.is_pro !== isPro) await patchBillingProfile(authResult.id, { is_pro: isPro });
+    return jsonResponse({
+      isPro,
+      state: billingStateForSubscription(subscription),
+      canManage: true,
+      cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
+      currentPeriodEnd: subscription.current_period_end || null,
+    });
+  } catch (error) {
+    console.error("Billing status reconciliation failed", {
+      message: error instanceof Error ? error.message : "unknown error",
+    });
+    return jsonResponse({
+      isPro: profile.is_pro,
+      state: profile.is_pro ? "legacy" : "free",
+      canManage: true,
+      temporarilyUnavailable: true,
+    });
+  }
+}
+
+async function handleCreatePortalSession(request: Request): Promise<Response> {
+  if (request.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
+  const authHeader = request.headers.get("Authorization");
+  const accessToken = authHeader?.replace(/^Bearer\s+/i, "");
+  if (!accessToken) return jsonResponse({ error: "Sign in required" }, 401);
+  const authResult = await requireAuthenticatedUser(request);
+  if (authResult instanceof Response) return authResult;
+  const rateLimited = enforceUserRateLimit(authResult.id, "billing-portal", 10);
+  if (rateLimited) return rateLimited;
+  const profile = await readBillingProfile(authResult.id, accessToken, request.signal);
+  if (!profile?.stripe_customer_id) {
+    return jsonResponse({ error: "No Stripe subscription is connected to this account." }, 409);
+  }
+  const config = stripeConfiguration();
+  if (config instanceof Response) return config;
+  const { origin } = new URL(request.url);
+  const url = await createPortalUrl(profile.stripe_customer_id, `${origin}/upgrade`, config);
+  return url
+    ? jsonResponse({ url })
+    : jsonResponse({ error: "Billing management is temporarily unavailable." }, 502);
+}
+
+// Starts a Stripe-hosted test-mode subscription Checkout flow. The browser
+// never receives a secret key and never decides entitlement.
 async function handleCreateCheckoutSession(request: Request): Promise<Response> {
   try {
-    if (request.method !== "POST") {
-      return jsonResponse({ error: "Method not allowed" }, 405);
-    }
-
+    if (request.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
     const authHeader = request.headers.get("Authorization");
     const accessToken = authHeader?.replace(/^Bearer\s+/i, "");
-    if (!accessToken) {
-      return jsonResponse({ error: "Sign in required" }, 401);
-    }
-
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    const stripePriceId = process.env.STRIPE_PRICE_ID;
-    if (!stripeSecretKey || !stripePriceId) {
-      return jsonResponse({ error: "Payments are temporarily unavailable." }, 501);
-    }
-
-    const supabaseUrl = process.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return jsonResponse({ error: "Auth isn't configured" }, 500);
-    }
-
-    const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
-      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${accessToken}` },
-    });
-    if (!userRes.ok) {
-      return jsonResponse({ error: "Invalid session" }, 401);
-    }
-    const userData = await userRes.json();
-    const userId = userData.id as string;
-    const email = userData.email as string | undefined;
-
+    if (!accessToken) return jsonResponse({ error: "Sign in required" }, 401);
+    const authResult = await requireAuthenticatedUser(request);
+    if (authResult instanceof Response) return authResult;
+    const rateLimited = enforceUserRateLimit(authResult.id, "billing-checkout", 5, 10 * 60_000);
+    if (rateLimited) return rateLimited;
+    const config = stripeConfiguration();
+    if (config instanceof Response) return config;
+    const profile = await readBillingProfile(authResult.id, accessToken, request.signal);
+    if (!profile) return jsonResponse({ error: "Billing profile is unavailable." }, 503);
     const { origin } = new URL(request.url);
+
+    if (profile.stripe_customer_id) {
+      const subscriptions = await listCustomerSubscriptions(profile.stripe_customer_id, config);
+      const existing = preferredSubscription(
+        subscriptions.filter(
+          (subscription) => !["canceled", "incomplete_expired"].includes(subscription.status),
+        ),
+      );
+      if (existing) {
+        const portalUrl = await createPortalUrl(
+          profile.stripe_customer_id,
+          `${origin}/upgrade`,
+          config,
+        );
+        return jsonResponse({ alreadySubscribed: true, url: portalUrl });
+      }
+    }
+
+    const priceResponse = await stripeRequest(
+      `/prices/${encodeURIComponent(config.priceId)}`,
+      config,
+    );
+    if (!priceResponse.ok) return jsonResponse({ error: "The Pro plan is unavailable." }, 503);
+    const price = (await priceResponse.json()) as {
+      active?: boolean;
+      type?: string;
+      livemode?: boolean;
+    };
+    if (
+      !price.active ||
+      price.type !== "recurring" ||
+      Boolean(price.livemode) !== config.liveMode
+    ) {
+      return jsonResponse(
+        { error: "The Pro plan is not configured for subscription checkout." },
+        503,
+      );
+    }
 
     const params = new URLSearchParams({
       mode: "subscription",
-      "line_items[0][price]": stripePriceId,
+      "line_items[0][price]": config.priceId,
       "line_items[0][quantity]": "1",
-      success_url: `${origin}/upgrade?success=true`,
+      success_url: `${origin}/upgrade?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/upgrade?canceled=true`,
-      client_reference_id: userId,
-      "metadata[user_id]": userId,
+      client_reference_id: authResult.id,
+      "metadata[user_id]": authResult.id,
+      "subscription_data[metadata][user_id]": authResult.id,
     });
-    if (email) params.set("customer_email", email);
+    if (profile.stripe_customer_id) params.set("customer", profile.stripe_customer_id);
+    else if (authResult.email) params.set("customer_email", authResult.email);
 
-    const stripeRes = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${stripeSecretKey}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: params.toString(),
-    });
-
+    const idempotencyWindow = Math.floor(Date.now() / (5 * 60 * 1_000));
+    const stripeRes = await stripeRequest(
+      "/checkout/sessions",
+      config,
+      { method: "POST", body: params.toString() },
+      `checkout-${authResult.id}-${config.priceId}-${idempotencyWindow}`,
+    );
     if (!stripeRes.ok) {
-      // Stripe error bodies can contain customer or payment details. Keep the
-      // operational signal without copying that payload into application logs.
       console.error("Stripe checkout session failed", { status: stripeRes.status });
-      return jsonResponse({ error: "Failed to start checkout" }, 500);
+      return jsonResponse({ error: "Checkout could not start. Please try again." }, 502);
     }
-
-    const session = await stripeRes.json();
+    const session = (await stripeRes.json()) as { url?: string };
+    if (!session.url) return jsonResponse({ error: "Stripe did not return a checkout link." }, 502);
+    const checkoutUrl = new URL(session.url);
+    if (checkoutUrl.protocol !== "https:" || checkoutUrl.hostname !== "checkout.stripe.com") {
+      return jsonResponse({ error: "Stripe returned an invalid checkout link." }, 502);
+    }
     return jsonResponse({ url: session.url });
   } catch (error) {
-    console.error("Error in handleCreateCheckoutSession:", error);
-    return jsonResponse({ error: "Internal server error" }, 500);
+    console.error("Checkout initialization failed", {
+      message: error instanceof Error ? error.message : "unknown error",
+    });
+    return jsonResponse({ error: "Checkout is temporarily unavailable." }, 502);
   }
 }
 
@@ -1777,10 +2135,60 @@ function constantTimeEqual(a: string, b: string): boolean {
   return result === 0;
 }
 
-// Handle /api/stripe-webhook — the only thing allowed to flip a user's
-// is_pro flag. Uses the service_role key (server-only, bypasses RLS by
-// design) since this must be able to write regardless of the user's own
-// permissions.
+async function retrieveStripeSubscription(
+  subscriptionId: string,
+  config: { secretKey: string },
+): Promise<StripeSubscription | null> {
+  const response = await stripeRequest(
+    `/subscriptions/${encodeURIComponent(subscriptionId)}?expand[]=items.data.price`,
+    config,
+  );
+  return response.ok ? ((await response.json()) as StripeSubscription) : null;
+}
+
+async function syncSubscriptionEntitlement(
+  subscription: StripeSubscription,
+  config: { priceId: string },
+  fallbackUserId?: string,
+): Promise<"updated" | "ignored" | "failed"> {
+  if (!subscriptionHasConfiguredPrice(subscription, config.priceId)) return "ignored";
+  const customerId = stripeCustomerId(subscription.customer);
+  if (!customerId) return "failed";
+  const candidateUserId = subscription.metadata?.user_id || fallbackUserId || null;
+  const customerOwners = await findUserIdsByStripeCustomer(customerId);
+  if (customerOwners.length > 1) return "failed";
+
+  let userId = customerOwners[0] || null;
+  if (userId && candidateUserId && userId !== candidateUserId) return "failed";
+  if (!userId && candidateUserId) {
+    const candidateProfile = await readBillingProfileAsServiceRole(candidateUserId);
+    if (
+      !candidateProfile ||
+      (candidateProfile.stripe_customer_id && candidateProfile.stripe_customer_id !== customerId)
+    ) {
+      return "failed";
+    }
+    userId = candidateUserId;
+  }
+  if (!userId) return "failed";
+  const updated = await patchBillingProfile(userId, {
+    is_pro: subscriptionEntitled(subscription.status),
+    stripe_customer_id: customerId,
+  });
+  return updated ? "updated" : "failed";
+}
+
+function objectId(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && typeof (value as { id?: unknown }).id === "string") {
+    return (value as { id: string }).id;
+  }
+  return null;
+}
+
+// Stripe is the subscription source of truth. Webhooks synchronize the
+// existing profile boolean for fast entitlement checks; all mutations remain
+// server-only through the service-role key.
 async function handleStripeWebhook(request: Request): Promise<Response> {
   try {
     if (request.method !== "POST") {
@@ -1794,57 +2202,98 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
     }
 
     const signatureHeader = request.headers.get("Stripe-Signature");
-    const payload = await request.text();
-    if (
-      !signatureHeader ||
-      !(await verifyStripeSignature(payload, signatureHeader, webhookSecret))
-    ) {
+    if (!signatureHeader || signatureHeader.length > MAX_STRIPE_SIGNATURE_CHARS) {
+      return new Response("Invalid signature", { status: 400 });
+    }
+    const payload = await readRequestTextLimited(request, MAX_STRIPE_WEBHOOK_BYTES);
+    if (payload instanceof Response) return new Response("Payload too large", { status: 413 });
+    if (!(await verifyStripeSignature(payload, signatureHeader, webhookSecret))) {
       return new Response("Invalid signature", { status: 400 });
     }
 
-    const event = JSON.parse(payload);
+    const event = JSON.parse(payload) as {
+      type?: string;
+      data?: {
+        object?: Record<string, unknown> & {
+          mode?: string;
+          subscription?: unknown;
+          client_reference_id?: string;
+          metadata?: Record<string, string>;
+        };
+      };
+    };
+    const config = stripeConfiguration();
+    if (config instanceof Response) return new Response("Stripe unavailable", { status: 503 });
+    const object = event.data?.object;
+    let syncResult: "updated" | "ignored" | "failed" = "ignored";
 
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      if (session.mode !== "subscription") {
-        console.warn("Ignoring non-subscription checkout session");
-        return new Response("ok", { status: 200 });
+    if (
+      event.type === "customer.subscription.created" ||
+      event.type === "customer.subscription.updated" ||
+      event.type === "customer.subscription.deleted" ||
+      event.type === "customer.subscription.paused" ||
+      event.type === "customer.subscription.resumed"
+    ) {
+      const eventSubscription = object as StripeSubscription;
+      const customerId = stripeCustomerId(eventSubscription.customer);
+      if (!customerId) return new Response("Missing Stripe customer", { status: 400 });
+      const currentSubscription = preferredSubscription(
+        await listCustomerSubscriptions(customerId, config),
+      );
+      syncResult = await syncSubscriptionEntitlement(
+        currentSubscription || eventSubscription,
+        config,
+      );
+    } else if (
+      event.type === "checkout.session.completed" ||
+      event.type === "checkout.session.async_payment_succeeded"
+    ) {
+      if (object?.mode !== "subscription") return new Response("ok", { status: 200 });
+      const subscriptionId = objectId(object.subscription);
+      const userId: string | undefined = object.client_reference_id || object.metadata?.user_id;
+      if (!subscriptionId || !userId)
+        return new Response("Missing subscription reference", { status: 400 });
+      const subscription = await retrieveStripeSubscription(subscriptionId, config);
+      if (!subscription) return new Response("Subscription lookup failed", { status: 503 });
+      syncResult = await syncSubscriptionEntitlement(subscription, config, userId);
+    } else if (
+      event.type === "invoice.paid" ||
+      event.type === "invoice.payment_failed" ||
+      event.type === "invoice.payment_action_required"
+    ) {
+      const subscriptionId = objectId(object?.subscription);
+      if (subscriptionId) {
+        const subscription = await retrieveStripeSubscription(subscriptionId, config);
+        if (!subscription) return new Response("Subscription lookup failed", { status: 503 });
+        syncResult = await syncSubscriptionEntitlement(subscription, config);
       }
-      if (session.payment_status && session.payment_status !== "paid") {
-        console.warn("Ignoring unpaid checkout session");
-        return new Response("ok", { status: 200 });
+    } else if (event.type === "checkout.session.async_payment_failed") {
+      const subscriptionId = objectId(object?.subscription);
+      if (subscriptionId) {
+        const subscription = await retrieveStripeSubscription(subscriptionId, config);
+        if (!subscription) return new Response("Subscription lookup failed", { status: 503 });
+        syncResult = await syncSubscriptionEntitlement(subscription, config);
+      } else {
+        const customerId = objectId(object?.customer);
+        const candidateUserId = object?.client_reference_id || object?.metadata?.user_id;
+        if (customerId) {
+          const customerOwners = await findUserIdsByStripeCustomer(customerId);
+          if (customerOwners.length > 1) syncResult = "failed";
+          else if (
+            customerOwners.length === 1 &&
+            (!candidateUserId || customerOwners[0] === candidateUserId)
+          ) {
+            syncResult = (await patchBillingProfile(customerOwners[0], { is_pro: false }))
+              ? "updated"
+              : "failed";
+          }
+        }
       }
-      const userId: string | undefined = session.client_reference_id || session.metadata?.user_id;
-      const customerId: string | undefined = session.customer;
+    }
 
-      if (!userId) {
-        console.error("Checkout completion is missing its UniMate user reference");
-        return new Response("Missing user reference", { status: 400 });
-      }
-
-      const supabaseUrl = process.env.VITE_SUPABASE_URL;
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if (!supabaseUrl || !serviceRoleKey) {
-        // A non-2xx response is intentional: Stripe can retry this event after
-        // deployment configuration is repaired instead of losing activation.
-        console.error("Cannot update Pro status because entitlement storage is unavailable");
-        return new Response("Entitlement storage unavailable", { status: 503 });
-      }
-
-      const profileRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`, {
-        method: "PATCH",
-        headers: {
-          apikey: serviceRoleKey,
-          Authorization: `Bearer ${serviceRoleKey}`,
-          "Content-Type": "application/json",
-          Prefer: "return=minimal",
-        },
-        body: JSON.stringify({ is_pro: true, stripe_customer_id: customerId }),
-      });
-      if (!profileRes.ok) {
-        console.error("Failed to update Pro status", { status: profileRes.status });
-        return new Response("Profile update failed", { status: 500 });
-      }
+    if (syncResult === "failed") {
+      console.error("Stripe event could not synchronize entitlement", { eventType: event.type });
+      return new Response("Entitlement storage unavailable", { status: 503 });
     }
 
     return new Response("ok", { status: 200 });
@@ -1879,6 +2328,9 @@ function brandedErrorResponse(): Response {
 function withSecurityHeaders(response: Response, request: Request): Response {
   const headers = new Headers(response.headers);
   headers.set("x-content-type-options", "nosniff");
+  headers.set("x-frame-options", "DENY");
+  headers.set("referrer-policy", "strict-origin-when-cross-origin");
+  headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
   const requestUrl = new URL(request.url);
   if (requestUrl.protocol === "https:") {
     headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");
@@ -2014,21 +2466,29 @@ export default {
 
     // Handle /api/create-checkout-session endpoint
     if (url.pathname === "/api/create-checkout-session") {
-      return handleCreateCheckoutSession(request);
+      return withSecurityHeaders(await handleCreateCheckoutSession(request), request);
+    }
+
+    if (url.pathname === "/api/billing-status") {
+      return withSecurityHeaders(await handleBillingStatus(request), request);
+    }
+
+    if (url.pathname === "/api/create-portal-session") {
+      return withSecurityHeaders(await handleCreatePortalSession(request), request);
     }
 
     // Handle /api/stripe-webhook endpoint
     if (url.pathname === "/api/stripe-webhook") {
-      return handleStripeWebhook(request);
+      return withSecurityHeaders(await handleStripeWebhook(request), request);
     }
 
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return withSecurityHeaders(await normalizeCatastrophicSsrResponse(response), request);
     } catch (error) {
       console.error(error);
-      return brandedErrorResponse();
+      return withSecurityHeaders(brandedErrorResponse(), request);
     }
   },
 };

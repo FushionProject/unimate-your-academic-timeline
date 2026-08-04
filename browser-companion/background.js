@@ -39,6 +39,16 @@ function configured() {
   return Boolean(config.SUPABASE_URL && config.SUPABASE_ANON_KEY && config.UNIMATE_API_URL);
 }
 
+function isTrustedUniMatePage(sender) {
+  try {
+    const configuredOrigin = new URL(config.UNIMATE_API_URL).origin;
+    const senderOrigin = new URL(String(sender.tab?.url || "")).origin;
+    return configuredOrigin === senderOrigin;
+  } catch {
+    return false;
+  }
+}
+
 async function readSession() {
   const result = await chrome.storage.local.get(STORAGE_KEY);
   return result[STORAGE_KEY] || null;
@@ -236,18 +246,22 @@ async function getValidSession() {
 }
 
 async function getProfile(session) {
-  const userId = session.user?.id;
   const response = await fetchWithTimeout(
-    `${config.SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=is_pro&limit=1`,
-    { headers: jsonHeaders(session.access_token) },
+    `${config.UNIMATE_API_URL.replace(/\/$/, "")}/api/billing-status?reconcile=false`,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    },
     ENTITLEMENT_TIMEOUT_MS,
     new CompanionError("UniMate Pro verification timed out.", {
       code: "ENTITLEMENT_TIMEOUT",
       phase: "entitlement",
     }),
   );
-  const rows = await parseResponse(response, "entitlement");
-  return { isPro: rows[0]?.is_pro === true };
+  const billing = await parseResponse(response, "entitlement");
+  return { isPro: billing.isPro === true };
 }
 
 async function authState() {
@@ -916,6 +930,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return signIn(String(request.email || ""), String(request.password || ""));
       case "SIGN_OUT":
         return signOut();
+      case "WEBSITE_SIGN_OUT":
+        if (!isTrustedUniMatePage(sender)) {
+          throw new CompanionError("This page cannot control the UniMate session.", {
+            code: "UNTRUSTED_WEBSITE",
+            phase: "auth",
+          });
+        }
+        return signOut();
+      case "WEBSITE_ORIGIN_CHECK":
+        return { trusted: isTrustedUniMatePage(sender) };
       case "LOAD_MESSAGES": {
         const session = await requireProSession();
         return loadMessages(session);

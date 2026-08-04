@@ -25,6 +25,8 @@ create table if not exists public.assignments (
 create index if not exists courses_user_id_idx on public.courses(user_id);
 create index if not exists assignments_user_id_idx on public.assignments(user_id);
 create index if not exists assignments_course_id_idx on public.assignments(course_id);
+create index if not exists courses_user_created_idx on public.courses(user_id, created_at);
+create index if not exists assignments_user_due_idx on public.assignments(user_id, due_at);
 
 alter table public.courses enable row level security;
 alter table public.assignments enable row level security;
@@ -39,37 +41,37 @@ drop policy if exists "assignments_update_own" on public.assignments;
 drop policy if exists "assignments_delete_own" on public.assignments;
 
 create policy "courses_select_own" on public.courses
-  for select using (auth.uid() = user_id);
+  for select to authenticated using ((select auth.uid()) = user_id);
 create policy "courses_insert_own" on public.courses
-  for insert with check (auth.uid() = user_id);
+  for insert to authenticated with check ((select auth.uid()) = user_id);
 create policy "courses_update_own" on public.courses
-  for update using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  for update to authenticated using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 create policy "courses_delete_own" on public.courses
-  for delete using (auth.uid() = user_id);
+  for delete to authenticated using ((select auth.uid()) = user_id);
 
 create policy "assignments_select_own" on public.assignments
-  for select using (auth.uid() = user_id);
+  for select to authenticated using ((select auth.uid()) = user_id);
 create policy "assignments_insert_own" on public.assignments
-  for insert with check (
-    auth.uid() = user_id
+  for insert to authenticated with check (
+    (select auth.uid()) = user_id
     and exists (
       select 1
       from public.courses
       where courses.id = assignments.course_id
-        and courses.user_id = auth.uid()
+        and courses.user_id = (select auth.uid())
     )
   );
 create policy "assignments_update_own" on public.assignments
-  for update using (auth.uid() = user_id)
+  for update to authenticated using ((select auth.uid()) = user_id)
   with check (
-    auth.uid() = user_id
+    (select auth.uid()) = user_id
     and exists (
       select 1
       from public.courses
       where courses.id = assignments.course_id
-        and courses.user_id = auth.uid()
+        and courses.user_id = (select auth.uid())
     )
   );
 create policy "assignments_delete_own" on public.assignments
-  for delete using (auth.uid() = user_id);
+  for delete to authenticated using ((select auth.uid()) = user_id);
