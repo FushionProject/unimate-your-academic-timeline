@@ -101,7 +101,7 @@ type BillingState =
   | "legacy"
   | "not_configured";
 
-type CompanionErrorPhase = "authentication" | "entitlement" | "search" | "ai" | "upstream";
+type CompanionErrorPhase = "authentication" | "entitlement" | "search" | "ai";
 
 class CompanionUpstreamError extends Error {
   code: string;
