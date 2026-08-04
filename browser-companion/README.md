@@ -12,10 +12,10 @@ screenshot-aware tutor to ordinary web pages.
    diagnostics; diagnostics default to off.
 2. Run `npm run companion:configure:dev` for unpacked development. Production
    packaging should run `npm run companion:configure`, which omits diagnostics.
-3. The migration is already applied to the connected UniMate Supabase project.
-   When installing against a different project, run
-   `supabase/companion_chats.sql` in its SQL editor. If that project uses
-   restricted Data API exposure, confirm the `authenticated` grants are present.
+3. Confirm the reviewed Companion database changes have been applied to the
+   target Supabase project before testing chat persistence. Do not assume this
+   from the repository state. See `SUPABASE_RELEASE_MIGRATION_REVIEW.md`; SQL is
+   intentionally unapplied on this branch.
 4. Start UniMate with `npm run dev`, or point the extension at the deployed app.
 5. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**,
    and select the `browser-companion` directory.

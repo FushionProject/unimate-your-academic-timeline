@@ -728,10 +728,6 @@ Production secrets should be configured in Cloudflare/Workers, for example throu
 
 ## Current Blockers and Risks
 
-### Not Yet Committed
-
-The repo currently has local modifications from the audit/fix pass. They are not staged or committed unless a later workflow does that.
-
 ### Stripe Live Activation Is Gated
 
 The subscription lifecycle is implemented, but live billing remains explicitly disabled.
@@ -742,24 +738,17 @@ live-mode flag or installing live credentials.
 
 Canvas tokens are stored in `localStorage`. This is simple, but less secure than a server-side encrypted token store.
 
-### No Rate Limiting
+### Durable AI Quotas Require a Reviewed Migration
 
-Protected AI endpoints now require auth and enforce payload limits, but there is no per-user or per-IP rate limiting. This matters because Groq and SerpAPI calls have cost and abuse potential.
+Short-window abuse protection, duplicate-request protection, global capacity controls, and degraded modes are implemented. Durable daily and monthly accounting remains disabled until the reviewed Supabase usage migration is manually applied and verified. See `SUPABASE_RELEASE_MIGRATION_REVIEW.md`.
 
 ### AI Output Validation Is Limited
 
 Some AI responses are parsed as JSON. Invalid JSON from Groq currently fails the endpoint with a server error. More robust repair/retry/schema validation would improve reliability.
 
-### Tests Are Mostly Manual
+### Manual Release Exercises Remain
 
-Current verification has relied on:
-
-- `npm run lint`
-- `npm run build`
-- live API smoke tests
-- browser route checks
-
-There is no dedicated automated test suite yet.
+Automated suites cover the dashboard, Companion, grounding, runtime stability, AI capacity, billing safeguards, and production hardening. Stripe sandbox lifecycle testing and Supabase migration staging remain manual release gates.
 
 ### Large Bundle Warning
 
@@ -791,51 +780,13 @@ Recent live API smoke checks confirmed:
 
 ## Short Roadmap
 
-### 1. Commit Current Stabilization Work
+### 1. Complete the Manual Release Gates
 
-Review, stage, commit, and push the current audit/fix changes. Include a concise commit message covering auth hardening, API validation, responsive fixes, RLS updates, and Stripe webhook hardening.
+- Review and stage the Supabase migration without applying repository setup files wholesale.
+- Complete every Stripe test-mode scenario in `STRIPE_SANDBOX_MANUAL_TESTS.md`.
+- Perform signed-in desktop, mobile, and unpacked-extension walkthroughs.
 
-### 2. Add Automated Tests
-
-Add coverage for:
-
-- Protected route redirects.
-- API auth failures.
-- API payload limits.
-- Supabase data hook behavior with mocked clients.
-- Stripe webhook signature verification.
-- Syllabus parsing result handling.
-
-### 3. Complete Stripe Subscription Sync
-
-Handle:
-
-- Subscription cancellation.
-- Subscription status changes.
-- Payment failures.
-- Optional customer portal.
-
-Consider expanding `profiles` to store:
-
-- `stripe_subscription_id`
-- `subscription_status`
-- `current_period_end`
-
-### 4. Add Rate Limiting
-
-Protect costly endpoints:
-
-- `/api/ask-unimate`
-- `/api/dashboard-ai`
-- `/api/parse-syllabus`
-- `/api/extract-resources`
-- `/api/generate-study-map`
-- `/api/analyze-screenshot`
-- `/api/canvas-proxy`
-
-Use a Cloudflare-native solution, Durable Object, KV, or another rate-limit provider.
-
-### 5. Improve AI Reliability
+### 2. Improve AI Reliability
 
 Add:
 
@@ -844,11 +795,11 @@ Add:
 - Better error messages for users.
 - Provider/model fallback logic.
 
-### 6. Move Supabase SQL to Migrations
+### 3. Move Supabase SQL to Migrations
 
 Adopt Supabase CLI migrations so schema changes are versioned and replayable.
 
-### 7. Secure Canvas Integration
+### 4. Secure Canvas Integration
 
 Replace `localStorage` Canvas tokens with:
 
@@ -858,7 +809,7 @@ Replace `localStorage` Canvas tokens with:
 
 Also consider a stricter Canvas host allow-list.
 
-### 8. Optimize Bundles
+### 5. Optimize Bundles
 
 Investigate route-level code splitting and heavy dependencies, especially PDF.js and large shared chunks.
 
