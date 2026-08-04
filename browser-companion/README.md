@@ -56,7 +56,9 @@ refresh open pages. Chrome blocks extensions on internal pages such as
   blocks capture, compact text context is used if available.
 - `background.js` owns credentials and network traffic. It signs into the same
   Supabase Auth project, refreshes tokens, validates each session through
-  `/auth/v1/user`, reads `profiles.is_pro`, and blocks non-Pro chat.
+  `/auth/v1/user`, requests the server-owned `/api/billing-status` decision, and
+  blocks non-Pro chat. This keeps Stripe lifecycle state and development
+  overrides consistent between the website and extension.
 - AI reasoning and intent handling live on the UniMate backend. No Groq key is
   exposed and no AI API was added.
 - Each user and assistant message is stored in `companion_chats`. RLS restricts
@@ -100,11 +102,10 @@ context and never triggers a request.
   scrutiny during store review. Persistent injection on every ordinary site is
   incompatible with `activeTab`-only access. The extractor skips password,
   email, and telephone values but visible page text can still be sensitive.
-- The extension enforces `profiles.is_pro` before every text-chat call, but the
-  reused `/api/dashboard-ai` route is not itself Pro-only because the main
-  UniMate dashboard also uses it. A modified client could call that existing
-  route directly; a dedicated server-side Pro-gated companion route is a V2
-  hardening option if product policy requires endpoint-level enforcement.
+- The extension checks `/api/billing-status` before every chat call, and the
+  Companion backend entry points independently enforce server-side entitlement.
+  The existing profile boolean remains a fast cache while Stripe reconciliation
+  and server-only development overrides stay outside the extension bundle.
 - Screenshot capture occurs only after Send. It does not continuously capture,
   persist screenshots, or use a screen-sharing picker.
 - The exact V1 schema has no conversation or page identifier. Persisted history
