@@ -67,23 +67,23 @@ No dependency lockfile update is included.
 
 ## Final automated verification
 
-| Check | Result |
-| --- | --- |
-| Prettier formatting | Pass |
-| ESLint | Pass: 0 errors; 8 pre-existing Fast Refresh warnings |
-| Production client and SSR build | Pass |
-| Dashboard tests | Pass |
-| Complete Browser Companion suite | Pass |
-| Grounding assertions | Pass: 55 assertions |
-| Runtime stability | Pass: 5 consecutive runs |
-| AI capacity tests | Pass |
-| Rate-limit, duplicate, and concurrency assertions | Pass through capacity and Companion suites |
-| Provider outage/degraded-mode assertions | Pass through capacity and AI release-guard suites |
-| Billing safeguards | Pass |
-| Production-hardening guards | Pass |
-| Secret scan | Pass: 192 repository files checked; values not printed |
-| `git diff --check` | Pass |
-| Dependency audit | Completed: 11 findings (7 high, 2 moderate, 2 low) |
+| Check                                             | Result                                                 |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| Prettier formatting                               | Pass                                                   |
+| ESLint                                            | Pass: 0 errors; 8 pre-existing Fast Refresh warnings   |
+| Production client and SSR build                   | Pass                                                   |
+| Dashboard tests                                   | Pass                                                   |
+| Complete Browser Companion suite                  | Pass                                                   |
+| Grounding assertions                              | Pass: 55 assertions                                    |
+| Runtime stability                                 | Pass: 5 consecutive runs                               |
+| AI capacity tests                                 | Pass                                                   |
+| Rate-limit, duplicate, and concurrency assertions | Pass through capacity and Companion suites             |
+| Provider outage/degraded-mode assertions          | Pass through capacity and AI release-guard suites      |
+| Billing safeguards                                | Pass                                                   |
+| Production-hardening guards                       | Pass                                                   |
+| Secret scan                                       | Pass: 192 repository files checked; values not printed |
+| `git diff --check`                                | Pass                                                   |
+| Dependency audit                                  | Completed: 11 findings (7 high, 2 moderate, 2 low)     |
 
 The build still emits a large-chunk warning. The dependency audit identifies remediations in Babel, Vite/esbuild, Wrangler/Miniflare, js-yaml, PostCSS, Sharp/libvips, Undici, and ws. The dependency-upgrades branch was intentionally not integrated, so these findings require separate review rather than an automatic lockfile change.
 
