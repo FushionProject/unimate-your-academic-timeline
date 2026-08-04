@@ -63,8 +63,15 @@ const STRIPE_WEBHOOK_TOLERANCE_SECONDS = 300;
 const SUPABASE_AUTH_TIMEOUT_MS = 8_000;
 const SUPABASE_ENTITLEMENT_TIMEOUT_MS = 8_000;
 const AI_PROVIDER_TIMEOUT_MS = 45_000;
+const CANVAS_API_TIMEOUT_MS = 12_000;
+const MAX_CANVAS_RESPONSE_BYTES = 2_000_000;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const MAX_RATE_LIMIT_ENTRIES = 20_000;
 
-type CompanionErrorPhase = "authentication" | "entitlement" | "search" | "ai";
+type CompanionErrorPhase = "authentication" | "entitlement" | "search" | "ai" | "upstream";
+
+type RateLimitRecord = { count: number; resetsAt: number };
+const requestRateLimits = new Map<string, RateLimitRecord>();
 
 class CompanionUpstreamError extends Error {
   code: string;
@@ -240,13 +247,53 @@ function rejectLargeRequest(request: Request, maxBytes = MAX_JSON_BODY_BYTES): R
   return length > maxBytes ? jsonResponse({ error: "Request body too large" }, 413) : null;
 }
 
+async function readStreamTextLimited(
+  stream: ReadableStream<Uint8Array> | null,
+  maxBytes: number,
+): Promise<string | Response> {
+  if (!stream) return "";
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel("request body too large").catch(() => undefined);
+        return jsonResponse({ error: "Request body too large" }, 413);
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function readRequestTextLimited(
+  request: Request,
+  maxBytes = MAX_JSON_BODY_BYTES,
+): Promise<string | Response> {
+  const earlyRejection = rejectLargeRequest(request, maxBytes);
+  if (earlyRejection) return earlyRejection;
+  return readStreamTextLimited(request.body, maxBytes);
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-async function parseJsonBody(request: Request): Promise<Record<string, unknown> | Response> {
+async function parseJsonBody(
+  request: Request,
+  maxBytes = MAX_JSON_BODY_BYTES,
+): Promise<Record<string, unknown> | Response> {
   try {
-    const body = await request.json();
+    const raw = await readRequestTextLimited(request, maxBytes);
+    if (raw instanceof Response) return raw;
+    const body = JSON.parse(raw);
     if (!body || Array.isArray(body) || typeof body !== "object") {
       return jsonResponse({ error: "JSON object body is required" }, 400);
     }
@@ -254,6 +301,39 @@ async function parseJsonBody(request: Request): Promise<Record<string, unknown> 
   } catch {
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
+}
+
+function enforceUserRateLimit(
+  userId: string,
+  category: string,
+  limit: number,
+  windowMs = RATE_LIMIT_WINDOW_MS,
+): Response | null {
+  const now = Date.now();
+  const key = `${category}:${userId}`;
+  const current = requestRateLimits.get(key);
+  if (!current || current.resetsAt <= now) {
+    requestRateLimits.set(key, { count: 1, resetsAt: now + windowMs });
+    return null;
+  }
+  if (current.count >= limit) {
+    const retryAfter = Math.max(1, Math.ceil((current.resetsAt - now) / 1_000));
+    return jsonResponse(
+      { error: "Too many requests. Please wait a moment and try again.", code: "RATE_LIMITED" },
+      429,
+      { "retry-after": String(retryAfter) },
+    );
+  }
+  current.count += 1;
+  if (requestRateLimits.size > MAX_RATE_LIMIT_ENTRIES) {
+    for (const [entryKey, record] of requestRateLimits) {
+      if (record.resetsAt <= now || requestRateLimits.size > MAX_RATE_LIMIT_ENTRIES) {
+        requestRateLimits.delete(entryKey);
+      }
+      if (requestRateLimits.size <= MAX_RATE_LIMIT_ENTRIES) break;
+    }
+  }
+  return null;
 }
 
 async function getUserFromAccessToken(
@@ -1025,11 +1105,20 @@ async function handleCanvasProxy(request: Request): Promise<Response> {
 
     const authResult = await requireAuthenticatedUser(request);
     if (authResult instanceof Response) return authResult;
+    const rateLimited = enforceUserRateLimit(authResult.id, "canvas-proxy", 120);
+    if (rateLimited) return rateLimited;
 
-    const body = await parseJsonBody(request);
+    const body = await parseJsonBody(request, 50_000);
     if (body instanceof Response) return body;
     const { apiUrl, apiToken, path } = body;
-    if (!apiUrl || !apiToken || !path) {
+    if (
+      !isNonEmptyString(apiUrl) ||
+      apiUrl.length > 2_000 ||
+      !isNonEmptyString(apiToken) ||
+      apiToken.length > 4_000 ||
+      !isNonEmptyString(path) ||
+      path.length > 8_000
+    ) {
       return jsonResponse({ error: "apiUrl, apiToken, and path are required" }, 400);
     }
 
@@ -1042,7 +1131,12 @@ async function handleCanvasProxy(request: Request): Promise<Response> {
 
     // Only forward https requests to Canvas /api/v1/ paths — this is not a
     // general-purpose proxy.
-    if (canvasUrl.protocol !== "https:") {
+    if (
+      canvasUrl.protocol !== "https:" ||
+      canvasUrl.username ||
+      canvasUrl.password ||
+      canvasUrl.port
+    ) {
       return jsonResponse({ error: "Canvas URL must use https" }, 400);
     }
     const hostname = canvasUrl.hostname;
@@ -1054,20 +1148,46 @@ async function handleCanvasProxy(request: Request): Promise<Response> {
     ) {
       return jsonResponse({ error: "Invalid Canvas host" }, 400);
     }
-    if (typeof path !== "string" || !path.startsWith("/api/v1/")) {
+    let targetUrl: URL;
+    try {
+      targetUrl = new URL(path, canvasUrl.origin);
+    } catch {
+      return jsonResponse({ error: "Invalid Canvas API path" }, 400);
+    }
+    if (targetUrl.origin !== canvasUrl.origin || !targetUrl.pathname.startsWith("/api/v1/")) {
       return jsonResponse({ error: "Only Canvas /api/v1/ paths are allowed" }, 400);
     }
 
-    const upstream = await fetch(`${canvasUrl.origin}${path}`, {
-      headers: { Authorization: `Bearer ${apiToken}` },
-    });
-
-    const upstreamBody = await upstream.text();
+    const upstream = await fetchWithTimeout(
+      targetUrl,
+      {
+        headers: { Authorization: `Bearer ${apiToken}` },
+        redirect: "manual",
+      },
+      CANVAS_API_TIMEOUT_MS,
+      new CompanionUpstreamError(
+        "CANVAS_TIMEOUT",
+        "upstream",
+        504,
+        "Canvas took too long to respond.",
+      ),
+      request.signal,
+    );
+    if (upstream.status >= 300 && upstream.status < 400) {
+      return jsonResponse({ error: "Canvas redirects are not permitted through this proxy." }, 502);
+    }
+    const upstreamLength = Number(upstream.headers.get("content-length") || 0);
+    if (upstreamLength > MAX_CANVAS_RESPONSE_BYTES) {
+      return jsonResponse({ error: "Canvas response is too large" }, 413);
+    }
+    const upstreamBody = await readStreamTextLimited(upstream.body, MAX_CANVAS_RESPONSE_BYTES);
+    if (upstreamBody instanceof Response) return upstreamBody;
     return new Response(upstreamBody, {
       status: upstream.status,
       headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
     });
   } catch (error) {
+    if (error instanceof CompanionUpstreamError) return companionErrorResponse(error);
     console.error("Error in handleCanvasProxy:", error);
     return jsonResponse({ error: "Internal server error" }, 500);
   }
@@ -1431,6 +1551,23 @@ function brandedErrorResponse(): Response {
   });
 }
 
+function withSecurityHeaders(response: Response, request: Request): Response {
+  const headers = new Headers(response.headers);
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("x-frame-options", "DENY");
+  headers.set("referrer-policy", "strict-origin-when-cross-origin");
+  headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
+  const requestUrl = new URL(request.url);
+  if (requestUrl.protocol === "https:") {
+    headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 function isCatastrophicSsrErrorBody(body: string, responseStatus: number): boolean {
   let payload: unknown;
   try {
@@ -1484,65 +1621,66 @@ export default {
         process.env.VITE_SUPABASE_ANON_KEY &&
         process.env.GROQ_API_KEY,
       );
-      return jsonResponse(
-        { status: ready ? "ready" : "configuration_required" },
-        ready ? 200 : 503,
-        { "cache-control": "no-store" },
+      return withSecurityHeaders(
+        jsonResponse({ status: ready ? "ready" : "configuration_required" }, ready ? 200 : 503, {
+          "cache-control": "no-store",
+        }),
+        request,
       );
     }
 
     // Handle /api/ask-unimate endpoint
     if (url.pathname === "/api/ask-unimate") {
-      return handleAskUniMate(request);
+      return withSecurityHeaders(await handleAskUniMate(request), request);
     }
 
     // Handle /api/dashboard-ai endpoint
     if (url.pathname === "/api/dashboard-ai") {
-      return handleDashboardAI(request);
+      return withSecurityHeaders(await handleDashboardAI(request), request);
     }
 
     // Handle /api/parse-syllabus endpoint
     if (url.pathname === "/api/parse-syllabus") {
-      return handleParseSyllabus(request);
+      return withSecurityHeaders(await handleParseSyllabus(request), request);
     }
 
     // Handle /api/extract-resources endpoint
     if (url.pathname === "/api/extract-resources") {
-      return handleExtractResources(request);
+      return withSecurityHeaders(await handleExtractResources(request), request);
     }
 
     // Handle /api/generate-study-map endpoint
     if (url.pathname === "/api/generate-study-map") {
-      return handleGenerateStudyMap(request);
+      return withSecurityHeaders(await handleGenerateStudyMap(request), request);
     }
 
     // Handle /api/canvas-proxy endpoint
     if (url.pathname === "/api/canvas-proxy") {
-      return handleCanvasProxy(request);
+      return withSecurityHeaders(await handleCanvasProxy(request), request);
     }
 
     // Handle /api/analyze-screenshot endpoint
     if (url.pathname === "/api/analyze-screenshot") {
-      return handleAnalyzeScreenshot(request);
+      return withSecurityHeaders(await handleAnalyzeScreenshot(request), request);
     }
 
     // Handle /api/create-checkout-session endpoint
     if (url.pathname === "/api/create-checkout-session") {
-      return handleCreateCheckoutSession(request);
+      return withSecurityHeaders(await handleCreateCheckoutSession(request), request);
     }
 
     // Handle /api/stripe-webhook endpoint
     if (url.pathname === "/api/stripe-webhook") {
-      return handleStripeWebhook(request);
+      return withSecurityHeaders(await handleStripeWebhook(request), request);
     }
 
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return withSecurityHeaders(await normalizeCatastrophicSsrResponse(response), request);
     } catch (error) {
       console.error(error);
-      return brandedErrorResponse();
+      return withSecurityHeaders(brandedErrorResponse(), request);
     }
   },
 };
