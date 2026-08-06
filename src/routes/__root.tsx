@@ -14,8 +14,6 @@ import { ThemeProvider } from "../components/theme-provider";
 import { AuthProvider } from "../lib/auth-context";
 import { Sidebar } from "../components/sidebar";
 import { Navbar } from "../components/navbar";
-import { MusicPlayer } from "../components/music-player";
-import { PomodoroTimer } from "../components/pomodoro-timer";
 import { DateWidget } from "../components/date-widget";
 // import { ScreenAssistant } from "../components/screen-assistant"; // Hidden for now — future rollout
 
@@ -168,8 +166,6 @@ function RootComponent() {
                 <Outlet />
               </div>
             </div>
-            {!isPublicPage && <PomodoroTimer />}
-            {!isPublicPage && <MusicPlayer />}
             {/* <ScreenAssistant /> — Hidden for now, future rollout */}
           </div>
         </ThemeProvider>
