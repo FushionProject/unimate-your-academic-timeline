@@ -8,13 +8,20 @@ export const Route = createFileRoute("/signin")({
   component: SignIn,
 });
 
-function friendlyAuthError(message: string): string {
+function friendlyAuthError(message: string, code?: string): string {
   const lower = message.toLowerCase();
-  if (lower.includes("invalid login") || lower.includes("invalid credentials")) {
+  if (
+    code === "invalid_credentials" ||
+    lower.includes("invalid login") ||
+    lower.includes("invalid credentials")
+  ) {
     return "That email or password did not match. Check both and try again.";
   }
-  if (lower.includes("email not confirmed")) {
+  if (code === "email_not_confirmed" || lower.includes("email not confirmed")) {
     return "Check your email confirmation link before signing in.";
+  }
+  if (code === "network_error") {
+    return "We couldn't reach UniMate. Check your connection and try again.";
   }
   return message;
 }
@@ -38,12 +45,17 @@ function SignIn() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await signIn(email.trim(), password);
-    setLoading(false);
-    if (error) {
-      setError(friendlyAuthError(error));
-    } else {
-      navigate({ to: "/dashboard" });
+    try {
+      const { error, errorCode } = await signIn(email.trim(), password);
+      if (error) {
+        setError(friendlyAuthError(error, errorCode));
+      } else {
+        await navigate({ to: "/dashboard" });
+      }
+    } catch {
+      setError("We couldn't sign you in. Check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -113,7 +125,7 @@ function SignIn() {
                 placeholder="Password"
                 aria-invalid={Boolean(error)}
                 aria-describedby={error ? "signin-error" : undefined}
-                className="w-full rounded-lg border border-border bg-background py-3 pl-4 pr-20 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-lg border border-border bg-background py-3 pl-4 pr-12 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <button
                 type="button"
@@ -121,9 +133,13 @@ function SignIn() {
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 aria-pressed={showPassword}
                 title={showPassword ? "Hide password" : "Show password"}
-                className="absolute inset-y-0 right-9 grid w-10 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="absolute inset-y-0 right-0 grid w-12 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                )}
               </button>
             </div>
           </div>
@@ -138,7 +154,7 @@ function SignIn() {
           )}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !isSupabaseConfigured}
             className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}

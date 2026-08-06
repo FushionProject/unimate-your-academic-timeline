@@ -8,16 +8,20 @@ export const Route = createFileRoute("/signup")({
   component: SignUp,
 });
 
-function friendlyAuthError(message: string) {
+function friendlyAuthError(message: string, code?: string) {
   const lower = message.toLowerCase();
-  if (lower.includes("weak") || lower.includes("password")) {
+  if (code === "weak_password" || lower.includes("weak") || lower.includes("password")) {
     return "Use a stronger password with at least 6 characters.";
   }
-  if (lower.includes("already") || lower.includes("registered")) {
+  if (code === "user_already_exists" || lower.includes("already") || lower.includes("registered")) {
     return "An account already exists for this email. Try signing in instead.";
   }
-  if (lower.includes("rate") || lower.includes("too many")) {
+  if (code === "over_request_rate_limit" || lower.includes("rate") || lower.includes("too many")) {
     return "Too many signup attempts. Wait a moment, then try again.";
+  }
+  if (code === "signup_disabled") return "New account creation is temporarily unavailable.";
+  if (code === "network_error") {
+    return "We couldn't reach UniMate. Check your connection and try again.";
   }
   return message || "We could not create your account. Please try again.";
 }
@@ -36,14 +40,19 @@ function SignUp() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error, needsConfirmation } = await signUp(email.trim(), password);
-    setLoading(false);
-    if (error) {
-      setError(friendlyAuthError(error));
-    } else if (needsConfirmation) {
-      setNeedsConfirmation(true);
-    } else {
-      navigate({ to: "/dashboard" });
+    try {
+      const { error, errorCode, needsConfirmation } = await signUp(email.trim(), password);
+      if (error) {
+        setError(friendlyAuthError(error, errorCode));
+      } else if (needsConfirmation) {
+        setNeedsConfirmation(true);
+      } else {
+        await navigate({ to: "/dashboard" });
+      }
+    } catch {
+      setError("We couldn't create your account. Check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -99,6 +108,8 @@ function SignUp() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email"
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "signup-error" : undefined}
               className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
@@ -113,11 +124,14 @@ function SignUp() {
                 required
                 minLength={6}
                 autoComplete="new-password"
-                aria-describedby="signup-password-hint"
+                aria-invalid={Boolean(error)}
+                aria-describedby={
+                  error ? "signup-error signup-password-hint" : "signup-password-hint"
+                }
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Create a password"
-                className="w-full rounded-lg border border-border bg-background py-3 pl-4 pr-20 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-lg border border-border bg-background py-3 pl-4 pr-12 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <button
                 type="button"
@@ -125,9 +139,13 @@ function SignUp() {
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 aria-pressed={showPassword}
                 title={showPassword ? "Hide password" : "Show password"}
-                className="absolute inset-y-0 right-9 grid w-10 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="absolute inset-y-0 right-0 grid w-12 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                )}
               </button>
             </div>
             <p id="signup-password-hint" className="text-xs text-muted-foreground">
@@ -136,6 +154,7 @@ function SignUp() {
           </div>
           {error && (
             <p
+              id="signup-error"
               className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
               role="alert"
             >
@@ -144,7 +163,7 @@ function SignUp() {
           )}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !isSupabaseConfigured}
             className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}

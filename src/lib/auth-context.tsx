@@ -4,6 +4,7 @@ import { supabase } from "./supabase";
 
 interface AuthResult {
   error: string | null;
+  errorCode?: string;
   needsConfirmation?: boolean;
 }
 
@@ -22,6 +23,13 @@ interface AuthContextType {
 const NOT_CONFIGURED_ERROR = "Auth isn't configured yet — add your Supabase keys to .env.local.";
 const UNIMATE_AUTH_SIGNED_OUT_EVENT = "unimate-auth-signed-out";
 const RECOVERY_SESSION_KEY = "unimate-password-recovery";
+
+function unavailableAuthResult(): AuthResult {
+  return {
+    error: "We couldn't reach UniMate authentication. Check your connection and try again.",
+    errorCode: "network_error",
+  };
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -68,19 +76,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string): Promise<AuthResult> => {
     if (!supabase) return { error: NOT_CONFIGURED_ERROR };
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: `${window.location.origin}/signin?confirmed=1` },
-    });
-    if (error) return { error: error.message };
-    return { error: null, needsConfirmation: !data.session };
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${window.location.origin}/signin?confirmed=1` },
+      });
+      if (error) return { error: error.message, errorCode: error.code };
+      return { error: null, needsConfirmation: !data.session };
+    } catch {
+      return unavailableAuthResult();
+    }
   };
 
   const signIn = async (email: string, password: string): Promise<AuthResult> => {
     if (!supabase) return { error: NOT_CONFIGURED_ERROR };
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      return { error: error?.message ?? null, errorCode: error?.code };
+    } catch {
+      return unavailableAuthResult();
+    }
   };
 
   const requestPasswordReset = async (email: string): Promise<AuthResult> => {
