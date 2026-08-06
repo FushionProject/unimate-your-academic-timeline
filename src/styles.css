@@ -111,29 +111,29 @@
 }
 
 html.dark {
-  /* Dark: warm near-black canvas with the same yellow brand accent as light */
-  --background: #14120e;
+  /* Dark: neutral charcoal canvas with yellow reserved for brand accents */
+  --background: #0d0f12;
   --foreground: #faf7f2;
-  --card: #1e1b15;
+  --card: #17191d;
   --card-foreground: #faf7f2;
-  --popover: #1e1b15;
+  --popover: #17191d;
   --popover-foreground: #faf7f2;
   --primary: #f5c518;
   --primary-foreground: #1a1a1a;
   --primary-glow: #f5c518;
-  --secondary: #2a251c;
+  --secondary: #202329;
   --secondary-foreground: #faf7f2;
-  --muted: #23201a;
-  --muted-foreground: #a8a090;
+  --muted: #1d2025;
+  --muted-foreground: #a4a9b2;
   --accent: #f5c518;
   --accent-foreground: #1a1a1a;
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: #322c22;
-  --input: #322c22;
+  --border: #2b2f36;
+  --input: #2b2f36;
   --ring: #f5c518;
-  --grid-color: rgba(245, 197, 24, 0.06);
-  --gradient-hero: radial-gradient(ellipse at top, rgba(245, 197, 24, 0.12), transparent 60%);
+  --grid-color: rgba(255, 255, 255, 0.045);
+  --gradient-hero: radial-gradient(ellipse at top, rgba(255, 255, 255, 0.045), transparent 60%);
   --gradient-primary: #f5c518;
   --shadow-glow: 0 20px 80px -20px rgba(245, 197, 24, 0.35);
   --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 48px -28px rgba(0, 0, 0, 0.85);
@@ -146,13 +146,13 @@ html.dark {
   --chart-3: oklch(0.646 0.222 41.116);
   --chart-4: oklch(0.6 0.118 184.704);
   --chart-5: oklch(0.7 0.15 250);
-  --sidebar: #0f0d0a;
+  --sidebar: #090a0c;
   --sidebar-foreground: #faf7f2;
   --sidebar-primary: #f5c518;
   --sidebar-primary-foreground: #1a1a1a;
-  --sidebar-accent: #23201a;
+  --sidebar-accent: #1d2025;
   --sidebar-accent-foreground: #faf7f2;
-  --sidebar-border: #322c22;
+  --sidebar-border: #2b2f36;
   --sidebar-ring: #f5c518;
 }
 
