@@ -157,10 +157,10 @@ function RootComponent() {
             </a>
             <Navbar />
             <div className="flex min-w-0 flex-1">
-              {!isPublicPage && <Sidebar />}
+              <Sidebar />
               <div
                 id="main-content"
-                className={`min-w-0 flex-1 ${isPublicPage ? "" : "p-4 sm:p-6 md:ml-16"}`}
+                className={`min-w-0 flex-1 md:ml-16 ${isPublicPage ? "" : "p-4 sm:p-6"}`}
               >
                 {!isPublicPage && <DateWidget />}
                 <Outlet />
