@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -13,6 +13,7 @@ import {
   MessageCircleQuestion,
   NotebookPen,
   Plus,
+  Puzzle,
   Sparkles,
   Trash2,
   Upload,
@@ -70,6 +71,19 @@ const itemTypeLabels: Record<AcademicItemType, string> = {
   exam: "Exam",
 };
 
+function companionStoreUrl(): string | null {
+  const configured = import.meta.env.VITE_COMPANION_STORE_URL?.trim();
+  if (!configured) return null;
+  try {
+    const url = new URL(configured);
+    return url.protocol === "https:" && url.hostname === "chromewebstore.google.com"
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function Dashboard() {
   const { data: courses = [], isLoading: coursesLoading } = useCourses();
   const { data: assignments = [], isLoading: assignmentsLoading } = useAssignments();
@@ -89,6 +103,18 @@ function Dashboard() {
   const [assignmentDue, setAssignmentDue] = useState("");
   const [formMessage, setFormMessage] = useState("");
   const [completionMessage, setCompletionMessage] = useState("");
+  const [companionInstalled, setCompanionInstalled] = useState(false);
+  const storeUrl = companionStoreUrl();
+
+  useEffect(() => {
+    const detectCompanion = () => {
+      setCompanionInstalled(Boolean(document.getElementById("unimate-companion-host")));
+    };
+    detectCompanion();
+    const observer = new MutationObserver(detectCompanion);
+    observer.observe(document.documentElement, { childList: true });
+    return () => observer.disconnect();
+  }, []);
 
   const pressureItems = useMemo(
     () => buildPressureItems(assignments, courses),
@@ -210,12 +236,36 @@ function Dashboard() {
               not pretend to know how difficult your assignments are.
             </p>
           </div>
-          <Link
-            to="/planner"
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-95"
-          >
-            <Upload className="h-4 w-4" /> Upload syllabus
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {companionInstalled ? (
+              <span className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-[#F5C518]/45 bg-[#F5C518]/10 px-4 py-2.5 text-sm font-semibold text-foreground">
+                <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" /> Companion
+                installed
+              </span>
+            ) : storeUrl ? (
+              <a
+                href={storeUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary/60 hover:bg-[#F5C518]/10"
+              >
+                <Puzzle className="h-4 w-4 text-primary" aria-hidden="true" /> Add Browser Companion
+              </a>
+            ) : (
+              <span
+                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-muted-foreground"
+                title="The Chrome Web Store listing is not public yet"
+              >
+                <Puzzle className="h-4 w-4" aria-hidden="true" /> Companion coming soon
+              </span>
+            )}
+            <Link
+              to="/planner"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-95"
+            >
+              <Upload className="h-4 w-4" /> Upload syllabus
+            </Link>
+          </div>
         </header>
 
         {loading ? (
