@@ -138,7 +138,7 @@ function Index() {
                 <Sparkles className="h-7 w-7 text-primary-foreground" aria-hidden="true" />
               </div>
               <h2 className="font-serif-display text-4xl font-medium">
-                Seen enough? Meet UniMate Pro.
+                Seen enough? Get UniMate Pro.
               </h2>
               <p className="mx-auto mt-4 max-w-xl leading-7 text-muted-foreground">
                 Compare Free and Pro before deciding. Nothing changes until you choose a plan.
