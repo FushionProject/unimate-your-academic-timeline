@@ -1163,6 +1163,7 @@ async function callGroqJson(
   systemPrompt: string,
   userContent: string,
   clientSignal?: AbortSignal,
+  maxTokens = 2000,
 ): Promise<unknown> {
   const response = await fetchWithTimeout(
     "https://api.groq.com/openai/v1/chat/completions",
@@ -1179,7 +1180,7 @@ async function callGroqJson(
           { role: "user", content: userContent },
         ],
         temperature: 0.3,
-        max_tokens: 2000,
+        max_tokens: maxTokens,
       }),
     },
     AI_PROVIDER_TIMEOUT_MS,
@@ -1260,12 +1261,17 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
     const items = await runCapacityTracked(reservation, authResult.id, () =>
       callGroqJson(
         groqApiKey,
-        `You are a helpful assistant that extracts academic deadlines, exams, quizzes, and assignments from syllabus text.
+        `You are a meticulous syllabus timeline extractor. Read the entire document from beginning to end before responding.
             Today's date is ${new Date().toISOString().slice(0, 10)}.
             This product plans the student's current or upcoming semester.
             If a date omits a year, infer the nearest upcoming academic occurrence, never a past year.
             If the syllabus names a term/year (for example Fall 2026), use that year for dates in that term.
-            Extract all relevant dates and events. Return the results as a JSON array with the following structure:
+            Extract every actionable dated event, including administrative deadlines, projects, exams, quizzes, assignments, holidays, final-exam information, and every row in weekly course schedules or tables.
+            Later pages and schedule tables are equally important. Do not stop after an IMPORTANT DATES section or after finding major exams.
+            For a weekly schedule, carry each stated "week beginning" date forward to every schedule row until the next week begins. Use that week-beginning date for those rows, include the session number and topic in the title, and include suggested homework in the same title when present. Do not invent a different day for session 2.
+            Exclude undated policy descriptions that cannot be tied to a stated date or week.
+            Before returning, scan every page marker and verify that no dated schedule row was skipped.
+            Return the results as a JSON array with the following structure:
             [
               {
                 "title": "Event title",
@@ -1273,9 +1279,10 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
                 "due_date": "YYYY-MM-DD"
               }
             ]
-            Only return the JSON array, no other text.`,
+            Preserve document order. Only return the JSON array, no other text.`,
         syllabusText,
         request.signal,
+        6000,
       ),
     );
 

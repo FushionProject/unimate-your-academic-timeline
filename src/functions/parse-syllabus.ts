@@ -3,7 +3,7 @@ import { getAuthHeaders } from "../lib/auth-fetch";
 
 const itemSchema = z.object({
   title: z.string(),
-  type: z.enum(["exam", "quiz", "assignment", "deadline"]),
+  type: z.enum(["exam", "quiz", "assignment", "project", "deadline"]),
   due_date: z.string(),
 });
 
