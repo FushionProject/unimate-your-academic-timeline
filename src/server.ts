@@ -1282,7 +1282,7 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
             Preserve document order. Only return the JSON array, no other text.`,
         syllabusText,
         request.signal,
-        6000,
+        4000,
       ),
     );
 

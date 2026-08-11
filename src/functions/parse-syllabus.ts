@@ -11,6 +11,23 @@ const responseSchema = z.object({
   items: z.array(itemSchema),
 });
 
+type SyllabusApiError = {
+  error?: string;
+  code?: string;
+};
+
+export class SyllabusParseError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly status: number,
+    readonly retryAfterSeconds: number | null,
+  ) {
+    super(message);
+    this.name = "SyllabusParseError";
+  }
+}
+
 export async function parseSyllabus(data: { syllabusText: string }) {
   const { syllabusText } = data;
 
@@ -25,7 +42,14 @@ export async function parseSyllabus(data: { syllabusText: string }) {
   });
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    const payload = (await response.json().catch(() => ({}))) as SyllabusApiError;
+    const retryAfter = Number(response.headers.get("retry-after"));
+    throw new SyllabusParseError(
+      payload.error || "UniMate could not build this timeline right now.",
+      payload.code || "SYLLABUS_PARSE_FAILED",
+      response.status,
+      Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : null,
+    );
   }
 
   const responseData = await response.json();

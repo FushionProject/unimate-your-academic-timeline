@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef } from "react";
 import { Upload, FileText, Sparkles, Loader2 } from "lucide-react";
-import { parseSyllabus } from "../functions/parse-syllabus";
+import { parseSyllabus, SyllabusParseError } from "../functions/parse-syllabus";
 import { extractPdfText } from "../lib/pdf";
 import { ProtectedRoute } from "../components/protected-route";
 import { createSyllabusResultId, SYLLABUS_RESULT_STORAGE_PREFIX } from "../lib/syllabus-results";
@@ -93,10 +93,13 @@ function Planner() {
         search: { resultId },
       });
     } catch (error) {
-      console.error("Error parsing syllabus:", error);
-      setProcessingError(
-        "We couldn't map that syllabus yet. Check the text and try again in a moment.",
-      );
+      if (error instanceof SyllabusParseError) {
+        setProcessingError(error.message);
+      } else {
+        setProcessingError(
+          "UniMate couldn't build the timeline right now. Your extracted syllabus is still ready—please try again.",
+        );
+      }
     } finally {
       setLoading(false);
     }
