@@ -40,6 +40,10 @@ import {
   reserveAiCapacity,
 } from "./lib/ai-capacity";
 import type { AiEntitlement, AiFeature, CapacityReservation } from "./lib/ai-capacity";
+import {
+  buildSyllabusExtractionContext,
+  extractDatedSyllabusItems,
+} from "./lib/syllabus-extraction";
 
 type SearchResult = {
   title: string;
@@ -1245,6 +1249,9 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
       return jsonResponse({ error: "Syllabus text is too large" }, 413);
     }
 
+    const extractionContext = buildSyllabusExtractionContext(syllabusText);
+    const localFallbackItems = extractDatedSyllabusItems(extractionContext);
+
     const reservation = await reserveCapacityOrResponse({
       request,
       userId: authResult.id,
@@ -1252,16 +1259,25 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
       entitlement: await entitlementForAiRequest(request, authResult),
       input: body,
     });
-    if (reservation instanceof Response) return reservation;
+    if (reservation instanceof Response) {
+      return localFallbackItems.length
+        ? jsonResponse({ items: localFallbackItems, extractionMode: "local_fallback" })
+        : reservation;
+    }
 
     const groqApiKey = process.env.GROQ_API_KEY;
 
-    if (!groqApiKey) return aiNotConfiguredResponse();
+    if (!groqApiKey) {
+      return localFallbackItems.length
+        ? jsonResponse({ items: localFallbackItems, extractionMode: "local_fallback" })
+        : aiNotConfiguredResponse();
+    }
 
-    const items = await runCapacityTracked(reservation, authResult.id, () =>
-      callGroqJson(
-        groqApiKey,
-        `You are a meticulous syllabus timeline extractor. Read the entire document from beginning to end before responding.
+    try {
+      const items = await runCapacityTracked(reservation, authResult.id, () =>
+        callGroqJson(
+          groqApiKey,
+          `You are a meticulous syllabus timeline extractor. Read the entire document from beginning to end before responding.
             Today's date is ${new Date().toISOString().slice(0, 10)}.
             This product plans the student's current or upcoming semester.
             If a date omits a year, infer the nearest upcoming academic occurrence, never a past year.
@@ -1280,13 +1296,19 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
               }
             ]
             Preserve document order. Only return the JSON array, no other text.`,
-        syllabusText,
-        request.signal,
-        4000,
-      ),
-    );
+          extractionContext,
+          request.signal,
+          4000,
+        ),
+      );
 
-    return jsonResponse({ items });
+      return jsonResponse({ items, extractionMode: "ai" });
+    } catch (error) {
+      if (localFallbackItems.length) {
+        return jsonResponse({ items: localFallbackItems, extractionMode: "local_fallback" });
+      }
+      throw error;
+    }
   } catch (error) {
     return aiErrorResponse(error);
   }
