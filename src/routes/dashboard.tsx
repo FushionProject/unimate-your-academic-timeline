@@ -38,6 +38,8 @@ import {
   type PressureItem,
   type PressureLevel,
 } from "../lib/semester-pressure";
+import { useSemesterEndDate } from "../hooks/use-semester-end-date";
+import { formatSemesterEndDate } from "../lib/semester-date";
 
 export const Route = createFileRoute("/dashboard")({
   component: () => (
@@ -92,6 +94,11 @@ function Dashboard() {
   const addAssignment = useAddAssignment();
   const removeAssignment = useRemoveAssignment();
   const toggleAssignment = useToggleAssignment();
+  const {
+    semesterEndDate,
+    isSaving: semesterDateSaving,
+    saveSemesterEndDate,
+  } = useSemesterEndDate();
 
   const [courseFilter, setCourseFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<AcademicItemType | "all">("all");
@@ -104,7 +111,11 @@ function Dashboard() {
   const [formMessage, setFormMessage] = useState("");
   const [completionMessage, setCompletionMessage] = useState("");
   const [companionInstalled, setCompanionInstalled] = useState(false);
+  const [semesterEndInput, setSemesterEndInput] = useState(semesterEndDate ?? "");
+  const [semesterDateMessage, setSemesterDateMessage] = useState("");
   const storeUrl = companionStoreUrl();
+
+  useEffect(() => setSemesterEndInput(semesterEndDate ?? ""), [semesterEndDate]);
 
   useEffect(() => {
     const detectCompanion = () => {
@@ -218,6 +229,16 @@ function Dashboard() {
         },
       },
     );
+  };
+
+  const updateSemesterEndDate = async (value: string | null) => {
+    setSemesterDateMessage("");
+    try {
+      await saveSemesterEndDate(value);
+      setSemesterDateMessage(value ? "Semester end date saved." : "Semester end date cleared.");
+    } catch {
+      setSemesterDateMessage("We couldn’t save that date. Try again.");
+    }
   };
 
   return (
@@ -624,6 +645,74 @@ function Dashboard() {
               </section>
 
               <aside className="space-y-5">
+                <section className="rounded-3xl border border-border/60 bg-card/80 p-5 shadow-[var(--shadow-card)]">
+                  <div className="mb-2 flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-primary" aria-hidden="true" />
+                    <h2 className="font-semibold text-foreground">Semester end</h2>
+                  </div>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Add your final day to see a countdown across UniMate.
+                  </p>
+                  {semesterEndDate && (
+                    <p className="mt-3 text-sm font-medium text-foreground">
+                      {formatSemesterEndDate(semesterEndDate)}
+                    </p>
+                  )}
+                  <form
+                    className="mt-4 space-y-2.5"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void updateSemesterEndDate(semesterEndInput);
+                    }}
+                  >
+                    <label htmlFor="semester-end-date" className="sr-only">
+                      Final day of semester
+                    </label>
+                    <input
+                      id="semester-end-date"
+                      type="date"
+                      value={semesterEndInput}
+                      min={format(new Date(), "yyyy-MM-dd")}
+                      onChange={(event) => setSemesterEndInput(event.target.value)}
+                      className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        disabled={!semesterEndInput || semesterDateSaving}
+                        className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-45"
+                      >
+                        {semesterDateSaving ? (
+                          <Loader2 className="h-4 w-4 animate-spin" aria-label="Saving" />
+                        ) : semesterEndDate ? (
+                          "Update date"
+                        ) : (
+                          "Save date"
+                        )}
+                      </button>
+                      {semesterEndDate && (
+                        <button
+                          type="button"
+                          disabled={semesterDateSaving}
+                          onClick={() => void updateSemesterEndDate(null)}
+                          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-semibold text-foreground disabled:opacity-45"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                  {semesterDateMessage && (
+                    <p
+                      className="mt-3 text-xs text-muted-foreground"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {semesterDateMessage}
+                    </p>
+                  )}
+                </section>
+
                 <section className="rounded-3xl border border-border/60 bg-card/80 p-5 shadow-[var(--shadow-card)]">
                   <div className="mb-4 flex items-center gap-2">
                     <Plus className="h-4 w-4 text-primary" />

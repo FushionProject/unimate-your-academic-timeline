@@ -77,6 +77,9 @@ export function Navbar() {
             <Link to="/ask" className={navLinkClass} activeProps={activeNavProps}>
               Ask UniMate
             </Link>
+            <Link to="/pricing" className={navLinkClass} activeProps={activeNavProps}>
+              Pricing
+            </Link>
           </nav>
         )}
         <div className="flex items-center gap-2">
@@ -154,6 +157,13 @@ export function Navbar() {
             activeProps={activeNavProps}
           >
             Bulletin
+          </Link>
+          <Link
+            to="/pricing"
+            className="inline-flex min-h-10 items-center whitespace-nowrap rounded-md px-2 text-muted-foreground hover:text-foreground"
+            activeProps={activeNavProps}
+          >
+            Pricing
           </Link>
         </nav>
       )}

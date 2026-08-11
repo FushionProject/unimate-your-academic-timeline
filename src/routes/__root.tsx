@@ -139,6 +139,7 @@ function RootComponent() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const isPublicPage =
     pathname === "/" ||
+    pathname === "/pricing" ||
     pathname === "/signin" ||
     pathname === "/signup" ||
     pathname === "/forgot-password" ||

@@ -47,7 +47,7 @@ function SignUp() {
       } else if (needsConfirmation) {
         setNeedsConfirmation(true);
       } else {
-        await navigate({ to: "/dashboard" });
+        await navigate({ to: "/" });
       }
     } catch {
       setError("We couldn't create your account. Check your connection and try again.");
