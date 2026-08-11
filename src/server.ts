@@ -1269,7 +1269,7 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
             [
               {
                 "title": "Event title",
-                "type": "exam" | "quiz" | "assignment" | "deadline",
+                "type": "exam" | "quiz" | "assignment" | "project" | "deadline",
                 "due_date": "YYYY-MM-DD"
               }
             ]

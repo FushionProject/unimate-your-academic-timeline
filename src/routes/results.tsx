@@ -8,7 +8,7 @@ import { SYLLABUS_RESULT_STORAGE_PREFIX } from "../lib/syllabus-results";
 
 const itemSchema = z.object({
   title: z.string(),
-  type: z.enum(["exam", "quiz", "assignment", "deadline"]),
+  type: z.enum(["exam", "quiz", "assignment", "project", "deadline"]),
   due_date: z.string(),
 });
 
@@ -183,6 +183,7 @@ function Results() {
                             className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                           >
                             <option value="assignment">Assignment</option>
+                            <option value="project">Project</option>
                             <option value="quiz">Quiz</option>
                             <option value="exam">Exam</option>
                             <option value="deadline">Other date</option>
