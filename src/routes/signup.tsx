@@ -47,7 +47,7 @@ function SignUp() {
       } else if (needsConfirmation) {
         setNeedsConfirmation(true);
       } else {
-        await navigate({ to: "/" });
+        await navigate({ to: "/companion-setup", search: { welcome: "1" } });
       }
     } catch {
       setError("We couldn't create your account. Check your connection and try again.");
@@ -64,8 +64,8 @@ function SignUp() {
           <h1 className="text-xl font-semibold text-foreground mb-2">Check your email</h1>
           <p className="text-sm text-muted-foreground">
             We sent a confirmation link to <span className="text-foreground">{email}</span>. Click
-            it to activate your account, then come back here to sign in. If it does not show up,
-            check your spam folder.
+            it to activate your account and continue Companion setup. If it does not show up, check
+            your spam folder.
           </p>
           <Link
             to="/signin"

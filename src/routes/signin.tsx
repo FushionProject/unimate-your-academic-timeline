@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useAuth } from "../lib/auth-context";
+import { NEW_ACCOUNT_SETUP_KEY } from "../lib/auth-context";
 import { isSupabaseConfigured } from "../lib/supabase";
 
 export const Route = createFileRoute("/signin")({
@@ -50,7 +51,11 @@ function SignIn() {
       if (error) {
         setError(friendlyAuthError(error, errorCode));
       } else {
-        await navigate({ to: "/dashboard" });
+        const needsSetup = localStorage.getItem(NEW_ACCOUNT_SETUP_KEY) === "pending";
+        if (needsSetup) localStorage.removeItem(NEW_ACCOUNT_SETUP_KEY);
+        await navigate(
+          needsSetup ? { to: "/companion-setup", search: { welcome: "1" } } : { to: "/dashboard" },
+        );
       }
     } catch {
       setError("We couldn't sign you in. Check your connection and try again.");

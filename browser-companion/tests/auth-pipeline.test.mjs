@@ -17,7 +17,11 @@ assert.match(authContext, /errorCode\?: string/);
 assert.match(authContext, /errorCode: error\.code/);
 assert.match(authContext, /errorCode: error\?\.code/);
 assert.match(authContext, /errorCode: "network_error"/);
-assert.match(authContext, /emailRedirectTo: `\$\{window\.location\.origin\}\/`/);
+assert.match(
+  authContext,
+  /emailRedirectTo: `\$\{window\.location\.origin\}\/companion-setup\?welcome=1`/,
+);
+assert.match(authContext, /NEW_ACCOUNT_SETUP_KEY/);
 
 for (const [name, route] of [
   ["sign-in", signIn],
@@ -36,12 +40,13 @@ assert.match(signUp, /code === "weak_password"/);
 assert.match(signUp, /code === "user_already_exists"/);
 assert.match(signUp, /code === "signup_disabled"/);
 assert.match(signUp, /id="signup-error"/);
-assert.match(signUp, /navigate\(\{ to: "\/" \}\)/, "successful sign-up should open Home");
-assert.doesNotMatch(
+assert.match(
   signUp,
-  /navigate\(\{ to: "\/dashboard" \}\)/,
-  "successful sign-up must not skip Home",
+  /navigate\(\{ to: "\/companion-setup", search: \{ welcome: "1" \} \}\)/,
+  "successful sign-up should open Companion onboarding",
 );
+assert.match(signIn, /NEW_ACCOUNT_SETUP_KEY/);
+assert.match(signIn, /to: "\/companion-setup"/);
 
 assert.match(
   profilesSchema,

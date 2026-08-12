@@ -196,7 +196,7 @@ function Ask() {
       }
       setConversationNotice(
         activeBrowserConversationId
-          ? "New chat created. Choose “Use in Companion” to make it the extension’s active chat."
+          ? "New chat created. Choose “Use in browser” to make it the extension’s active chat."
           : "New chat created and selected for the Browser Companion.",
       );
     } catch {
@@ -456,7 +456,7 @@ function Ask() {
                       aria-label={`${activeInBrowser ? "Currently selected" : "Select"} ${conversation.title} for Browser Companion`}
                     >
                       <MonitorCheck className="h-3 w-3" />
-                      {activeInBrowser ? "Companion chat" : "Use in Companion"}
+                      {activeInBrowser ? "In browser" : "Use in browser"}
                     </button>
                     <button
                       type="button"

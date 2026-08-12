@@ -23,6 +23,7 @@ interface AuthContextType {
 const NOT_CONFIGURED_ERROR = "Auth isn't configured yet — add your Supabase keys to .env.local.";
 const UNIMATE_AUTH_SIGNED_OUT_EVENT = "unimate-auth-signed-out";
 const RECOVERY_SESSION_KEY = "unimate-password-recovery";
+export const NEW_ACCOUNT_SETUP_KEY = "unimate-new-account-setup";
 
 function unavailableAuthResult(): AuthResult {
   return {
@@ -80,9 +81,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: `${window.location.origin}/` },
+        options: { emailRedirectTo: `${window.location.origin}/companion-setup?welcome=1` },
       });
       if (error) return { error: error.message, errorCode: error.code };
+      localStorage.setItem(NEW_ACCOUNT_SETUP_KEY, "pending");
       return { error: null, needsConfirmation: !data.session };
     } catch {
       return unavailableAuthResult();
