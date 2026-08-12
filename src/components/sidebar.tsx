@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Sparkles } from "lucide-react";
+import { BadgeDollarSign } from "lucide-react";
 import {
   IconHome,
   IconSyllabus,
@@ -23,7 +23,7 @@ export function Sidebar() {
     { icon: IconBulletin, label: "Bulletin Board", to: "/bulletin" },
     { icon: IconNotes, label: "Notes", to: "/notes" },
     { icon: IconAsk, label: "Ask UniMate", to: "/ask" },
-    { icon: Sparkles, label: "Pricing", to: "/pricing" },
+    { icon: BadgeDollarSign, label: "Pricing", to: "/pricing" },
     { icon: IconSettings, label: "Settings", to: "/settings" },
   ];
 
