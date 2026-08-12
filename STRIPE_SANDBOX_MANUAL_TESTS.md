@@ -5,7 +5,7 @@ Status: **test mode only**. Do not use live keys, enable `STRIPE_LIVE_MODE_ENABL
 ## Test setup
 
 1. Use a dedicated Supabase test user and a Stripe test-mode recurring Price.
-2. Configure server-only test values: `STRIPE_SECRET_KEY=sk_test_...`, `STRIPE_PRICE_ID=price_...`, `STRIPE_WEBHOOK_SECRET=whsec_...`, `STRIPE_LIVE_MODE_ENABLED=false`, and `SUPABASE_SERVICE_ROLE_KEY=...`.
+2. Configure server-only test values: `STRIPE_SECRET_KEY=sk_test_...` (or a least-privilege `rk_test_...` key), `STRIPE_PRICE_ID=price_...`, `STRIPE_WEBHOOK_SECRET=whsec_...`, `STRIPE_LIVE_MODE_ENABLED=false`, `STRIPE_PRO_MONTHLY_AMOUNT_CENTS=599`, `STRIPE_PRO_CURRENCY=usd`, `UNIMATE_CANONICAL_ORIGIN=http://localhost:8080`, and `SUPABASE_SERVICE_ROLE_KEY=...`.
 3. Point the Stripe CLI at the local server: `stripe listen --forward-to http://localhost:8080/api/stripe-webhook`, then copy its test webhook secret into the local server environment.
 4. Keep the browser DevTools Network panel, local server output, Stripe test-event log, and the test user's `profiles.is_pro` and `profiles.stripe_customer_id` values available for inspection. Never paste credentials into tickets or logs.
 5. Run `npm run billing:test` before and after the manual sequence.
@@ -17,7 +17,7 @@ Status: **test mode only**. Do not use live keys, enable `STRIPE_LIVE_MODE_ENABL
 3. Complete Checkout using Stripe's successful test card `4242 4242 4242 4242`, any future expiration, any CVC, and a valid postal code.
 4. Return to `/upgrade` and allow status reconciliation to finish.
 
-Expected: one test customer and one subscription exist; the page reports active Pro; `profiles.is_pro` is true; `stripe_customer_id` matches that customer; no card data reaches UniMate.
+Expected: the server rejects any Price that is not active, monthly, USD, exactly $5.99, and test-mode. One test customer and one subscription exist; the page reports active Pro; `profiles.is_pro` is true; `stripe_customer_id` matches that customer; no card data reaches UniMate.
 
 Inspect failures in: browser Network responses for `/api/create-checkout-session` and `/api/billing-status`, local server output, Stripe test Checkout/subscription/event logs, webhook delivery details, and the test profile.
 
@@ -99,7 +99,7 @@ Inspect failures in: `/api/billing-status`, query refresh behavior, Stripe state
 2. Open it on a normal web page and submit a request while active.
 3. Revoke entitlement through a terminal Stripe test event, then reopen or reload the Companion and submit again.
 
-Expected: the Companion calls `/api/billing-status?reconcile=false`, works while the server-owned entitlement is true, and stops Pro requests after revocation. No Stripe or service-role secret exists in the extension bundle.
+Expected: the Companion reads the same server-owned entitlement cache maintained by reconciliation and webhooks, works while entitlement is true, and stops Pro requests after revocation. No Stripe or service-role secret exists in the extension bundle.
 
 Inspect failures in: extension service-worker errors, the billing-status response, server output, and profile state. Do not log tokens or page content.
 
@@ -112,6 +112,34 @@ Inspect failures in: extension service-worker errors, the billing-status respons
 Expected: the listed UUID receives `development_override` in test configuration without changing `profiles.is_pro`. Removing it removes the override. The override is disabled whenever live mode is enabled or a live-key prefix is detected.
 
 Inspect failures in: `/api/billing-status`, sanitized server output, environment configuration names, and the unchanged profile row.
+
+## 11. Concurrent upgrade requests
+
+1. Use browser automation or two tabs to submit the upgrade request for the same Free user at nearly the same time.
+2. Repeat within five minutes and then once after five minutes while the original Checkout Session remains open.
+3. Inspect the Stripe test customer, open Sessions, and subscriptions.
+
+Expected: the user is bound to one Stripe customer. Concurrent calls converge through Stripe idempotency; later calls reuse an open subscription Checkout Session only when its line item matches the configured Pro Price. No duplicate subscription is created.
+
+Inspect failures in: `/api/create-checkout-session`, Stripe request logs and idempotency records, Checkout Sessions, customers, and the profile binding.
+
+## 12. Refund and dispute
+
+1. Refund a successful test charge partially, then fully, and deliver `charge.refunded`.
+2. Create a test dispute and deliver `charge.dispute.created`, then close it and deliver `charge.dispute.closed`.
+3. Inspect the related invoice and subscription after every event.
+
+Expected: each event re-fetches and reconciles the current subscription. A refund or dispute does not itself invent a cancellation; access follows Stripe's subscription status. If the business policy requires revocation, cancel or pause the test subscription and confirm the corresponding lifecycle event revokes Pro.
+
+Inspect failures in: charge, dispute, invoice, and subscription event timelines; webhook responses; `/api/billing-status`; and the profile.
+
+## 13. Database uniqueness safeguard
+
+1. Before applying any SQL, query the test database for duplicate non-null `stripe_customer_id` values.
+2. Review `supabase/stripe_billing_hardening.sql` and `supabase/stripe_billing_hardening_rollback.sql`.
+3. Apply only in a disposable test project, then attempt to assign one Stripe customer ID to two profiles.
+
+Expected: preflight finds no duplicates; the second binding is rejected by the unique partial index; rollback removes only that index. Do not apply this migration to production as part of this checklist.
 
 ## Completion record
 

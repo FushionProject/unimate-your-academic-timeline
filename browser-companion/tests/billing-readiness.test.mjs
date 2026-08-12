@@ -6,6 +6,10 @@ const upgrade = await readFile(new URL("../../src/routes/upgrade.tsx", import.me
 const profile = await readFile(new URL("../../src/lib/profile.ts", import.meta.url), "utf8");
 const companion = await readFile(new URL("../background.js", import.meta.url), "utf8");
 const envExample = await readFile(new URL("../../.env.example", import.meta.url), "utf8");
+const billingMigration = await readFile(
+  new URL("../../supabase/stripe_billing_hardening.sql", import.meta.url),
+  "utf8",
+);
 
 const checkout = server.slice(
   server.indexOf("async function handleCreateCheckoutSession"),
@@ -16,7 +20,7 @@ const webhook = server.slice(
   server.indexOf("type ServerEntry"),
 );
 
-assert.match(server, /secretKey\.startsWith\("sk_live_"\)/);
+assert.match(server, /secretKey\.startsWith\("sk_live_"\).*secretKey\.startsWith\("rk_live_"\)/s);
 assert.match(server, /STRIPE_LIVE_MODE_ENABLED !== "true"/);
 assert.match(envExample, /STRIPE_LIVE_MODE_ENABLED=false/);
 assert.match(envExample, /ALLOW_DEV_PRO_OVERRIDES=false/);
@@ -36,6 +40,14 @@ assert.match(
 assert.match(checkout, /profile\.stripe_customer_id/);
 assert.match(checkout, /listCustomerSubscriptions/);
 assert.match(checkout, /price\.type !== "recurring"/);
+assert.match(checkout, /price\.unit_amount !== expectedAmount/);
+assert.match(checkout, /price\.recurring\?\.interval !== "month"/);
+assert.match(checkout, /integration_identifier/);
+assert.match(checkout, /createOrBindStripeCustomer/);
+assert.match(checkout, /findOpenCheckoutUrl/);
+assert.match(server, /"expand\[\]": "data\.line_items"/);
+assert.match(server, /lineItem\.price\?\.id === config\.priceId/);
+assert.match(checkout, /config\.canonicalOrigin/);
 assert.match(checkout, /checkoutUrl\.hostname !== "checkout\.stripe\.com"/);
 assert.doesNotMatch(
   checkout,
@@ -52,13 +64,19 @@ assert.match(webhook, /invoice\.payment_failed/);
 assert.match(webhook, /invoice\.paid/);
 assert.match(webhook, /checkout\.session\.async_payment_succeeded/);
 assert.match(webhook, /checkout\.session\.async_payment_failed/);
+assert.match(webhook, /charge\.refunded/);
+assert.match(webhook, /charge\.dispute\.created/);
+assert.match(webhook, /Boolean\(event\.livemode\) !== config\.liveMode/);
+assert.match(webhook, /listCustomerSubscriptions\(customerId, config\)/);
 assert.match(server, /subscriptionEntitled\(subscription\.status\)/);
-assert.match(server, /status === "past_due"/);
-assert.match(server, /status === "active" \|\| status === "trialing"/);
+assert.match(server, /stripeStateEntitled/);
 
 assert.match(server, /async function handleBillingStatus/);
 assert.match(server, /async function handleCreatePortalSession/);
 assert.match(server, /url\.hostname === "billing\.stripe\.com"/);
+assert.match(server, /owners\.length !== 1 \|\| owners\[0\] !== authResult\.id/);
+assert.match(server, /Prefer: "return=representation"/);
+assert.match(server, /rows\.length === 1/);
 assert.match(server, /url\.pathname === "\/api\/billing-status"/);
 assert.match(server, /url\.pathname === "\/api\/create-portal-session"/);
 assert.match(profile, /fetch\("\/api\/billing-status"/);
@@ -71,5 +89,8 @@ assert.match(upgrade, /set to end/);
 assert.match(upgrade, /Confirmation is taking longer than expected/);
 assert.match(upgrade, /never\s+receives\s+your card details/);
 assert.doesNotMatch(upgrade, /Payment received/);
+assert.match(billingMigration, /create unique index[\s\S]*stripe_customer_id/);
+assert.match(envExample, /STRIPE_PRO_MONTHLY_AMOUNT_CENTS=599/);
+assert.match(envExample, /UNIMATE_CANONICAL_ORIGIN=http:\/\/localhost:8080/);
 
 console.log("PASS complete test-mode subscription, lifecycle, portal, and override safeguards");

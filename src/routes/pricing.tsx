@@ -4,16 +4,12 @@ import { useAuth } from "../lib/auth-context";
 
 export const Route = createFileRoute("/pricing")({ component: Pricing });
 
-const freeFeatures = [
-  "Semester timeline and dashboard",
-  "Course notes",
-  "A starter allowance for Ask UniMate",
-];
+const freeFeatures = ["Semester timeline and dashboard", "Course notes", "Two AI syllabus parses"];
 
 const proFeatures = [
   "Everything in Free",
   "Browser Companion access",
-  "Higher fair-use limits for AI study help",
+  "Ask UniMate with fair-use limits",
   "Shared conversations between UniMate and the Companion",
 ];
 
@@ -70,8 +66,8 @@ function Pricing() {
           <p className="mt-2 max-w-xs text-sm text-muted-foreground">
             For students who want UniMate beside them across the web.
           </p>
-          <p className="mt-7 text-4xl font-bold">Pro</p>
-          <p className="mt-1 text-xs text-muted-foreground">Final price shown before checkout</p>
+          <p className="mt-7 text-4xl font-bold">$5.99</p>
+          <p className="mt-1 text-xs text-muted-foreground">per month · cancel anytime</p>
           <PlanFeatures items={proFeatures} />
           <Link
             to={user ? "/upgrade" : "/signup"}

@@ -110,7 +110,7 @@ function Upgrade() {
         </div>
         <h1 className="mb-1 text-2xl font-bold text-foreground">UniMate Pro</h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          Keep UniMate beside your coursework with the Browser Companion.
+          Keep UniMate beside your coursework for $5.99 per month.
         </p>
 
         {!user ? (

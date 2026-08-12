@@ -15,6 +15,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { buildOperationalReadiness, readinessKeyMatches } from "./lib/operational-readiness";
+import { selectPreferredSubscription, stripeStateEntitled } from "./lib/billing-policy";
 import {
   COMPANION_GROUNDING_SYSTEM_PROMPT,
   COMPANION_PROMPT_TEMPLATE_ID,
@@ -394,7 +395,7 @@ async function parseJsonBody(
 function developmentProOverride(userId: string): boolean {
   if (process.env.ALLOW_DEV_PRO_OVERRIDES !== "true") return false;
   if (process.env.STRIPE_LIVE_MODE_ENABLED === "true") return false;
-  if (process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")) return false;
+  if (/^(sk|rk)_live_/.test(process.env.STRIPE_SECRET_KEY || "")) return false;
   const allowedIds = (process.env.DEV_PRO_USER_IDS || "")
     .split(",")
     .map((value) => value.trim())
@@ -1864,7 +1865,7 @@ async function handleAiUsageSummary(request: Request): Promise<Response> {
 }
 
 function stripeConfiguration():
-  | { secretKey: string; priceId: string; liveMode: boolean }
+  | { secretKey: string; priceId: string; liveMode: boolean; canonicalOrigin: string }
   | Response {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   const priceId = process.env.STRIPE_PRICE_ID;
@@ -1872,15 +1873,27 @@ function stripeConfiguration():
     return jsonResponse({ error: "Payments are temporarily unavailable." }, 503);
   }
 
-  const liveMode = secretKey.startsWith("sk_live_");
+  const liveMode = secretKey.startsWith("sk_live_") || secretKey.startsWith("rk_live_");
   if (liveMode && process.env.STRIPE_LIVE_MODE_ENABLED !== "true") {
     console.error("A live Stripe key was rejected because live billing is not explicitly enabled");
     return jsonResponse({ error: "Live billing is disabled." }, 503);
   }
-  if (!liveMode && !secretKey.startsWith("sk_test_")) {
+  if (!liveMode && !secretKey.startsWith("sk_test_") && !secretKey.startsWith("rk_test_")) {
     return jsonResponse({ error: "Stripe test-mode configuration is invalid." }, 503);
   }
-  return { secretKey, priceId, liveMode };
+  const configuredOrigin = process.env.UNIMATE_CANONICAL_ORIGIN?.trim();
+  let canonicalOrigin: string;
+  try {
+    const parsed = new URL(configuredOrigin || process.env.VITE_UNIMATE_API_URL || "");
+    const localDevelopment = import.meta.env.DEV && parsed.hostname === "localhost";
+    if ((parsed.protocol !== "https:" && !localDevelopment) || parsed.username || parsed.password) {
+      throw new Error("invalid origin");
+    }
+    canonicalOrigin = parsed.origin;
+  } catch {
+    return jsonResponse({ error: "Payments are temporarily unavailable." }, 503);
+  }
+  return { secretKey, priceId, liveMode, canonicalOrigin };
 }
 
 async function stripeRequest(
@@ -1896,6 +1909,7 @@ async function stripeRequest(
       ...init,
       headers: {
         Authorization: `Bearer ${config.secretKey}`,
+        "Stripe-Version": "2026-06-24.dahlia",
         ...(init.body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
         ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
         ...init.headers,
@@ -1922,7 +1936,7 @@ async function patchBillingProfile(
         apikey: serviceRoleKey,
         Authorization: `Bearer ${serviceRoleKey}`,
         "Content-Type": "application/json",
-        Prefer: "return=minimal",
+        Prefer: "return=representation",
       },
       body: JSON.stringify(values),
     },
@@ -1934,7 +1948,9 @@ async function patchBillingProfile(
       "Billing profile update timed out.",
     ),
   );
-  return response.ok;
+  if (!response.ok) return false;
+  const rows = (await response.json()) as unknown[];
+  return Array.isArray(rows) && rows.length === 1;
 }
 
 async function readBillingProfileAsServiceRole(userId: string): Promise<BillingProfile | null> {
@@ -1989,8 +2005,7 @@ function stripeCustomerId(value: StripeSubscription["customer"]): string | null 
 }
 
 function subscriptionEntitled(status: string): boolean {
-  if (status === "active" || status === "trialing") return true;
-  return status === "past_due" && process.env.STRIPE_PAST_DUE_GRACE_ENABLED !== "false";
+  return stripeStateEntitled(status, process.env.STRIPE_PAST_DUE_GRACE_ENABLED !== "false");
 }
 
 function billingStateForSubscription(subscription: StripeSubscription): BillingState {
@@ -2019,14 +2034,7 @@ async function listCustomerSubscriptions(
 }
 
 function preferredSubscription(subscriptions: StripeSubscription[]): StripeSubscription | null {
-  const rank = ["active", "trialing", "past_due", "unpaid", "paused", "incomplete"];
-  return (
-    [...subscriptions].sort((left, right) => {
-      const leftRank = rank.indexOf(left.status);
-      const rightRank = rank.indexOf(right.status);
-      return (leftRank < 0 ? rank.length : leftRank) - (rightRank < 0 ? rank.length : rightRank);
-    })[0] || null
-  );
+  return selectPreferredSubscription(subscriptions);
 }
 
 async function createPortalUrl(
@@ -2034,15 +2042,77 @@ async function createPortalUrl(
   returnUrl: string,
   config: { secretKey: string },
 ): Promise<string | null> {
-  const response = await stripeRequest("/billing_portal/sessions", config, {
-    method: "POST",
-    body: new URLSearchParams({ customer: customerId, return_url: returnUrl }).toString(),
-  });
+  const response = await stripeRequest(
+    "/billing_portal/sessions",
+    config,
+    {
+      method: "POST",
+      body: new URLSearchParams({ customer: customerId, return_url: returnUrl }).toString(),
+    },
+    `portal-${customerId}-${Math.floor(Date.now() / 60_000)}`,
+  );
   if (!response.ok) return null;
   const payload = (await response.json()) as { url?: string };
   if (!payload.url) return null;
   const url = new URL(payload.url);
   return url.protocol === "https:" && url.hostname === "billing.stripe.com" ? payload.url : null;
+}
+
+async function createOrBindStripeCustomer(
+  user: AuthenticatedUser,
+  config: { secretKey: string },
+): Promise<string | null> {
+  const params = new URLSearchParams({ "metadata[user_id]": user.id });
+  if (user.email) params.set("email", user.email);
+  const response = await stripeRequest(
+    "/customers",
+    config,
+    { method: "POST", body: params.toString() },
+    `unimate-customer-${user.id}`,
+  );
+  if (!response.ok) return null;
+  const customer = (await response.json()) as { id?: string };
+  if (!customer.id) return null;
+  const owners = await findUserIdsByStripeCustomer(customer.id);
+  if (owners.some((owner) => owner !== user.id)) return null;
+  return (await patchBillingProfile(user.id, { stripe_customer_id: customer.id }))
+    ? customer.id
+    : null;
+}
+
+async function findOpenCheckoutUrl(
+  customerId: string,
+  config: { secretKey: string; priceId: string },
+): Promise<string | null> {
+  const query = new URLSearchParams({
+    customer: customerId,
+    status: "open",
+    limit: "20",
+    "expand[]": "data.line_items",
+  });
+  const response = await stripeRequest(`/checkout/sessions?${query}`, config);
+  if (!response.ok) return null;
+  const payload = (await response.json()) as {
+    data?: Array<{
+      mode?: string;
+      url?: string;
+      line_items?: { data?: Array<{ price?: { id?: string } }> };
+    }>;
+  };
+  for (const session of payload.data || []) {
+    if (session.mode !== "subscription" || !session.url) continue;
+    const matchesConfiguredPrice = session.line_items?.data?.some(
+      (lineItem) => lineItem.price?.id === config.priceId,
+    );
+    if (!matchesConfiguredPrice) continue;
+    try {
+      const url = new URL(session.url);
+      if (url.protocol === "https:" && url.hostname === "checkout.stripe.com") return session.url;
+    } catch {
+      // Ignore malformed provider data and continue to a fresh hosted session.
+    }
+  }
+  return null;
 }
 
 async function handleBillingStatus(request: Request): Promise<Response> {
@@ -2090,11 +2160,24 @@ async function handleBillingStatus(request: Request): Promise<Response> {
       await listCustomerSubscriptions(profile.stripe_customer_id, config),
     );
     if (!subscription) {
-      if (profile.is_pro) await patchBillingProfile(authResult.id, { is_pro: false });
+      if (profile.is_pro && !(await patchBillingProfile(authResult.id, { is_pro: false }))) {
+        return jsonResponse(
+          { error: "Billing status could not be synchronized.", code: "BILLING_SYNC_FAILED" },
+          503,
+        );
+      }
       return jsonResponse({ isPro: false, state: "canceled", canManage: true });
     }
     const isPro = subscriptionEntitled(subscription.status);
-    if (profile.is_pro !== isPro) await patchBillingProfile(authResult.id, { is_pro: isPro });
+    if (
+      profile.is_pro !== isPro &&
+      !(await patchBillingProfile(authResult.id, { is_pro: isPro }))
+    ) {
+      return jsonResponse(
+        { error: "Billing status could not be synchronized.", code: "BILLING_SYNC_FAILED" },
+        503,
+      );
+    }
     return jsonResponse({
       isPro,
       state: billingStateForSubscription(subscription),
@@ -2130,8 +2213,15 @@ async function handleCreatePortalSession(request: Request): Promise<Response> {
   }
   const config = stripeConfiguration();
   if (config instanceof Response) return config;
-  const { origin } = new URL(request.url);
-  const url = await createPortalUrl(profile.stripe_customer_id, `${origin}/upgrade`, config);
+  const owners = await findUserIdsByStripeCustomer(profile.stripe_customer_id);
+  if (owners.length !== 1 || owners[0] !== authResult.id) {
+    return jsonResponse({ error: "Billing account ownership could not be verified." }, 409);
+  }
+  const url = await createPortalUrl(
+    profile.stripe_customer_id,
+    `${config.canonicalOrigin}/upgrade`,
+    config,
+  );
   return url
     ? jsonResponse({ url })
     : jsonResponse({ error: "Billing management is temporarily unavailable." }, 502);
@@ -2153,23 +2243,31 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
     if (config instanceof Response) return config;
     const profile = await readBillingProfile(authResult.id, accessToken, request.signal);
     if (!profile) return jsonResponse({ error: "Billing profile is unavailable." }, 503);
-    const { origin } = new URL(request.url);
+    const origin = config.canonicalOrigin;
 
-    if (profile.stripe_customer_id) {
-      const subscriptions = await listCustomerSubscriptions(profile.stripe_customer_id, config);
+    const customerId =
+      profile.stripe_customer_id || (await createOrBindStripeCustomer(authResult, config));
+    if (!customerId) {
+      return jsonResponse({ error: "Your billing account could not be prepared." }, 503);
+    }
+
+    if (customerId) {
+      const owners = await findUserIdsByStripeCustomer(customerId);
+      if (owners.length !== 1 || owners[0] !== authResult.id) {
+        return jsonResponse({ error: "Billing account ownership could not be verified." }, 409);
+      }
+      const subscriptions = await listCustomerSubscriptions(customerId, config);
       const existing = preferredSubscription(
         subscriptions.filter(
           (subscription) => !["canceled", "incomplete_expired"].includes(subscription.status),
         ),
       );
       if (existing) {
-        const portalUrl = await createPortalUrl(
-          profile.stripe_customer_id,
-          `${origin}/upgrade`,
-          config,
-        );
+        const portalUrl = await createPortalUrl(customerId, `${origin}/upgrade`, config);
         return jsonResponse({ alreadySubscribed: true, url: portalUrl });
       }
+      const openCheckoutUrl = await findOpenCheckoutUrl(customerId, config);
+      if (openCheckoutUrl) return jsonResponse({ url: openCheckoutUrl });
     }
 
     const priceResponse = await stripeRequest(
@@ -2181,11 +2279,19 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
       active?: boolean;
       type?: string;
       livemode?: boolean;
+      unit_amount?: number;
+      currency?: string;
+      recurring?: { interval?: string };
     };
+    const expectedAmount = Number(process.env.STRIPE_PRO_MONTHLY_AMOUNT_CENTS || "599");
+    const expectedCurrency = (process.env.STRIPE_PRO_CURRENCY || "usd").toLowerCase();
     if (
       !price.active ||
       price.type !== "recurring" ||
-      Boolean(price.livemode) !== config.liveMode
+      Boolean(price.livemode) !== config.liveMode ||
+      price.unit_amount !== expectedAmount ||
+      price.currency?.toLowerCase() !== expectedCurrency ||
+      price.recurring?.interval !== "month"
     ) {
       return jsonResponse(
         { error: "The Pro plan is not configured for subscription checkout." },
@@ -2202,9 +2308,9 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
       client_reference_id: authResult.id,
       "metadata[user_id]": authResult.id,
       "subscription_data[metadata][user_id]": authResult.id,
+      integration_identifier: `unimate_web_${crypto.randomUUID().replaceAll("-", "").slice(0, 8)}`,
     });
-    if (profile.stripe_customer_id) params.set("customer", profile.stripe_customer_id);
-    else if (authResult.email) params.set("customer_email", authResult.email);
+    params.set("customer", customerId);
 
     const idempotencyWindow = Math.floor(Date.now() / (5 * 60 * 1_000));
     const stripeRes = await stripeRequest(
@@ -2293,6 +2399,34 @@ async function retrieveStripeSubscription(
   return response.ok ? ((await response.json()) as StripeSubscription) : null;
 }
 
+async function retrieveSubscriptionFromInvoice(
+  invoiceId: string,
+  config: { secretKey: string },
+): Promise<StripeSubscription | null> {
+  const invoiceResponse = await stripeRequest(
+    `/invoices/${encodeURIComponent(invoiceId)}?expand[]=subscription`,
+    config,
+  );
+  if (!invoiceResponse.ok) return null;
+  const invoice = (await invoiceResponse.json()) as { subscription?: unknown };
+  const subscriptionId = objectId(invoice.subscription);
+  return subscriptionId ? retrieveStripeSubscription(subscriptionId, config) : null;
+}
+
+async function retrieveSubscriptionFromCharge(
+  chargeId: string,
+  config: { secretKey: string },
+): Promise<StripeSubscription | null> {
+  const chargeResponse = await stripeRequest(
+    `/charges/${encodeURIComponent(chargeId)}?expand[]=invoice.subscription`,
+    config,
+  );
+  if (!chargeResponse.ok) return null;
+  const charge = (await chargeResponse.json()) as { invoice?: unknown };
+  const invoiceId = objectId(charge.invoice);
+  return invoiceId ? retrieveSubscriptionFromInvoice(invoiceId, config) : null;
+}
+
 async function syncSubscriptionEntitlement(
   subscription: StripeSubscription,
   config: { priceId: string },
@@ -2359,7 +2493,9 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
     }
 
     const event = JSON.parse(payload) as {
+      id?: string;
       type?: string;
+      livemode?: boolean;
       data?: {
         object?: Record<string, unknown> & {
           mode?: string;
@@ -2371,6 +2507,9 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
     };
     const config = stripeConfiguration();
     if (config instanceof Response) return new Response("Stripe unavailable", { status: 503 });
+    if (!event.id || !event.type || Boolean(event.livemode) !== config.liveMode) {
+      return new Response("Invalid event mode", { status: 400 });
+    }
     const object = event.data?.object;
     let syncResult: "updated" | "ignored" | "failed" = "ignored";
 
@@ -2422,18 +2561,30 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
         syncResult = await syncSubscriptionEntitlement(subscription, config);
       } else {
         const customerId = objectId(object?.customer);
-        const candidateUserId = object?.client_reference_id || object?.metadata?.user_id;
         if (customerId) {
-          const customerOwners = await findUserIdsByStripeCustomer(customerId);
-          if (customerOwners.length > 1) syncResult = "failed";
-          else if (
-            customerOwners.length === 1 &&
-            (!candidateUserId || customerOwners[0] === candidateUserId)
-          ) {
-            syncResult = (await patchBillingProfile(customerOwners[0], { is_pro: false }))
-              ? "updated"
-              : "failed";
+          const currentSubscription = preferredSubscription(
+            await listCustomerSubscriptions(customerId, config),
+          );
+          if (currentSubscription) {
+            syncResult = await syncSubscriptionEntitlement(currentSubscription, config);
           }
+        }
+      }
+    } else if (
+      event.type === "charge.refunded" ||
+      event.type === "charge.dispute.created" ||
+      event.type === "charge.dispute.closed"
+    ) {
+      const chargeId = event.type.startsWith("charge.dispute.")
+        ? objectId(object?.charge)
+        : objectId(object?.id);
+      if (chargeId) {
+        const subscription = await retrieveSubscriptionFromCharge(chargeId, config);
+        if (subscription) {
+          // Stripe remains the source of truth. Refund/dispute events force a
+          // current subscription lookup; access follows its current state rather
+          // than trusting an out-of-order charge event.
+          syncResult = await syncSubscriptionEntitlement(subscription, config);
         }
       }
     }

@@ -13,7 +13,7 @@
     "companion:test": "node browser-companion/tests/background.test.mjs && node browser-companion/tests/grounding.test.mjs && node browser-companion/tests/context-pipeline.test.mjs && node browser-companion/tests/runtime-stability.test.mjs && node browser-companion/tests/backend-guards.test.mjs && node browser-companion/tests/ai-release-guards.test.mjs && node browser-companion/tests/conversation-dashboard.test.mjs && node browser-companion/tests/store-readiness.test.mjs",
     "dashboard:test": "node --experimental-strip-types browser-companion/tests/semester-pressure.test.ts && node --experimental-strip-types browser-companion/tests/semester-settings.test.ts && node browser-companion/tests/syllabus-review.test.mjs && node --experimental-strip-types browser-companion/tests/pdf-extraction.test.ts && node --experimental-strip-types browser-companion/tests/syllabus-fallback.test.ts",
     "auth:test": "node browser-companion/tests/auth-pipeline.test.mjs && node browser-companion/tests/app-shell-regression.test.mjs",
-    "billing:test": "node browser-companion/tests/billing-readiness.test.mjs",
+    "billing:test": "node --experimental-strip-types browser-companion/tests/billing-policy.test.ts && node browser-companion/tests/billing-readiness.test.mjs",
     "hardening:test": "node browser-companion/tests/production-hardening.test.mjs",
     "capacity:test": "node --experimental-strip-types browser-companion/tests/ai-capacity.test.ts",
     "resilience:test": "node browser-companion/tests/launch-resilience.test.mjs",
