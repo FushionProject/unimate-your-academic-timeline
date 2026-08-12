@@ -6,6 +6,8 @@ type PositionedPdfText = {
   transform: ArrayLike<number>;
 };
 
+const MAX_PDF_PAGES = 100;
+
 function isPositionedPdfText(value: unknown): value is PositionedPdfText {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<PositionedPdfText>;
@@ -53,6 +55,10 @@ export async function extractPdfText(file: File): Promise<string> {
 
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  if (pdf.numPages > MAX_PDF_PAGES) {
+    await pdf.destroy();
+    throw new Error(`PDF exceeds the ${MAX_PDF_PAGES}-page limit.`);
+  }
 
   const pageTexts: string[] = [];
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {

@@ -6,6 +6,8 @@ import { extractPdfText } from "../lib/pdf";
 import { ProtectedRoute } from "../components/protected-route";
 import { createSyllabusResultId, SYLLABUS_RESULT_STORAGE_PREFIX } from "../lib/syllabus-results";
 
+const MAX_PDF_BYTES = 10 * 1024 * 1024;
+
 export const Route = createFileRoute("/planner")({
   component: () => (
     <ProtectedRoute>
@@ -52,6 +54,10 @@ function Planner() {
   const handlePdfFile = async (file: File) => {
     if (file.type !== "application/pdf") {
       setPdfError("Please choose a PDF file.");
+      return;
+    }
+    if (file.size > MAX_PDF_BYTES) {
+      setPdfError("That PDF is larger than 10 MB. Try a smaller file or paste its text instead.");
       return;
     }
     setFilename(file.name);

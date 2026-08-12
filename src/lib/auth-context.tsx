@@ -78,6 +78,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (email: string, password: string): Promise<AuthResult> => {
     if (!supabase) return { error: NOT_CONFIGURED_ERROR };
     try {
+      const response = await fetch("/api/signup-status", { cache: "no-store" });
+      if (!response.ok) return unavailableAuthResult();
+      const signupStatus = (await response.json()) as { enabled?: boolean };
+      if (signupStatus.enabled !== true) {
+        return {
+          error: "New accounts are temporarily paused while we make room for more students.",
+        };
+      }
       const { data, error } = await supabase.auth.signUp({
         email,
         password,

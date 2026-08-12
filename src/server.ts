@@ -14,6 +14,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { buildOperationalReadiness, readinessKeyMatches } from "./lib/operational-readiness";
 import {
   COMPANION_GROUNDING_SYSTEM_PROMPT,
   COMPANION_PROMPT_TEMPLATE_ID,
@@ -40,6 +41,8 @@ import {
   reserveAiCapacity,
 } from "./lib/ai-capacity";
 import type { AiEntitlement, AiFeature, CapacityReservation } from "./lib/ai-capacity";
+import { entitlementFor, planFromProfile, reserveEntitlementUsage } from "./lib/ai-entitlements";
+import type { AiFeature as ProductAiFeature, AiPlan } from "./lib/ai-entitlements";
 import {
   buildSyllabusExtractionContext,
   extractDatedSyllabusItems,
@@ -88,6 +91,8 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_RATE_LIMIT_ENTRIES = 20_000;
 const DEFAULT_GROQ_TEXT_MODEL = "llama-3.3-70b-versatile";
 const DEFAULT_GROQ_VISION_MODEL = "qwen/qwen3.6-27b";
+const DEFAULT_MAX_AI_CONCURRENCY = 8;
+let activeAiProviderRequests = 0;
 
 type RateLimitRecord = { count: number; resetsAt: number };
 const requestRateLimits = new Map<string, RateLimitRecord>();
@@ -126,6 +131,28 @@ function configuredGroqModel(value: string | undefined, fallback: string): strin
   return candidate && candidate.length <= 120 && /^[a-zA-Z0-9._/-]+$/.test(candidate)
     ? candidate
     : fallback;
+}
+
+function configuredAiConcurrency(): number {
+  const value = Number(process.env.MAX_AI_CONCURRENCY);
+  return Number.isInteger(value) && value > 0 && value <= 100 ? value : DEFAULT_MAX_AI_CONCURRENCY;
+}
+
+async function withAiProviderCapacity<T>(operation: () => Promise<T>): Promise<T> {
+  if (activeAiProviderRequests >= configuredAiConcurrency()) {
+    throw new CompanionUpstreamError(
+      "AI_BUSY",
+      "ai",
+      503,
+      "UniMate’s AI is at capacity. Please try again shortly.",
+    );
+  }
+  activeAiProviderRequests += 1;
+  try {
+    return await operation();
+  } finally {
+    activeAiProviderRequests -= 1;
+  }
 }
 
 type CompanionErrorPhase = "authentication" | "entitlement" | "search" | "ai" | "upstream";
@@ -300,8 +327,12 @@ function resolveCurrentCompanionTask(provenance: CompanionProvenance, message: s
 }
 
 function rejectLargeRequest(request: Request, maxBytes = MAX_JSON_BODY_BYTES): Response | null {
-  const length = Number(request.headers.get("content-length") || 0);
-  return length > maxBytes ? jsonResponse({ error: "Request body too large" }, 413) : null;
+  const rawLength = request.headers.get("content-length");
+  if (!rawLength) return null;
+  const length = Number(rawLength);
+  return !Number.isFinite(length) || length < 0 || length > maxBytes
+    ? jsonResponse({ error: "Request body too large" }, 413)
+    : null;
 }
 
 async function readStreamTextLimited(
@@ -459,6 +490,78 @@ async function reserveCapacityOrResponse(options: {
   }
 }
 
+async function reserveProductEntitlementOrResponse(options: {
+  request: Request;
+  userId: string;
+  plan: AiPlan;
+  feature: ProductAiFeature;
+  capacityFeature: AiFeature;
+  input: unknown;
+}): Promise<CapacityReservation | Response> {
+  const policy = entitlementFor(options.plan, options.feature);
+  if (!policy.allowed) {
+    return jsonResponse(
+      { error: "UniMate Pro is required for AI help.", code: "PRO_REQUIRED" },
+      403,
+      { "cache-control": "no-store" },
+    );
+  }
+  // Product quota IDs are always server-generated. Accepting a caller's UUID
+  // here would let them replay one successful reservation indefinitely.
+  const requestId = crypto.randomUUID();
+  const entitlement = await reserveEntitlementUsage({
+    userId: options.userId,
+    feature: options.feature,
+    requestId,
+    signal: options.request.signal,
+  }).catch(() => ({
+    allowed: false,
+    used: 0,
+    limit: 0,
+    period: "none",
+    code: "ENTITLEMENT_UNAVAILABLE" as const,
+  }));
+  if (!entitlement.allowed) {
+    const quota = entitlement.code === "QUOTA_EXCEEDED";
+    return jsonResponse(
+      {
+        error: quota
+          ? options.plan === "free"
+            ? "You’ve used both free syllabus parses. Upgrade to UniMate Pro to continue."
+            : "You’ve reached this month’s fair-use limit. Please try again next month."
+          : entitlement.code === "PRO_REQUIRED"
+            ? "UniMate Pro is required for AI help."
+            : entitlement.code === "DUPLICATE_REQUEST"
+              ? "That request was already processed."
+              : "Usage verification is temporarily unavailable. Please try again shortly.",
+        code: entitlement.code || "ENTITLEMENT_UNAVAILABLE",
+      },
+      quota
+        ? 429
+        : entitlement.code === "PRO_REQUIRED"
+          ? 403
+          : entitlement.code === "DUPLICATE_REQUEST"
+            ? 409
+            : 503,
+      { "cache-control": "no-store" },
+    );
+  }
+  const headers = new Headers(options.request.headers);
+  headers.set("x-unimate-request-id", requestId);
+  const accountingRequest = new Request(options.request.url, {
+    method: options.request.method,
+    headers,
+    signal: options.request.signal,
+  });
+  return reserveCapacityOrResponse({
+    request: accountingRequest,
+    userId: options.userId,
+    feature: options.capacityFeature,
+    entitlement: options.plan,
+    input: options.input,
+  });
+}
+
 async function completeCapacitySafely(
   reservation: CapacityReservation,
   userId: string,
@@ -480,17 +583,12 @@ async function completeCapacitySafely(
   }
 }
 
-async function entitlementForAiRequest(
-  request: Request,
-  user: AuthenticatedUser,
-): Promise<AiEntitlement> {
+async function planForAiRequest(request: Request, user: AuthenticatedUser): Promise<AiPlan> {
   if (developmentProOverride(user.id)) return "pro";
   const accessToken = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") || "";
   try {
-    const profile = await readBillingProfile(user.id, accessToken, request.signal);
-    return profile?.is_pro === true ? "pro" : "free";
+    return planFromProfile(await readBillingProfile(user.id, accessToken, request.signal));
   } catch {
-    // Entitlement lookup failures fail closed to the lower-cost tier.
     return "free";
   }
 }
@@ -716,12 +814,13 @@ async function handleAskUniMate(request: Request): Promise<Response> {
       return jsonResponse({ error: "Course context is invalid" }, 400);
     }
 
-    const entitlement = await entitlementForAiRequest(request, authResult);
-    const reservation = await reserveCapacityOrResponse({
+    const plan = await planForAiRequest(request, authResult);
+    const reservation = await reserveProductEntitlementOrResponse({
       request,
       userId: authResult.id,
-      feature: "ask_unimate",
-      entitlement,
+      plan,
+      feature: "text",
+      capacityFeature: "ask_unimate",
       input: body,
     });
     if (reservation instanceof Response) return reservation;
@@ -928,24 +1027,26 @@ async function groqTextCompletion(
   opts: { temperature: number; maxTokens: number },
   clientSignal?: AbortSignal,
 ): Promise<string> {
-  const res = await fetchWithTimeout(
-    "https://api.groq.com/openai/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${groqApiKey}`,
-        "Content-Type": "application/json",
+  const res = await withAiProviderCapacity(() =>
+    fetchWithTimeout(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${groqApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: configuredGroqModel(process.env.GROQ_TEXT_MODEL, DEFAULT_GROQ_TEXT_MODEL),
+          messages,
+          temperature: opts.temperature,
+          max_tokens: opts.maxTokens,
+        }),
       },
-      body: JSON.stringify({
-        model: configuredGroqModel(process.env.GROQ_TEXT_MODEL, DEFAULT_GROQ_TEXT_MODEL),
-        messages,
-        temperature: opts.temperature,
-        max_tokens: opts.maxTokens,
-      }),
-    },
-    AI_PROVIDER_TIMEOUT_MS,
-    new CompanionUpstreamError("AI_TIMEOUT", "ai", 504, "UniMate’s AI request timed out."),
-    clientSignal,
+      AI_PROVIDER_TIMEOUT_MS,
+      new CompanionUpstreamError("AI_TIMEOUT", "ai", 504, "UniMate’s AI request timed out."),
+      clientSignal,
+    ),
   );
   if (!res.ok) {
     await recordProviderSignal({
@@ -1012,11 +1113,12 @@ async function handleDashboardAI(request: Request): Promise<Response> {
       if (entitlement instanceof Response) return entitlement;
       const rateLimited = enforceUserRateLimit(entitlement.user.id, "companion-text", 20);
       if (rateLimited) return rateLimited;
-      const reservation = await reserveCapacityOrResponse({
+      const reservation = await reserveProductEntitlementOrResponse({
         request,
         userId: entitlement.user.id,
-        feature: "browser_companion",
-        entitlement: "pro",
+        plan: "pro",
+        feature: "text",
+        capacityFeature: "browser_companion",
         input: body,
       });
       if (reservation instanceof Response) return reservation;
@@ -1090,11 +1192,13 @@ async function handleDashboardAI(request: Request): Promise<Response> {
     const rateLimited = enforceUserRateLimit(authResult.id, "dashboard-ai", 30);
     if (rateLimited) return rateLimited;
 
-    const reservation = await reserveCapacityOrResponse({
+    const plan = await planForAiRequest(request, authResult);
+    const reservation = await reserveProductEntitlementOrResponse({
       request,
       userId: authResult.id,
-      feature: "ask_unimate",
-      entitlement: await entitlementForAiRequest(request, authResult),
+      plan,
+      feature: "text",
+      capacityFeature: "ask_unimate",
       input: body,
     });
     if (reservation instanceof Response) return reservation;
@@ -1169,27 +1273,29 @@ async function callGroqJson(
   clientSignal?: AbortSignal,
   maxTokens = 2000,
 ): Promise<unknown> {
-  const response = await fetchWithTimeout(
-    "https://api.groq.com/openai/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${groqApiKey}`,
-        "Content-Type": "application/json",
+  const response = await withAiProviderCapacity(() =>
+    fetchWithTimeout(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${groqApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: configuredGroqModel(process.env.GROQ_TEXT_MODEL, DEFAULT_GROQ_TEXT_MODEL),
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userContent },
+          ],
+          temperature: 0.3,
+          max_tokens: maxTokens,
+        }),
       },
-      body: JSON.stringify({
-        model: configuredGroqModel(process.env.GROQ_TEXT_MODEL, DEFAULT_GROQ_TEXT_MODEL),
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userContent },
-        ],
-        temperature: 0.3,
-        max_tokens: maxTokens,
-      }),
-    },
-    AI_PROVIDER_TIMEOUT_MS,
-    new CompanionUpstreamError("AI_TIMEOUT", "ai", 504, "UniMate’s AI request timed out."),
-    clientSignal,
+      AI_PROVIDER_TIMEOUT_MS,
+      new CompanionUpstreamError("AI_TIMEOUT", "ai", 504, "UniMate’s AI request timed out."),
+      clientSignal,
+    ),
   );
 
   if (!response.ok) {
@@ -1252,11 +1358,13 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
     const extractionContext = buildSyllabusExtractionContext(syllabusText);
     const localFallbackItems = extractDatedSyllabusItems(extractionContext);
 
-    const reservation = await reserveCapacityOrResponse({
+    const plan = await planForAiRequest(request, authResult);
+    const reservation = await reserveProductEntitlementOrResponse({
       request,
       userId: authResult.id,
-      feature: "ask_unimate",
-      entitlement: await entitlementForAiRequest(request, authResult),
+      plan,
+      feature: "syllabus",
+      capacityFeature: "ask_unimate",
       input: body,
     });
     if (reservation instanceof Response) {
@@ -1339,11 +1447,13 @@ async function handleExtractResources(request: Request): Promise<Response> {
       return jsonResponse({ error: "Syllabus text is too large" }, 413);
     }
 
-    const reservation = await reserveCapacityOrResponse({
+    const plan = await planForAiRequest(request, authResult);
+    const reservation = await reserveProductEntitlementOrResponse({
       request,
       userId: authResult.id,
-      feature: "ask_unimate",
-      entitlement: await entitlementForAiRequest(request, authResult),
+      plan,
+      feature: "syllabus",
+      capacityFeature: "ask_unimate",
       input: body,
     });
     if (reservation instanceof Response) return reservation;
@@ -1405,11 +1515,13 @@ async function handleGenerateStudyMap(request: Request): Promise<Response> {
       return jsonResponse({ error: "Study items are too large" }, 413);
     }
 
-    const reservation = await reserveCapacityOrResponse({
+    const plan = await planForAiRequest(request, authResult);
+    const reservation = await reserveProductEntitlementOrResponse({
       request,
       userId: authResult.id,
-      feature: "ask_unimate",
-      entitlement: await entitlementForAiRequest(request, authResult),
+      plan,
+      feature: "text",
+      capacityFeature: "ask_unimate",
       input: body,
     });
     if (reservation instanceof Response) return reservation;
@@ -1592,11 +1704,12 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
       return jsonResponse({ error: "Question is too large" }, 413);
     }
 
-    const reservation = await reserveCapacityOrResponse({
+    const reservation = await reserveProductEntitlementOrResponse({
       request,
       userId: entitlement.user.id,
-      feature: "browser_companion",
-      entitlement: "pro",
+      plan: "pro",
+      feature: "screenshot",
+      capacityFeature: "browser_companion",
       input: { question, pageContext, imageCharacters: imageBase64.length },
     });
     if (reservation instanceof Response) return reservation;
@@ -1636,38 +1749,40 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
     // model_not_found, hit GET /openai/v1/models and pick another model that
     // accepts image_url content.
     const callVisionModel = async (systemPrompt: string): Promise<string> => {
-      const groqResponse = await fetchWithTimeout(
-        "https://api.groq.com/openai/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${groqApiKey}`,
-            "Content-Type": "application/json",
+      const groqResponse = await withAiProviderCapacity(() =>
+        fetchWithTimeout(
+          "https://api.groq.com/openai/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${groqApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: configuredGroqModel(process.env.GROQ_VISION_MODEL, DEFAULT_GROQ_VISION_MODEL),
+              // qwen is a reasoning model; without this it spends the whole token
+              // budget "thinking" and never reaches an answer. "none" turns that off.
+              reasoning_effort: "none",
+              messages: [
+                { role: "system", content: systemPrompt },
+                ...history,
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: userContent },
+                    { type: "image_url", image_url: { url: imageBase64 } },
+                  ],
+                },
+              ],
+              // Lower temperature than before — grounded analysis, not creative.
+              temperature: 0.2,
+              max_tokens: companionMaxTokens(userPrompt),
+            }),
           },
-          body: JSON.stringify({
-            model: configuredGroqModel(process.env.GROQ_VISION_MODEL, DEFAULT_GROQ_VISION_MODEL),
-            // qwen is a reasoning model; without this it spends the whole token
-            // budget "thinking" and never reaches an answer. "none" turns that off.
-            reasoning_effort: "none",
-            messages: [
-              { role: "system", content: systemPrompt },
-              ...history,
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: userContent },
-                  { type: "image_url", image_url: { url: imageBase64 } },
-                ],
-              },
-            ],
-            // Lower temperature than before — grounded analysis, not creative.
-            temperature: 0.2,
-            max_tokens: companionMaxTokens(userPrompt),
-          }),
-        },
-        AI_PROVIDER_TIMEOUT_MS,
-        new CompanionUpstreamError("AI_TIMEOUT", "ai", 504, "UniMate’s AI request timed out."),
-        request.signal,
+          AI_PROVIDER_TIMEOUT_MS,
+          new CompanionUpstreamError("AI_TIMEOUT", "ai", 504, "UniMate’s AI request timed out."),
+          request.signal,
+        ),
       );
 
       if (!groqResponse.ok) {
@@ -2422,15 +2537,57 @@ export default {
     // A dependency-free readiness probe for deployment smoke tests. It exposes
     // no environment values and makes no paid or third-party requests.
     if (url.pathname === "/api/health") {
-      const ready = Boolean(
-        process.env.VITE_SUPABASE_URL &&
-        process.env.VITE_SUPABASE_ANON_KEY &&
-        process.env.GROQ_API_KEY,
-      );
+      const ready = Boolean(process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY);
+      const aiReady = aiSystemMode() !== "off" && Boolean(process.env.GROQ_API_KEY);
       return withSecurityHeaders(
-        jsonResponse({ status: ready ? "ready" : "configuration_required" }, ready ? 200 : 503, {
+        jsonResponse(
+          { status: ready ? "ready" : "configuration_required", ai: aiReady ? "ready" : "paused" },
+          ready ? 200 : 503,
+          { "cache-control": "no-store" },
+        ),
+        request,
+      );
+    }
+
+    // Operator-only configuration diagnostics. This endpoint never probes paid
+    // dependencies and never returns secret values or identifiers.
+    if (url.pathname === "/api/readiness") {
+      if (request.method !== "GET") {
+        return withSecurityHeaders(
+          jsonResponse({ error: "Method not allowed" }, 405, {
+            allow: "GET",
+            "cache-control": "no-store",
+          }),
+          request,
+        );
+      }
+      if (
+        !readinessKeyMatches(
+          request.headers.get("x-unimate-readiness-key"),
+          process.env.OPERATIONS_READINESS_KEY,
+        )
+      ) {
+        return withSecurityHeaders(
+          jsonResponse({ error: "Not found" }, 404, { "cache-control": "no-store" }),
+          request,
+        );
+      }
+      const report = buildOperationalReadiness(process.env);
+      return withSecurityHeaders(
+        jsonResponse(report, report.status === "configuration_ready" ? 200 : 503, {
           "cache-control": "no-store",
         }),
+        request,
+      );
+    }
+
+    if (url.pathname === "/api/signup-status") {
+      return withSecurityHeaders(
+        jsonResponse(
+          { enabled: process.env.SIGNUPS_ENABLED?.trim().toLowerCase() !== "false" },
+          200,
+          { "cache-control": "no-store" },
+        ),
         request,
       );
     }
