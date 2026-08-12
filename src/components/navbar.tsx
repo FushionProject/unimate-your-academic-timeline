@@ -80,6 +80,9 @@ export function Navbar() {
             <Link to="/pricing" className={navLinkClass} activeProps={activeNavProps}>
               Pricing
             </Link>
+            <Link to="/settings" className={navLinkClass} activeProps={activeNavProps}>
+              Settings
+            </Link>
           </nav>
         )}
         <div className="flex items-center gap-2">
@@ -164,6 +167,13 @@ export function Navbar() {
             activeProps={activeNavProps}
           >
             Pricing
+          </Link>
+          <Link
+            to="/settings"
+            className="inline-flex min-h-10 items-center whitespace-nowrap rounded-md px-2 text-muted-foreground hover:text-foreground"
+            activeProps={activeNavProps}
+          >
+            Settings
           </Link>
         </nav>
       )}

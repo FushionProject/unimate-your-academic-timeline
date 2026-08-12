@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UpgradeRouteImport } from './routes/upgrade'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SigninRouteImport } from './routes/signin'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ResultsRouteImport } from './routes/results'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PricingRouteImport } from './routes/pricing'
@@ -19,6 +20,7 @@ import { Route as PlannerRouteImport } from './routes/planner'
 import { Route as NotesRouteImport } from './routes/notes'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as CompanionSetupRouteImport } from './routes/companion-setup'
 import { Route as BulletinRouteImport } from './routes/bulletin'
 import { Route as AskRouteImport } from './routes/ask'
 import { Route as IndexRouteImport } from './routes/index'
@@ -36,6 +38,11 @@ const SignupRoute = SignupRouteImport.update({
 const SigninRoute = SigninRouteImport.update({
   id: '/signin',
   path: '/signin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResultsRoute = ResultsRouteImport.update({
@@ -73,6 +80,11 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CompanionSetupRoute = CompanionSetupRouteImport.update({
+  id: '/companion-setup',
+  path: '/companion-setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BulletinRoute = BulletinRouteImport.update({
   id: '/bulletin',
   path: '/bulletin',
@@ -93,6 +105,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ask': typeof AskRoute
   '/bulletin': typeof BulletinRoute
+  '/companion-setup': typeof CompanionSetupRoute
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/notes': typeof NotesRoute
@@ -100,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/pricing': typeof PricingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
   '/upgrade': typeof UpgradeRoute
@@ -108,6 +122,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ask': typeof AskRoute
   '/bulletin': typeof BulletinRoute
+  '/companion-setup': typeof CompanionSetupRoute
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/notes': typeof NotesRoute
@@ -115,6 +130,7 @@ export interface FileRoutesByTo {
   '/pricing': typeof PricingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
   '/upgrade': typeof UpgradeRoute
@@ -124,6 +140,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/ask': typeof AskRoute
   '/bulletin': typeof BulletinRoute
+  '/companion-setup': typeof CompanionSetupRoute
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/notes': typeof NotesRoute
@@ -131,6 +148,7 @@ export interface FileRoutesById {
   '/pricing': typeof PricingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/settings': typeof SettingsRoute
   '/signin': typeof SigninRoute
   '/signup': typeof SignupRoute
   '/upgrade': typeof UpgradeRoute
@@ -141,6 +159,7 @@ export interface FileRouteTypes {
     | '/'
     | '/ask'
     | '/bulletin'
+    | '/companion-setup'
     | '/dashboard'
     | '/forgot-password'
     | '/notes'
@@ -148,6 +167,7 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/reset-password'
     | '/results'
+    | '/settings'
     | '/signin'
     | '/signup'
     | '/upgrade'
@@ -156,6 +176,7 @@ export interface FileRouteTypes {
     | '/'
     | '/ask'
     | '/bulletin'
+    | '/companion-setup'
     | '/dashboard'
     | '/forgot-password'
     | '/notes'
@@ -163,6 +184,7 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/reset-password'
     | '/results'
+    | '/settings'
     | '/signin'
     | '/signup'
     | '/upgrade'
@@ -171,6 +193,7 @@ export interface FileRouteTypes {
     | '/'
     | '/ask'
     | '/bulletin'
+    | '/companion-setup'
     | '/dashboard'
     | '/forgot-password'
     | '/notes'
@@ -178,6 +201,7 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/reset-password'
     | '/results'
+    | '/settings'
     | '/signin'
     | '/signup'
     | '/upgrade'
@@ -187,6 +211,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AskRoute: typeof AskRoute
   BulletinRoute: typeof BulletinRoute
+  CompanionSetupRoute: typeof CompanionSetupRoute
   DashboardRoute: typeof DashboardRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   NotesRoute: typeof NotesRoute
@@ -194,6 +219,7 @@ export interface RootRouteChildren {
   PricingRoute: typeof PricingRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ResultsRoute: typeof ResultsRoute
+  SettingsRoute: typeof SettingsRoute
   SigninRoute: typeof SigninRoute
   SignupRoute: typeof SignupRoute
   UpgradeRoute: typeof UpgradeRoute
@@ -220,6 +246,13 @@ declare module '@tanstack/react-router' {
       path: '/signin'
       fullPath: '/signin'
       preLoaderRoute: typeof SigninRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/results': {
@@ -271,6 +304,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/companion-setup': {
+      id: '/companion-setup'
+      path: '/companion-setup'
+      fullPath: '/companion-setup'
+      preLoaderRoute: typeof CompanionSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/bulletin': {
       id: '/bulletin'
       path: '/bulletin'
@@ -299,6 +339,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AskRoute: AskRoute,
   BulletinRoute: BulletinRoute,
+  CompanionSetupRoute: CompanionSetupRoute,
   DashboardRoute: DashboardRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   NotesRoute: NotesRoute,
@@ -306,6 +347,7 @@ const rootRouteChildren: RootRouteChildren = {
   PricingRoute: PricingRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ResultsRoute: ResultsRoute,
+  SettingsRoute: SettingsRoute,
   SigninRoute: SigninRoute,
   SignupRoute: SignupRoute,
   UpgradeRoute: UpgradeRoute,

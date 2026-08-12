@@ -273,12 +273,13 @@ function Dashboard() {
                 <Puzzle className="h-4 w-4 text-primary" aria-hidden="true" /> Add Browser Companion
               </a>
             ) : (
-              <span
-                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-muted-foreground"
-                title="The Chrome Web Store listing is not public yet"
+              <a
+                href="/companion-setup"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary/60 hover:bg-[#F5C518]/10"
               >
-                <Puzzle className="h-4 w-4" aria-hidden="true" /> Companion coming soon
-              </span>
+                <Puzzle className="h-4 w-4 text-primary" aria-hidden="true" /> Set up Browser
+                Companion
+              </a>
             )}
             <Link
               to="/planner"

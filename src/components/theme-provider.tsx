@@ -4,6 +4,7 @@ type Theme = "light" | "dark";
 
 interface ThemeContextType {
   theme: Theme;
+  setTheme: (theme: Theme) => void;
   toggle: () => void;
 }
 
@@ -26,8 +27,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     applyTheme(themeToApply);
   }, []);
 
-  const toggle = () => {
-    const nextTheme: Theme = theme === "light" ? "dark" : "light";
+  const updateTheme = (nextTheme: Theme) => {
     setTheme(nextTheme);
     if (typeof window !== "undefined") {
       localStorage.setItem("theme", nextTheme);
@@ -35,7 +35,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  return <ThemeContext.Provider value={{ theme, toggle }}>{children}</ThemeContext.Provider>;
+  const toggle = () => updateTheme(theme === "light" ? "dark" : "light");
+
+  return (
+    <ThemeContext.Provider value={{ theme, setTheme: updateTheme, toggle }}>
+      {children}
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme() {

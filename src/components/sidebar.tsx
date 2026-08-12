@@ -8,15 +8,13 @@ import {
   IconBulletin,
   IconNotes,
   IconAsk,
-  IconFlame,
+  IconSettings,
   IconChevronLeft,
   IconChevronRight,
 } from "./icons";
-import { useStudyStreak } from "../hooks/use-study-streak";
 
 export function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { streak, bestStreak } = useStudyStreak();
 
   const menuItems = [
     { icon: IconHome, label: "Home", to: "/" },
@@ -26,6 +24,7 @@ export function Sidebar() {
     { icon: IconNotes, label: "Notes", to: "/notes" },
     { icon: IconAsk, label: "Ask UniMate", to: "/ask" },
     { icon: Sparkles, label: "Pricing", to: "/pricing" },
+    { icon: IconSettings, label: "Settings", to: "/settings" },
   ];
 
   return (
@@ -71,19 +70,6 @@ export function Sidebar() {
           </Link>
         ))}
       </nav>
-
-      {/* Study Streak Indicator */}
-      <div className="p-4 border-t border-gray-800">
-        <div className="flex items-center gap-3 px-3 py-2">
-          <IconFlame className="h-5 w-5 text-orange-500 flex-shrink-0" />
-          {isExpanded && (
-            <div className="flex flex-col">
-              <span className="text-sm font-bold text-orange-500">{streak} day streak</span>
-              <span className="text-xs text-gray-400">Best: {bestStreak} days</span>
-            </div>
-          )}
-        </div>
-      </div>
     </aside>
   );
 }

@@ -196,8 +196,8 @@ function Ask() {
       }
       setConversationNotice(
         activeBrowserConversationId
-          ? "New chat created and selected. Choose “Use in browser” to open it in the extension."
-          : "New chat created and connected to the extension.",
+          ? "New chat created. Choose “Use in Companion” to make it the extension’s active chat."
+          : "New chat created and selected for the Browser Companion.",
       );
     } catch {
       setConversationNotice("");
@@ -243,11 +243,11 @@ function Ask() {
   const handleUseInBrowser = async (conversationId: string) => {
     if (!userId || conversationBusy) return;
     setConversationBusy(true);
-    setConversationNotice("Connecting this chat to the extension…");
+    setConversationNotice("Selecting this chat for the Companion…");
     try {
       await setBrowserConversation(userId, conversationId);
       setActiveBrowserConversationId(conversationId);
-      setConversationNotice("Connected. The extension will show this chat when you return to it.");
+      setConversationNotice("Selected. The installed Companion will open this chat.");
     } catch {
       setConversationNotice("");
       setHistoryNotice("The browser conversation could not be changed.");
@@ -453,10 +453,10 @@ function Ask() {
                           ? "bg-primary text-primary-foreground"
                           : "bg-background text-muted-foreground hover:text-foreground"
                       }`}
-                      aria-label={`${activeInBrowser ? "Currently open" : "Open"} ${conversation.title} in Browser Companion`}
+                      aria-label={`${activeInBrowser ? "Currently selected" : "Select"} ${conversation.title} for Browser Companion`}
                     >
                       <MonitorCheck className="h-3 w-3" />
-                      {activeInBrowser ? "In browser" : "Use in browser"}
+                      {activeInBrowser ? "Companion chat" : "Use in Companion"}
                     </button>
                     <button
                       type="button"
