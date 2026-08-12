@@ -71,10 +71,12 @@ function CompanionSetup() {
                 )}
               </SetupStep>
               <SetupStep number="2" title="Install the Chrome extension">
-                {url
-                  ? "Open the verified Chrome Web Store listing and choose Add to Chrome."
-                  : "The extension is built, but its public Chrome Web Store link has not been connected to UniMate yet."}
-                {url && (
+                {!isPro
+                  ? "Installation unlocks after this account has confirmed Pro access."
+                  : url
+                    ? "Open the verified Chrome Web Store listing and choose Add to Chrome."
+                    : "The extension is built, but its public Chrome Web Store link has not been connected to UniMate yet."}
+                {isPro && url && (
                   <a
                     href={url}
                     target="_blank"
@@ -106,12 +108,18 @@ function CompanionSetup() {
                 label={isPro ? "Pro access active" : "Pro access required for Companion AI"}
               />
               <StatusRow
-                ready={Boolean(url)}
+                ready={isPro && Boolean(url)}
                 icon={MonitorCheck}
-                label={url ? "Public install link ready" : "Chrome Web Store link pending"}
+                label={
+                  !isPro
+                    ? "Installation locked until Pro is active"
+                    : url
+                      ? "Public install link ready"
+                      : "Chrome Web Store link pending"
+                }
               />
             </div>
-            {!url && (
+            {isPro && !url && (
               <div className="mt-6 rounded-2xl border border-primary/40 bg-primary/10 p-4">
                 <p className="text-sm font-semibold">Why you cannot enable it yet</p>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">

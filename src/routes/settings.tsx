@@ -102,17 +102,30 @@ function Settings() {
               <div>
                 <h2 className="font-semibold">Browser Companion</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  The extension is a separate Chrome installation. Once installed, sign in with this
-                  same UniMate account.
+                  {planLoading
+                    ? "Checking your Companion access…"
+                    : isPro
+                      ? "Your Pro account can install the extension and sign in with this same UniMate account."
+                      : "Browser Companion is available with UniMate Pro."}
                 </p>
               </div>
             </div>
-            <Link
-              to="/dashboard"
-              className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"
-            >
-              View setup on Dashboard
-            </Link>
+            {!planLoading &&
+              (isPro ? (
+                <Link
+                  to="/companion-setup"
+                  className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"
+                >
+                  Set up Browser Companion
+                </Link>
+              ) : (
+                <Link
+                  to="/upgrade"
+                  className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"
+                >
+                  Upgrade to Pro
+                </Link>
+              ))}
           </section>
 
           <section className="rounded-3xl border border-border bg-card p-5 shadow-[var(--shadow-card)] sm:p-7 lg:col-span-2">

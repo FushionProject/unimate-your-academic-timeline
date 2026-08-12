@@ -144,6 +144,11 @@ function RootComponent() {
     pathname === "/signup" ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password";
+  const isAuthPage =
+    pathname === "/signin" ||
+    pathname === "/signup" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password";
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -163,7 +168,14 @@ function RootComponent() {
                 id="main-content"
                 className={`min-w-0 flex-1 md:ml-16 ${isPublicPage ? "" : "p-4 sm:p-6"}`}
               >
-                {!isPublicPage && <DateWidget />}
+                {!isAuthPage &&
+                  (isPublicPage ? (
+                    <div className="px-4 pt-4 sm:px-6 sm:pt-6">
+                      <DateWidget />
+                    </div>
+                  ) : (
+                    <DateWidget />
+                  ))}
                 <Outlet />
               </div>
             </div>

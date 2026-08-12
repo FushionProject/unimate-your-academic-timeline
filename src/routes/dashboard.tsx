@@ -40,6 +40,7 @@ import {
 } from "../lib/semester-pressure";
 import { useSemesterEndDate } from "../hooks/use-semester-end-date";
 import { formatSemesterEndDate } from "../lib/semester-date";
+import { useIsPro } from "../lib/profile";
 
 export const Route = createFileRoute("/dashboard")({
   component: () => (
@@ -114,6 +115,7 @@ function Dashboard() {
   const [semesterEndInput, setSemesterEndInput] = useState(semesterEndDate ?? "");
   const [semesterDateMessage, setSemesterDateMessage] = useState("");
   const storeUrl = companionStoreUrl();
+  const { data: isPro, isLoading: proLoading } = useIsPro();
 
   useEffect(() => setSemesterEndInput(semesterEndDate ?? ""), [semesterEndDate]);
 
@@ -258,7 +260,20 @@ function Dashboard() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {companionInstalled ? (
+            {proLoading ? (
+              <span className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Checking Companion
+                access
+              </span>
+            ) : !isPro ? (
+              <Link
+                to="/upgrade"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-primary/50 bg-primary/10 px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-primary/20"
+              >
+                <Puzzle className="h-4 w-4 text-primary" aria-hidden="true" /> Upgrade to unlock
+                Companion
+              </Link>
+            ) : companionInstalled ? (
               <span className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-[#F5C518]/45 bg-[#F5C518]/10 px-4 py-2.5 text-sm font-semibold text-foreground">
                 <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" /> Companion
                 installed
