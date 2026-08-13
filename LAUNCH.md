@@ -18,12 +18,22 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - [x] Browser Companion runtime stability passes five consecutive times
 - [x] Authentication, entitlement, capacity, grounding, and billing safeguards pass
 - [x] Secret scan passes
-- [ ] Dependency advisories are resolved or explicitly accepted
-- [ ] Production environment variables reviewed without exposing values
+- [x] Dependency advisories are resolved or explicitly accepted
+- [x] Production environment variables reviewed without exposing values
 - [x] Rollback commit and deployment procedure confirmed
-- [x] Launch owner records the exact release commit: `7040bd8`
+- [ ] Launch owner records the exact deployment commit after this checklist pass is frozen
 
 Evidence recorded August 12, 2026: production build passed; ESLint returned zero errors and eight existing Fast Refresh warnings; complete Companion and grounding suites passed; runtime stability passed five consecutive times; authentication, dashboard, entitlement, AI capacity, billing, production-hardening, resilience, and operational-readiness suites passed; secret scan passed across 224 repository files; `git diff --check` passed. Rollback point before the latest frontend status optimization: `9482b95`.
+
+Dependency evidence recorded August 12, 2026: a fresh `npm audit fix` changed only
+`package-lock.json`, reduced 13 advisories to zero, and passed the full release,
+Companion, lint, build, and secret-scan matrix in an isolated worktree before the
+lockfile was copied into this release candidate.
+
+Configuration evidence recorded August 12, 2026: the privacy-safe environment
+audit found Supabase, Groq, and SerpAPI configured locally. Stripe, the Supabase
+server writer, operations keys, canonical production origin, and Store URL are
+not configured. `npm run release:readiness` now reports these without values.
 
 ## Stripe sandbox
 
@@ -55,14 +65,21 @@ Evidence: [Stripe sandbox manual tests](./STRIPE_SANDBOX_MANUAL_TESTS.md)
 
 - [ ] Production backup created and restore procedure tested
 - [ ] Existing `stripe_customer_id` values checked for duplicates
-- [ ] Stripe billing hardening migration reviewed
-- [ ] Migration rollback reviewed
+- [x] Stripe billing hardening migration reviewed
+- [x] Migration rollback reviewed
 - [x] AI usage migration reviewed, if required for launch quotas
 - [ ] RLS policies reviewed for all student-owned data
 - [x] New-account default confirmed as Free, never Pro
 - [x] Two-syllabus Free allowance enforced server-side
 - [x] Ask UniMate and Browser Companion confirmed Pro-only server-side
 - [ ] No migration is marked complete until applied and verified manually
+
+Live audit evidence recorded August 12, 2026: all existing student tables have
+RLS enabled, 17 of 18 profiles are Free, and the live project is healthy. The
+audit also confirmed that the billing column and durable AI tables are absent,
+and that the signup trigger remains callable by client roles. See
+`SUPABASE_LIVE_AUDIT_2026-08-12.md`. A migration and exact rollback are prepared
+but intentionally unapplied.
 
 ## AI capacity and cost controls
 
@@ -178,7 +195,7 @@ Complete these in order. Do not begin live billing or public promotion before st
 
 1. **Connect Stripe sandbox:** add server-only test credentials, a $5.99 monthly test Price, webhook signing secret, and canonical local origin. Complete every test in `STRIPE_SANDBOX_MANUAL_TESTS.md`.
 2. **Review Supabase production state:** create a backup, inspect duplicate Stripe customer IDs, compare remote RLS and triggers with repository SQL, then stage the capacity/entitlement and Stripe uniqueness migrations. Do not apply directly to production first.
-3. **Resolve dependency gate:** 13 advisories currently remain (2 low, 2 moderate, 9 high, 0 critical). The isolated dependency-upgrade branch is stale and was already marked not ready to merge; prepare and test a fresh upgrade from this release candidate instead.
+3. **Dependency gate cleared:** the fresh lockfile repair has zero known npm advisories and passed the full automated suite. Re-audit immediately before deployment.
 4. **Configure the production environment:** review every required variable, set global AI/provider spending ceilings, and keep live Stripe disabled.
 5. **Publish legal/support surfaces:** Privacy Policy, Terms, subscription/cancellation/refund language, support email, and incident/status communication.
 6. **Prepare and submit the Companion:** configure it against the HTTPS production origin, perform the installed-extension smoke test, package it, submit to Chrome Web Store, and connect the approved listing URL to `VITE_COMPANION_STORE_URL`.

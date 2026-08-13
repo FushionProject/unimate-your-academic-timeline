@@ -19,6 +19,7 @@
     "capacity:test": "node --experimental-strip-types browser-companion/tests/ai-capacity.test.ts",
     "resilience:test": "node browser-companion/tests/launch-resilience.test.mjs",
     "operations:test": "node --experimental-strip-types browser-companion/tests/operational-readiness.test.mjs",
+    "release:readiness": "node scripts/release-readiness.mjs",
     "entitlements:test": "node --experimental-strip-types browser-companion/tests/entitlement-policy.test.ts && node browser-companion/tests/entitlement-migration.test.mjs && node browser-companion/tests/entitlement-server-wiring.test.mjs",
     "secret:scan": "node scripts/secret-scan.mjs",
     "companion:test:v2": "node browser-companion/tests/context-pipeline.test.mjs && node browser-companion/tests/background.test.mjs && node browser-companion/tests/grounding.test.mjs",
