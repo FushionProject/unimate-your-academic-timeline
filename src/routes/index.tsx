@@ -169,6 +169,15 @@ function Index() {
               <Link to="/pricing" className="hover:text-foreground">
                 Pricing
               </Link>
+              <Link to="/privacy" className="hover:text-foreground">
+                Privacy
+              </Link>
+              <Link to="/terms" className="hover:text-foreground">
+                Terms
+              </Link>
+              <Link to="/support" className="hover:text-foreground">
+                Support
+              </Link>
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <MonitorCheck className="h-4 w-4" /> Browser Companion ready

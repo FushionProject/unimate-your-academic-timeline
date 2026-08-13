@@ -98,14 +98,16 @@ Evidence: [Stripe sandbox manual tests](./STRIPE_SANDBOX_MANUAL_TESTS.md)
 
 - [ ] Privacy Policy published and linked
 - [ ] Terms of Service published and linked
-- [ ] Subscription, cancellation, and refund language reviewed
-- [ ] Student-data and screenshot disclosures reviewed
+- [x] Subscription, cancellation, and refund language drafted for owner/legal review
+- [x] Student-data and screenshot disclosures drafted and linked in Companion consent
 - [ ] Support email receives and sends successfully
 - [ ] Password reset email verified
 - [ ] Email-confirmation flow verified
 - [ ] Public status or outage communication channel prepared
 - [ ] Incident response runbook reviewed
 - [ ] First support email handled and response time recorded
+
+Draft evidence recorded August 12, 2026: `/privacy`, `/terms`, and `/support` exist in the release build; the Home footer links all three; the Companion consent screen links to `https://unimate.site/privacy`; production build, Companion Store-readiness tests, and secret scan pass. Publication boxes remain open until the production domain serves these pages and the owner/legal reviewer approves the wording. The `support@unimate.site` mailbox must be verified before launch.
 
 ## Production activation
 

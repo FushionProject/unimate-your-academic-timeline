@@ -458,6 +458,7 @@
         ${error ? `<div class="um-status error" role="alert">${escapeHtml(error)}</div>` : ""}
         <button class="um-primary um-consent-accept" type="button">Allow and continue</button>
         <button class="um-secondary um-consent-decline" type="button">Not now</button>
+        <p><a href="https://unimate.site/privacy" target="_blank" rel="noreferrer">Read UniMate's Privacy Policy</a></p>
       </div>`;
     body.querySelector(".um-consent-accept").addEventListener("click", handlePrivacyConsent);
     body.querySelector(".um-consent-decline").addEventListener("click", () => toggle(false));

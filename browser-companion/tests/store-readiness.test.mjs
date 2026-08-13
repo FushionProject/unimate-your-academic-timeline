@@ -25,6 +25,7 @@ assert.match(content, /one-time image of the visible tab/);
 assert.match(content, /It does not record continuously/);
 assert.match(content, /Allow and continue/);
 assert.match(content, /Not now/);
+assert.match(content, /https:\/\/unimate\.site\/privacy/);
 assert.match(background, /PRIVACY_CONSENT_VERSION = 1/);
 assert.match(
   background,
