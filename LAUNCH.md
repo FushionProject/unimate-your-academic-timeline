@@ -21,7 +21,7 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - [ ] Dependency advisories are resolved or explicitly accepted
 - [ ] Production environment variables reviewed without exposing values
 - [x] Rollback commit and deployment procedure confirmed
-- [x] Launch owner records the exact release commit: `057a0b1`
+- [x] Launch owner records the exact release commit: `7040bd8`
 
 Evidence recorded August 12, 2026: production build passed; ESLint returned zero errors and eight existing Fast Refresh warnings; complete Companion and grounding suites passed; runtime stability passed five consecutive times; authentication, dashboard, entitlement, AI capacity, billing, production-hardening, resilience, and operational-readiness suites passed; secret scan passed across 224 repository files; `git diff --check` passed. Rollback point before the latest frontend status optimization: `9482b95`.
 
@@ -106,10 +106,14 @@ Evidence: [Stripe sandbox manual tests](./STRIPE_SANDBOX_MANUAL_TESTS.md)
 - [ ] Password reset email verified
 - [ ] Email-confirmation flow verified
 - [ ] Public status or outage communication channel prepared
-- [ ] Incident response runbook reviewed
+- [x] Incident response runbook reviewed
 - [ ] First support email handled and response time recorded
 
 Draft evidence recorded August 12, 2026: `/privacy`, `/terms`, and `/support` exist in the release build; the Home footer links all three; the Companion consent screen links to `https://unimate.site/privacy`; production build, Companion Store-readiness tests, and secret scan pass. Publication boxes remain open until the production domain serves these pages and the owner/legal reviewer approves the wording. The `support@unimate.site` mailbox must be verified before launch.
+
+Incident evidence recorded August 12, 2026: `LAUNCH_INCIDENT_RUNBOOK.md` defines
+severity, containment, communication, recovery, and privacy-safe incident records.
+External alert routing, owner assignment, and status-channel testing remain open.
 
 ## Production activation
 
@@ -174,7 +178,7 @@ Complete these in order. Do not begin live billing or public promotion before st
 
 1. **Connect Stripe sandbox:** add server-only test credentials, a $5.99 monthly test Price, webhook signing secret, and canonical local origin. Complete every test in `STRIPE_SANDBOX_MANUAL_TESTS.md`.
 2. **Review Supabase production state:** create a backup, inspect duplicate Stripe customer IDs, compare remote RLS and triggers with repository SQL, then stage the capacity/entitlement and Stripe uniqueness migrations. Do not apply directly to production first.
-3. **Resolve dependency gate:** 12 advisories currently remain (2 low, 2 moderate, 8 high, 0 critical). Review the isolated dependency-upgrade branch and rerun this entire release suite after any lockfile change.
+3. **Resolve dependency gate:** 13 advisories currently remain (2 low, 2 moderate, 9 high, 0 critical). The isolated dependency-upgrade branch is stale and was already marked not ready to merge; prepare and test a fresh upgrade from this release candidate instead.
 4. **Configure the production environment:** review every required variable, set global AI/provider spending ceilings, and keep live Stripe disabled.
 5. **Publish legal/support surfaces:** Privacy Policy, Terms, subscription/cancellation/refund language, support email, and incident/status communication.
 6. **Prepare and submit the Companion:** configure it against the HTTPS production origin, perform the installed-extension smoke test, package it, submit to Chrome Web Store, and connect the approved listing URL to `VITE_COMPANION_STORE_URL`.
