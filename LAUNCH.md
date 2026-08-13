@@ -21,7 +21,7 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - [x] Dependency advisories are resolved or explicitly accepted
 - [x] Production environment variables reviewed without exposing values
 - [x] Rollback commit and deployment procedure confirmed
-- [ ] Launch owner records the exact deployment commit after this checklist pass is frozen
+- [x] Launch owner records the exact release commit: `8f02d70`
 
 Evidence recorded August 12, 2026: production build passed; ESLint returned zero errors and eight existing Fast Refresh warnings; complete Companion and grounding suites passed; runtime stability passed five consecutive times; authentication, dashboard, entitlement, AI capacity, billing, production-hardening, resilience, and operational-readiness suites passed; secret scan passed across 224 repository files; `git diff --check` passed. Rollback point before the latest frontend status optimization: `9482b95`.
 
