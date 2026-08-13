@@ -52,11 +52,11 @@ function AskAccessGate() {
     );
   }
 
-  if (!billing.data?.isPro) return <AskProIntroduction unavailable={billing.isError} />;
+  if (!billing.data?.isPro) return <AskProIntroduction />;
   return <Ask />;
 }
 
-function AskProIntroduction({ unavailable }: { unavailable: boolean }) {
+function AskProIntroduction() {
   return (
     <main className="min-h-[calc(100vh-73px)] bg-background px-4 py-10 sm:px-6 sm:py-14">
       <div className="mx-auto max-w-4xl">
@@ -101,11 +101,6 @@ function AskProIntroduction({ unavailable }: { unavailable: boolean }) {
               Free accounts can still use the timeline, dashboard, notes, and two syllabus parses.
               AI conversations and screen-aware help unlock with Pro.
             </p>
-            {unavailable && (
-              <p className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
-                We couldn’t confirm your plan. Refresh before upgrading if you already have Pro.
-              </p>
-            )}
             <div className="mt-6 flex flex-col gap-2">
               <Link
                 to="/upgrade"

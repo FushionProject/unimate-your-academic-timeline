@@ -15,6 +15,7 @@ import { AuthProvider } from "../lib/auth-context";
 import { Sidebar } from "../components/sidebar";
 import { Navbar } from "../components/navbar";
 import { DateWidget } from "../components/date-widget";
+import { useBillingStatus } from "../lib/profile";
 // import { ScreenAssistant } from "../components/screen-assistant"; // Hidden for now — future rollout
 
 function NotFoundComponent() {
@@ -153,6 +154,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <BillingStatusWarmup />
         <ThemeProvider>
           <div className="min-h-screen flex flex-col">
             <a
@@ -185,4 +187,9 @@ function RootComponent() {
       </AuthProvider>
     </QueryClientProvider>
   );
+}
+
+function BillingStatusWarmup() {
+  useBillingStatus();
+  return null;
 }

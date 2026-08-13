@@ -24,11 +24,18 @@ export interface BillingStatus {
   temporarilyUnavailable?: boolean;
 }
 
+const BILLING_STATUS_FRESH_MS = 2 * 60 * 1000;
+const BILLING_STATUS_CACHE_MS = 30 * 60 * 1000;
+
 export function useBillingStatus(options?: { refetchInterval?: number | false }) {
   const { user, session } = useAuth();
   return useQuery({
     queryKey: ["billing-status", user?.id],
     enabled: Boolean(user && session?.access_token),
+    staleTime: BILLING_STATUS_FRESH_MS,
+    gcTime: BILLING_STATUS_CACHE_MS,
+    retry: false,
+    refetchOnMount: false,
     refetchInterval: options?.refetchInterval ?? false,
     queryFn: async (): Promise<BillingStatus> => {
       const response = await fetch("/api/billing-status", {
