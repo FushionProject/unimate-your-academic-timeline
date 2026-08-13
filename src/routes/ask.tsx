@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
 import {
   Send,
   ExternalLink,
@@ -10,6 +10,8 @@ import {
   MonitorCheck,
   MessageSquarePlus,
   LoaderCircle,
+  LockKeyhole,
+  Puzzle,
 } from "lucide-react";
 import { askUniMate } from "../functions/ask-unimate";
 import ReactMarkdown from "react-markdown";
@@ -17,6 +19,7 @@ import { LogoMark } from "../components/logo-mark";
 import { useCourses, useAssignments, getAcademicContext } from "../lib/courses";
 import { ProtectedRoute } from "../components/protected-route";
 import { useAuth } from "../lib/auth-context";
+import { useBillingStatus } from "../lib/profile";
 import {
   createCompanionConversation,
   deleteCompanionConversation,
@@ -30,10 +33,121 @@ import {
 export const Route = createFileRoute("/ask")({
   component: () => (
     <ProtectedRoute>
-      <Ask />
+      <AskAccessGate />
     </ProtectedRoute>
   ),
 });
+
+function AskAccessGate() {
+  const billing = useBillingStatus();
+
+  if (billing.isLoading) {
+    return (
+      <main className="grid min-h-[calc(100vh-73px)] place-items-center bg-background px-4">
+        <div className="text-center" role="status" aria-live="polite">
+          <LoaderCircle className="mx-auto h-6 w-6 animate-spin text-primary" aria-hidden="true" />
+          <p className="mt-3 text-sm font-medium text-foreground">Checking your UniMate plan…</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!billing.data?.isPro) return <AskProIntroduction unavailable={billing.isError} />;
+  return <Ask />;
+}
+
+function AskProIntroduction({ unavailable }: { unavailable: boolean }) {
+  return (
+    <main className="min-h-[calc(100vh-73px)] bg-background px-4 py-10 sm:px-6 sm:py-14">
+      <div className="mx-auto max-w-4xl">
+        <header className="text-center">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-primary">
+            <Puzzle className="h-6 w-6 text-primary-foreground" aria-hidden="true" />
+          </div>
+          <p className="mt-5 text-xs font-bold uppercase tracking-[0.2em] text-primary">
+            Ask UniMate + Browser Companion
+          </p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+            Your AI study partner is included with Pro
+          </h1>
+          <p className="mx-auto mt-3 max-w-2xl leading-7 text-muted-foreground">
+            Ask questions here, continue the same conversation beside any study page, and get help
+            with what is visible on your screen.
+          </p>
+        </header>
+
+        <section className="mt-8 grid overflow-hidden rounded-3xl border border-border bg-card shadow-[var(--shadow-card)] md:grid-cols-[1fr_0.78fr]">
+          <div className="p-6 sm:p-8">
+            <h2 className="text-xl font-semibold">How it works</h2>
+            <ol className="mt-6 space-y-5">
+              <ProStep number="1" title="Upgrade to UniMate Pro">
+                Unlock Ask UniMate and the Browser Companion for this account.
+              </ProStep>
+              <ProStep number="2" title="Install the Chrome extension">
+                Once Pro is active, UniMate guides you to the verified extension listing.
+              </ProStep>
+              <ProStep number="3" title="Use one conversation everywhere">
+                Choose “Use in browser” and continue that chat from UniMate or the extension.
+              </ProStep>
+            </ol>
+          </div>
+
+          <aside className="border-t border-border bg-secondary/45 p-6 sm:p-8 md:border-l md:border-t-0">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-background">
+              <LockKeyhole className="h-5 w-5 text-primary" aria-hidden="true" />
+            </div>
+            <h2 className="mt-4 font-semibold">Pro access required</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Free accounts can still use the timeline, dashboard, notes, and two syllabus parses.
+              AI conversations and screen-aware help unlock with Pro.
+            </p>
+            {unavailable && (
+              <p className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
+                We couldn’t confirm your plan. Refresh before upgrading if you already have Pro.
+              </p>
+            )}
+            <div className="mt-6 flex flex-col gap-2">
+              <Link
+                to="/upgrade"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"
+              >
+                Get UniMate Pro · $5.99/month
+              </Link>
+              <Link
+                to="/companion-setup"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background px-4 text-sm font-semibold"
+              >
+                See Browser Companion setup
+              </Link>
+            </div>
+          </aside>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function ProStep({
+  number,
+  title,
+  children,
+}: {
+  number: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <li className="flex gap-4">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+        {number}
+      </span>
+      <div>
+        <h3 className="font-semibold">{title}</h3>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">{children}</p>
+      </div>
+    </li>
+  );
+}
 
 interface Message {
   id: string;
