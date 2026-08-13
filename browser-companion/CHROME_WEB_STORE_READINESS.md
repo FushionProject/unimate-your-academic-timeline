@@ -1,6 +1,6 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-Status reviewed: August 1, 2026. This is a local readiness package only. Nothing
+Status reviewed: August 12, 2026. This is a local readiness package only. Nothing
 was uploaded, submitted, purchased, or published.
 
 ## Release decision
@@ -81,8 +81,8 @@ practice change can require a new decision.
 The backend also rejects `SEND_CHAT` unless the current consent version is stored,
 which prevents a stale or modified content-script flow from bypassing the gate.
 
-Before launch, add a working Privacy Policy link to this consent screen once the
-public URL exists. Do not insert a placeholder or dead link in the release build.
+The consent screen links to `https://unimate.site/privacy`. Confirm that the
+production domain serves that page before packaging or submission.
 
 ## Store listing draft
 
@@ -194,8 +194,9 @@ submission.
 - [ ] Include only `manifest.json`, `background.js`, `content.js`,
       `context-extractor.js`, generated `config.local.js`, `assets/mascot.png`,
       and `assets/icons/*.png`.
-- [ ] Run `npm run companion:check`, `npm run companion:test`, and the repeated
-      runtime suite before creating the archive.
+- [ ] Run `npm run companion:package`. It runs the V2 verification suite and
+      secret scan before creating the archive, rejects local/non-HTTPS origins,
+      debug mode, secret-like configuration, and forbidden archive entries.
 - [ ] Load the exact unpacked staging directory that will be zipped and complete
       the manual launch tests.
 - [ ] Verify the manifest version is higher than any package already uploaded.

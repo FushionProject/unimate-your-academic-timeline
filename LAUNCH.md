@@ -83,6 +83,8 @@ Evidence: [Stripe sandbox manual tests](./STRIPE_SANDBOX_MANUAL_TESTS.md)
 ## Browser Companion release
 
 - [ ] Chrome Web Store package generated from the release commit
+  - Packaging command is ready: `npm run companion:package`. It deliberately
+    blocks until production HTTPS Companion configuration is present.
 - [ ] Store listing copy, screenshots, privacy disclosures, and permissions reviewed
 - [ ] Chrome Web Store submission completed
 - [ ] Store listing URL added to UniMate onboarding

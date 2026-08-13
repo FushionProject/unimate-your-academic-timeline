@@ -5,6 +5,10 @@ const manifestUrl = new URL("../manifest.json", import.meta.url);
 const manifest = JSON.parse(fs.readFileSync(manifestUrl, "utf8"));
 const background = fs.readFileSync(new URL("../background.js", import.meta.url), "utf8");
 const content = fs.readFileSync(new URL("../content.js", import.meta.url), "utf8");
+const packageScript = fs.readFileSync(
+  new URL("../../scripts/package-companion.mjs", import.meta.url),
+  "utf8",
+);
 
 assert.equal(manifest.manifest_version, 3);
 assert.deepEqual(manifest.permissions, ["storage", "scripting"]);
@@ -32,5 +36,10 @@ assert.match(
   /async function sendChat\(payload, sender\) \{\s*await requirePrivacyConsent\(\);/,
   "privacy consent must be checked before any chat capture or transmission",
 );
+assert.match(packageScript, /must use a non-local HTTPS origin/);
+assert.match(packageScript, /Disable Companion debug mode/);
+assert.match(packageScript, /Secret-like content detected/);
+assert.match(packageScript, /tests\?\|reports\?/);
+assert.match(packageScript, /unzip/);
 
 console.log("PASS Chrome Web Store package and consent readiness checks");

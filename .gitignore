@@ -30,6 +30,7 @@ goplatinum_export/
 
 # Generated Browser Companion environment configuration
 browser-companion/config.local.js
+release-artifacts/
 
 # Editor directories and files
 .vscode/*
