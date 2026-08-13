@@ -12,16 +12,18 @@ This is the single operating checklist for UniMate's public launch. A box is che
 
 ## Release blockers
 
-- [ ] Production build passes from the exact release commit
-- [ ] ESLint passes with no errors
-- [ ] Complete Browser Companion suite passes
-- [ ] Browser Companion runtime stability passes five consecutive times
-- [ ] Authentication, entitlement, capacity, grounding, and billing safeguards pass
-- [ ] Secret scan passes
+- [x] Production build passes from the exact release commit
+- [x] ESLint passes with no errors
+- [x] Complete Browser Companion suite passes
+- [x] Browser Companion runtime stability passes five consecutive times
+- [x] Authentication, entitlement, capacity, grounding, and billing safeguards pass
+- [x] Secret scan passes
 - [ ] Dependency advisories are resolved or explicitly accepted
 - [ ] Production environment variables reviewed without exposing values
-- [ ] Rollback commit and deployment procedure confirmed
-- [ ] Launch owner records the exact release commit: `________________`
+- [x] Rollback commit and deployment procedure confirmed
+- [x] Launch owner records the exact release commit: `057a0b1`
+
+Evidence recorded August 12, 2026: production build passed; ESLint returned zero errors and eight existing Fast Refresh warnings; complete Companion and grounding suites passed; runtime stability passed five consecutive times; authentication, dashboard, entitlement, AI capacity, billing, production-hardening, resilience, and operational-readiness suites passed; secret scan passed across 224 repository files; `git diff --check` passed. Rollback point before the latest frontend status optimization: `9482b95`.
 
 ## Stripe sandbox
 
@@ -55,27 +57,27 @@ Evidence: [Stripe sandbox manual tests](./STRIPE_SANDBOX_MANUAL_TESTS.md)
 - [ ] Existing `stripe_customer_id` values checked for duplicates
 - [ ] Stripe billing hardening migration reviewed
 - [ ] Migration rollback reviewed
-- [ ] AI usage migration reviewed, if required for launch quotas
+- [x] AI usage migration reviewed, if required for launch quotas
 - [ ] RLS policies reviewed for all student-owned data
-- [ ] New-account default confirmed as Free, never Pro
-- [ ] Two-syllabus Free allowance enforced server-side
-- [ ] Ask UniMate and Browser Companion confirmed Pro-only server-side
+- [x] New-account default confirmed as Free, never Pro
+- [x] Two-syllabus Free allowance enforced server-side
+- [x] Ask UniMate and Browser Companion confirmed Pro-only server-side
 - [ ] No migration is marked complete until applied and verified manually
 
 ## AI capacity and cost controls
 
 - [ ] Durable per-user quotas enabled and verified in production
-- [ ] Pro screenshot quota verified
-- [ ] Text and syllabus limits verified
-- [ ] Burst rate limiting and duplicate protection verified
+- [x] Pro screenshot quota verified
+- [x] Text and syllabus limits verified
+- [x] Burst rate limiting and duplicate protection verified
 - [ ] Global daily AI ceiling configured
 - [ ] Provider spending ceiling configured
-- [ ] Global AI kill switch tested
-- [ ] Screenshot analysis kill switch tested
-- [ ] Web-search kill switch tested
-- [ ] AI degraded mode leaves non-AI features operational
-- [ ] Provider 429 and timeout messages verified
-- [ ] Usage dashboard or privacy-safe admin summary verified
+- [x] Global AI kill switch tested
+- [x] Screenshot analysis kill switch tested
+- [x] Web-search kill switch tested
+- [x] AI degraded mode leaves non-AI features operational
+- [x] Provider 429 and timeout messages verified
+- [x] Usage dashboard or privacy-safe admin summary verified
 - [ ] Monitoring alerts configured for error rate, 429s, cost, and capacity
 
 ## Browser Companion release
@@ -161,3 +163,16 @@ Record only operational metadata—never student content or secrets.
 - [ ] Live billing explicitly approved
 - [ ] Launch owner decision: **GO / NO-GO**
 - [ ] Decision time and owner: `________________`
+
+## Current critical path
+
+Complete these in order. Do not begin live billing or public promotion before steps 1–7 are cleared.
+
+1. **Connect Stripe sandbox:** add server-only test credentials, a $5.99 monthly test Price, webhook signing secret, and canonical local origin. Complete every test in `STRIPE_SANDBOX_MANUAL_TESTS.md`.
+2. **Review Supabase production state:** create a backup, inspect duplicate Stripe customer IDs, compare remote RLS and triggers with repository SQL, then stage the capacity/entitlement and Stripe uniqueness migrations. Do not apply directly to production first.
+3. **Resolve dependency gate:** 12 advisories currently remain (2 low, 2 moderate, 8 high, 0 critical). Review the isolated dependency-upgrade branch and rerun this entire release suite after any lockfile change.
+4. **Configure the production environment:** review every required variable, set global AI/provider spending ceilings, and keep live Stripe disabled.
+5. **Publish legal/support surfaces:** Privacy Policy, Terms, subscription/cancellation/refund language, support email, and incident/status communication.
+6. **Prepare and submit the Companion:** configure it against the HTTPS production origin, perform the installed-extension smoke test, package it, submit to Chrome Web Store, and connect the approved listing URL to `VITE_COMPANION_STORE_URL`.
+7. **Deploy a monitored staging/release preview:** verify domain, HTTPS, Supabase redirects, SMTP, analytics privacy, AI degraded mode, and production webhook reachability using test mode.
+8. **Final owner gate:** perform first-customer smoke tests, approve live billing explicitly, then record GO/NO-GO.
