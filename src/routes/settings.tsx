@@ -17,7 +17,7 @@ export const Route = createFileRoute("/settings")({
 function Settings() {
   const { user, requestPasswordReset, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
-  const { data: isPro, isLoading: planLoading } = useIsPro();
+  const { data: isPro, isLoading: planLoading, isError: planError } = useIsPro();
   const navigate = useNavigate();
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState<"reset" | "signout" | null>(null);
@@ -34,8 +34,18 @@ function Settings() {
   const handleSignOut = async () => {
     if (busy) return;
     setBusy("signout");
-    await signOut();
-    await navigate({ to: "/" });
+    try {
+      const result = await signOut();
+      if (result.error) {
+        setStatus("We couldn't sign you out. Check your connection and try again.");
+        return;
+      }
+      await navigate({ to: "/" });
+    } catch {
+      setStatus("We couldn't sign you out. Check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (
@@ -63,7 +73,15 @@ function Settings() {
           </div>
           <div className="rounded-2xl border border-border bg-background px-4 py-3 text-sm">
             <span className="text-muted-foreground">Current plan: </span>
-            <strong>{planLoading ? "Checking…" : isPro ? "UniMate Pro" : "Free"}</strong>
+            <strong>
+              {planLoading
+                ? "Checking…"
+                : planError
+                  ? "Temporarily unavailable"
+                  : isPro
+                    ? "UniMate Pro"
+                    : "Free"}
+            </strong>
           </div>
         </section>
 
@@ -104,13 +122,16 @@ function Settings() {
                 <p className="mt-1 text-sm text-muted-foreground">
                   {planLoading
                     ? "Checking your Companion access…"
-                    : isPro
-                      ? "Your Pro account can install the extension and sign in with this same UniMate account."
-                      : "Browser Companion is available with UniMate Pro."}
+                    : planError
+                      ? "We couldn't check your Companion access right now. Your plan is unchanged — refresh to try again."
+                      : isPro
+                        ? "Your Pro account can install the extension and sign in with this same UniMate account."
+                        : "Browser Companion is available with UniMate Pro."}
                 </p>
               </div>
             </div>
             {!planLoading &&
+              !planError &&
               (isPro ? (
                 <Link
                   to="/companion-setup"

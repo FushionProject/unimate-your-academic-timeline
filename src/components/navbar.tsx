@@ -21,6 +21,7 @@ export function Navbar() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutFailed, setSignOutFailed] = useState(false);
   const isAuthPage =
     pathname === "/signin" ||
     pathname === "/signup" ||
@@ -30,10 +31,20 @@ export function Navbar() {
   const handleSignOut = async () => {
     if (isSigningOut) return;
     setIsSigningOut(true);
+    setSignOutFailed(false);
     clearCanvasData();
-    await signOut();
-    navigate({ to: "/" });
-    setIsSigningOut(false);
+    try {
+      const result = await signOut();
+      if (result.error) {
+        setSignOutFailed(true);
+        return;
+      }
+      navigate({ to: "/" });
+    } catch {
+      setSignOutFailed(true);
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   const navLinkClass =
@@ -99,9 +110,13 @@ export function Navbar() {
                 onClick={handleSignOut}
                 disabled={isSigningOut}
                 className="inline-flex h-11 items-center rounded-full border border-border bg-card/60 px-3 text-sm font-medium text-foreground transition hover:bg-card disabled:cursor-not-allowed disabled:opacity-60 sm:h-9 sm:px-4"
-                title={user.email ?? undefined}
+                title={
+                  signOutFailed
+                    ? "Sign out didn't finish. Check your connection and try again."
+                    : (user.email ?? undefined)
+                }
               >
-                {isSigningOut ? "Signing out…" : "Sign out"}
+                {isSigningOut ? "Signing out…" : signOutFailed ? "Retry sign out" : "Sign out"}
               </button>
             ) : (
               <Link

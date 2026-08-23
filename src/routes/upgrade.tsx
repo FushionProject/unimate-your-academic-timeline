@@ -22,12 +22,22 @@ function Upgrade() {
   const [portalLoading, setPortalLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-  const success = params.get("success") === "true";
-  const canceled = params.get("canceled") === "true";
-  const [confirming, setConfirming] = useState(success);
+  // Stripe's return params are read in an effect: reading window.location
+  // during render makes the server and client render different confirmation
+  // UI and breaks hydration on the ?success=true return page.
+  const [success, setSuccess] = useState(false);
+  const [canceled, setCanceled] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const billing = useBillingStatus({ refetchInterval: confirming ? 2000 : false });
   const status = billing.data;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const returnedFromCheckout = params.get("success") === "true";
+    setSuccess(returnedFromCheckout);
+    setCanceled(params.get("canceled") === "true");
+    if (returnedFromCheckout) setConfirming(true);
+  }, []);
 
   useEffect(() => {
     if (!confirming) return;
@@ -127,6 +137,24 @@ function Upgrade() {
           <div className="py-8" role="status">
             <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
             <p className="mt-3 text-sm text-muted-foreground">Checking your Pro access…</p>
+          </div>
+        ) : billing.isError ? (
+          <div className="py-4">
+            <p className="text-sm font-medium text-foreground">
+              We couldn't check your Pro access right now.
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground" role="alert">
+              Your plan is unchanged — this is a temporary connection problem.
+            </p>
+            <button
+              type="button"
+              onClick={() => void billing.refetch()}
+              disabled={billing.isFetching}
+              className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:brightness-95 disabled:opacity-50"
+            >
+              {billing.isFetching && <Loader2 className="h-4 w-4 animate-spin" />}
+              Try again
+            </button>
           </div>
         ) : (
           <>

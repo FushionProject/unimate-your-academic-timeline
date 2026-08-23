@@ -17,7 +17,7 @@ interface AuthContextType {
   requestPasswordReset: (email: string) => Promise<AuthResult>;
   updatePassword: (password: string) => Promise<AuthResult>;
   recoveryMode: boolean;
-  signOut: () => Promise<void>;
+  signOut: () => Promise<AuthResult>;
 }
 
 const NOT_CONFIGURED_ERROR = "Auth isn't configured yet — add your Supabase keys to .env.local.";
@@ -127,14 +127,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   };
 
-  const signOut = async () => {
-    if (!supabase) return;
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+  const signOut = async (): Promise<AuthResult> => {
+    if (!supabase) return { error: null };
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) return { error: error.message, errorCode: error.code };
+    } catch {
+      return unavailableAuthResult();
+    }
     // The extension has its own isolated Supabase session. This event carries
     // no token or account data; it only asks the installed Companion to clear
     // its local session after the website has successfully signed out.
     document.dispatchEvent(new CustomEvent(UNIMATE_AUTH_SIGNED_OUT_EVENT));
+    return { error: null };
   };
 
   return (

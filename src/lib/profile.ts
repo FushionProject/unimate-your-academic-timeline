@@ -41,8 +41,14 @@ export function useBillingStatus(options?: { refetchInterval?: number | false })
       const response = await fetch("/api/billing-status", {
         headers: { Authorization: `Bearer ${session!.access_token}` },
       });
-      const data = (await response.json()) as BillingStatus & { error?: string };
-      if (!response.ok) throw new Error(data.error || "Billing status is temporarily unavailable.");
+      // A gateway error page is not JSON — never surface a parse exception as
+      // the billing error the user reads.
+      const data = (await response.json().catch(() => null)) as
+        | (BillingStatus & { error?: string })
+        | null;
+      if (!response.ok || !data) {
+        throw new Error(data?.error || "Billing status is temporarily unavailable.");
+      }
       return data;
     },
   });
