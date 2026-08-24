@@ -88,8 +88,14 @@ function companionStoreUrl(): string | null {
 }
 
 function Dashboard() {
-  const { data: courses = [], isLoading: coursesLoading } = useCourses();
-  const { data: assignments = [], isLoading: assignmentsLoading } = useAssignments();
+  const coursesQuery = useCourses();
+  const assignmentsQuery = useAssignments();
+  const { data: courses = [], isLoading: coursesLoading, isError: coursesError } = coursesQuery;
+  const {
+    data: assignments = [],
+    isLoading: assignmentsLoading,
+    isError: assignmentsError,
+  } = assignmentsQuery;
   const addCourse = useAddCourse();
   const removeCourse = useRemoveCourse();
   const addAssignment = useAddAssignment();
@@ -115,7 +121,7 @@ function Dashboard() {
   const [semesterEndInput, setSemesterEndInput] = useState(semesterEndDate ?? "");
   const [semesterDateMessage, setSemesterDateMessage] = useState("");
   const storeUrl = companionStoreUrl();
-  const { data: isPro, isLoading: proLoading } = useIsPro();
+  const { data: isPro, isLoading: proLoading, isError: proError } = useIsPro();
 
   useEffect(() => setSemesterEndInput(semesterEndDate ?? ""), [semesterEndDate]);
 
@@ -162,6 +168,7 @@ function Dashboard() {
   }).length;
   const activeCourseCount = new Set(pressureItems.map((item) => item.course_id)).size;
   const loading = coursesLoading || assignmentsLoading;
+  const loadError = coursesError || assignmentsError;
   const progressPercent = dailyBrief.totalCount
     ? Math.round((dailyBrief.completedCount / dailyBrief.totalCount) * 100)
     : 0;
@@ -178,8 +185,29 @@ function Dashboard() {
               : `${item.name} is done. Your next step is already waiting below.`,
           );
         },
+        onError: () => {
+          setCompletionMessage(`We couldn't update ${item.name}. Try again in a moment.`);
+        },
       },
     );
+  };
+
+  const handleRemoveAssignment = (item: PressureItem) => {
+    setCompletionMessage("");
+    removeAssignment.mutate(item.id, {
+      onError: () => {
+        setCompletionMessage(`We couldn't delete ${item.name}. Try again in a moment.`);
+      },
+    });
+  };
+
+  const handleRemoveCourse = (courseId: string, courseName: string) => {
+    setFormMessage("");
+    removeCourse.mutate(courseId, {
+      onError: () => {
+        setFormMessage(`We couldn't delete ${courseName}. Try again in a moment.`);
+      },
+    });
   };
 
   const addNewCourse = () => {
@@ -203,6 +231,9 @@ function Dashboard() {
           setCourseName("");
           setCourseCode("");
           setFormMessage("Course added.");
+        },
+        onError: () => {
+          setFormMessage("We couldn't add that course. Check your connection and try again.");
         },
       },
     );
@@ -228,6 +259,9 @@ function Dashboard() {
           setAssignmentName("");
           setAssignmentDue("");
           setFormMessage("Deadline added to your semester map.");
+        },
+        onError: () => {
+          setFormMessage("We couldn't add that deadline. Check your connection and try again.");
         },
       },
     );
@@ -264,6 +298,10 @@ function Dashboard() {
               <span className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Checking Companion
                 access
+              </span>
+            ) : proError ? (
+              <span className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-muted-foreground">
+                <Puzzle className="h-4 w-4" aria-hidden="true" /> Companion status unavailable
               </span>
             ) : !isPro ? (
               <Link
@@ -315,6 +353,29 @@ function Dashboard() {
               <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" aria-hidden />
               <p className="mt-3 text-sm font-medium text-foreground">Loading your semester…</p>
               <p className="mt-1 text-xs text-muted-foreground">Your deadlines are on the way.</p>
+            </div>
+          </div>
+        ) : loadError ? (
+          // A failed fetch must never masquerade as an empty semester — the
+          // onboarding empty state would read as deleted data.
+          <div className="grid min-h-[30rem] place-items-center rounded-3xl border border-border/60 bg-card/70">
+            <div className="max-w-md px-6 text-center">
+              <p className="text-sm font-semibold text-foreground">
+                We couldn't load your semester right now.
+              </p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground" role="alert">
+                Your courses and deadlines are safe — this is a temporary connection problem.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  void coursesQuery.refetch();
+                  void assignmentsQuery.refetch();
+                }}
+                className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:brightness-95"
+              >
+                Try again
+              </button>
             </div>
           </div>
         ) : (
@@ -646,7 +707,7 @@ function Dashboard() {
                             </div>
                             <button
                               type="button"
-                              onClick={() => removeAssignment.mutate(item.id)}
+                              onClick={() => handleRemoveAssignment(item)}
                               aria-label={`Delete ${item.name}`}
                               className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
                             >
@@ -838,7 +899,7 @@ function Dashboard() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => removeCourse.mutate(course.id)}
+                          onClick={() => handleRemoveCourse(course.id, course.name)}
                           aria-label={`Delete ${course.name}`}
                           className="grid h-11 w-11 place-items-center rounded-full text-[#1a1a1a]/65 hover:bg-destructive/10 hover:text-destructive"
                         >

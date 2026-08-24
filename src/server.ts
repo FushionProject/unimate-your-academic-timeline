@@ -589,8 +589,17 @@ async function planForAiRequest(request: Request, user: AuthenticatedUser): Prom
   const accessToken = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") || "";
   try {
     return planFromProfile(await readBillingProfile(user.id, accessToken, request.signal));
-  } catch {
-    return "free";
+  } catch (error) {
+    // A missing profile row legitimately means "free" (planFromProfile(null)),
+    // but a lookup failure must not silently downgrade a paying user — surface
+    // a retryable error instead of denying their entitlement.
+    if (error instanceof CompanionUpstreamError) throw error;
+    throw new CompanionUpstreamError(
+      "ENTITLEMENT_UNAVAILABLE",
+      "entitlement",
+      503,
+      "Subscription verification is temporarily unavailable.",
+    );
   }
 }
 
@@ -1096,6 +1105,18 @@ async function handleDashboardAI(request: Request): Promise<Response> {
     const body = await parseJsonBody(request);
     if (body instanceof Response) return body;
     const { type, academicContext, message, chatHistory, pageContext } = body;
+    // Validate the request shape BEFORE authentication and quota reservation so
+    // malformed requests can never consume a user's entitlement.
+    const dashboardTypes = ["study-tonight", "on-track", "motivation", "chat"];
+    if (typeof type !== "string" || (type !== "companion-chat" && !dashboardTypes.includes(type))) {
+      return jsonResponse({ error: "Invalid type" }, 400);
+    }
+    if (academicContext !== undefined && typeof academicContext !== "string") {
+      return jsonResponse({ error: "Academic context must be text" }, 400);
+    }
+    if (message !== undefined && typeof message !== "string") {
+      return jsonResponse({ error: "Message must be text" }, 400);
+    }
     if (typeof academicContext === "string" && academicContext.length > 30_000) {
       return jsonResponse({ error: "Academic context is too large" }, 413);
     }
@@ -1331,6 +1352,31 @@ async function callGroqJson(
   return JSON.parse(content);
 }
 
+const SYLLABUS_ITEM_TYPES = new Set(["exam", "quiz", "assignment", "project", "deadline"]);
+
+type SanitizedSyllabusItem = { title: string; type: string; due_date: string };
+
+// The AI extractor returns model-authored JSON. Normalize it server-side so a
+// single out-of-vocabulary value (e.g. type: "homework") can't fail the strict
+// client schema and lose an otherwise good extraction.
+function sanitizeSyllabusItems(value: unknown): SanitizedSyllabusItem[] {
+  if (!Array.isArray(value)) return [];
+  const items: SanitizedSyllabusItem[] = [];
+  for (const entry of value.slice(0, MAX_STUDY_ITEMS)) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    const title = typeof record.title === "string" ? record.title.trim().slice(0, 300) : "";
+    const dueDate = typeof record.due_date === "string" ? record.due_date.trim() : "";
+    if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) continue;
+    const type =
+      typeof record.type === "string" && SYLLABUS_ITEM_TYPES.has(record.type)
+        ? record.type
+        : "deadline";
+    items.push({ title, type, due_date: dueDate });
+  }
+  return items;
+}
+
 // Handle /api/parse-syllabus endpoint
 async function handleParseSyllabus(request: Request): Promise<Response> {
   try {
@@ -1359,7 +1405,17 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
     const extractionContext = buildSyllabusExtractionContext(syllabusText);
     const localFallbackItems = extractDatedSyllabusItems(extractionContext);
 
-    const plan = await planForAiRequest(request, authResult);
+    let plan: AiPlan;
+    try {
+      plan = await planForAiRequest(request, authResult);
+    } catch (error) {
+      // Entitlement lookup outages degrade to the local extractor, matching the
+      // reservation-failure path below, instead of failing the whole upload.
+      if (localFallbackItems.length) {
+        return jsonResponse({ items: localFallbackItems, extractionMode: "local_fallback" });
+      }
+      throw error;
+    }
     const reservation = await reserveProductEntitlementOrResponse({
       request,
       userId: authResult.id,
@@ -1383,7 +1439,7 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
     }
 
     try {
-      const items = await runCapacityTracked(reservation, authResult.id, () =>
+      const rawItems = await runCapacityTracked(reservation, authResult.id, () =>
         callGroqJson(
           groqApiKey,
           `You are a meticulous syllabus timeline extractor. Read the entire document from beginning to end before responding.
@@ -1411,6 +1467,10 @@ async function handleParseSyllabus(request: Request): Promise<Response> {
         ),
       );
 
+      const items = sanitizeSyllabusItems(rawItems);
+      if (items.length === 0 && localFallbackItems.length) {
+        return jsonResponse({ items: localFallbackItems, extractionMode: "local_fallback" });
+      }
       return jsonResponse({ items, extractionMode: "ai" });
     } catch (error) {
       if (localFallbackItems.length) {
@@ -2116,6 +2176,18 @@ async function findOpenCheckoutUrl(
 }
 
 async function handleBillingStatus(request: Request): Promise<Response> {
+  try {
+    return await handleBillingStatusInner(request);
+  } catch (error) {
+    if (error instanceof CompanionUpstreamError) return companionErrorResponse(error);
+    console.error("Billing status request failed", {
+      message: error instanceof Error ? error.message : "unknown error",
+    });
+    return jsonResponse({ error: "Billing status is temporarily unavailable." }, 503);
+  }
+}
+
+async function handleBillingStatusInner(request: Request): Promise<Response> {
   if (request.method !== "GET") return jsonResponse({ error: "Method not allowed" }, 405);
   const authHeader = request.headers.get("Authorization");
   const accessToken = authHeader?.replace(/^Bearer\s+/i, "");
@@ -2199,32 +2271,40 @@ async function handleBillingStatus(request: Request): Promise<Response> {
 }
 
 async function handleCreatePortalSession(request: Request): Promise<Response> {
-  if (request.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
-  const authHeader = request.headers.get("Authorization");
-  const accessToken = authHeader?.replace(/^Bearer\s+/i, "");
-  if (!accessToken) return jsonResponse({ error: "Sign in required" }, 401);
-  const authResult = await requireAuthenticatedUser(request);
-  if (authResult instanceof Response) return authResult;
-  const rateLimited = enforceUserRateLimit(authResult.id, "billing-portal", 10);
-  if (rateLimited) return rateLimited;
-  const profile = await readBillingProfile(authResult.id, accessToken, request.signal);
-  if (!profile?.stripe_customer_id) {
-    return jsonResponse({ error: "No Stripe subscription is connected to this account." }, 409);
+  try {
+    if (request.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
+    const authHeader = request.headers.get("Authorization");
+    const accessToken = authHeader?.replace(/^Bearer\s+/i, "");
+    if (!accessToken) return jsonResponse({ error: "Sign in required" }, 401);
+    const authResult = await requireAuthenticatedUser(request);
+    if (authResult instanceof Response) return authResult;
+    const rateLimited = enforceUserRateLimit(authResult.id, "billing-portal", 10);
+    if (rateLimited) return rateLimited;
+    const profile = await readBillingProfile(authResult.id, accessToken, request.signal);
+    if (!profile?.stripe_customer_id) {
+      return jsonResponse({ error: "No Stripe subscription is connected to this account." }, 409);
+    }
+    const config = stripeConfiguration();
+    if (config instanceof Response) return config;
+    const owners = await findUserIdsByStripeCustomer(profile.stripe_customer_id);
+    if (owners.length !== 1 || owners[0] !== authResult.id) {
+      return jsonResponse({ error: "Billing account ownership could not be verified." }, 409);
+    }
+    const url = await createPortalUrl(
+      profile.stripe_customer_id,
+      `${config.canonicalOrigin}/upgrade`,
+      config,
+    );
+    return url
+      ? jsonResponse({ url })
+      : jsonResponse({ error: "Billing management is temporarily unavailable." }, 502);
+  } catch (error) {
+    if (error instanceof CompanionUpstreamError) return companionErrorResponse(error);
+    console.error("Billing portal request failed", {
+      message: error instanceof Error ? error.message : "unknown error",
+    });
+    return jsonResponse({ error: "Billing management is temporarily unavailable." }, 502);
   }
-  const config = stripeConfiguration();
-  if (config instanceof Response) return config;
-  const owners = await findUserIdsByStripeCustomer(profile.stripe_customer_id);
-  if (owners.length !== 1 || owners[0] !== authResult.id) {
-    return jsonResponse({ error: "Billing account ownership could not be verified." }, 409);
-  }
-  const url = await createPortalUrl(
-    profile.stripe_customer_id,
-    `${config.canonicalOrigin}/upgrade`,
-    config,
-  );
-  return url
-    ? jsonResponse({ url })
-    : jsonResponse({ error: "Billing management is temporarily unavailable." }, 502);
 }
 
 // Starts a Stripe-hosted test-mode subscription Checkout flow. The browser
@@ -2810,11 +2890,11 @@ export default {
     }
 
     if (url.pathname === "/api/billing-status") {
-      return handleBillingStatus(request);
+      return withSecurityHeaders(await handleBillingStatus(request), request);
     }
 
     if (url.pathname === "/api/create-portal-session") {
-      return handleCreatePortalSession(request);
+      return withSecurityHeaders(await handleCreatePortalSession(request), request);
     }
 
     // Handle /api/stripe-webhook endpoint

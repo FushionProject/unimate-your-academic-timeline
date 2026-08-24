@@ -51,6 +51,63 @@ interface Note {
   course?: string;
 }
 
+const DEFAULT_FORMATTING: NoteFormatting = {
+  fontFamily: "sans-serif",
+  fontSize: "16px",
+  bold: false,
+  italic: false,
+  underline: false,
+  backgroundColor: "transparent",
+};
+
+const FONT_FAMILIES: readonly string[] = ["sans-serif", "serif", "monospace", "cursive"];
+const FONT_SIZES: readonly string[] = ["14px", "16px", "20px", "24px"];
+
+function normalizeFormatting(value: unknown): NoteFormatting {
+  if (!value || typeof value !== "object") return { ...DEFAULT_FORMATTING };
+  const record = value as Record<string, unknown>;
+  return {
+    fontFamily: FONT_FAMILIES.includes(record.fontFamily as string)
+      ? (record.fontFamily as FontFamily)
+      : DEFAULT_FORMATTING.fontFamily,
+    fontSize: FONT_SIZES.includes(record.fontSize as string)
+      ? (record.fontSize as FontSize)
+      : DEFAULT_FORMATTING.fontSize,
+    bold: record.bold === true,
+    italic: record.italic === true,
+    underline: record.underline === true,
+    backgroundColor:
+      typeof record.backgroundColor === "string"
+        ? record.backgroundColor
+        : DEFAULT_FORMATTING.backgroundColor,
+  };
+}
+
+// localStorage contents are unvalidated user-machine state — one note saved by
+// an older schema (e.g. missing formatting) must not crash the whole editor.
+function normalizeStoredNotes(value: unknown): Note[] {
+  if (!Array.isArray(value)) return [];
+  const notes: Note[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const record = entry as Record<string, unknown>;
+    if (typeof record.id !== "string" && typeof record.id !== "number") continue;
+    notes.push({
+      id: String(record.id),
+      title: typeof record.title === "string" ? record.title : "Untitled Note",
+      body: typeof record.body === "string" ? record.body : "",
+      updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : new Date().toISOString(),
+      formatting: normalizeFormatting(record.formatting),
+      tags: Array.isArray(record.tags)
+        ? record.tags.filter((tag): tag is string => typeof tag === "string")
+        : [],
+      pinned: record.pinned === true,
+      course: typeof record.course === "string" && record.course ? record.course : undefined,
+    });
+  }
+  return notes;
+}
+
 function Notes() {
   const { user } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
@@ -75,6 +132,19 @@ function Notes() {
 
   const { data: manualCourses = [] } = useCourses();
   const notesStorageKey = user ? `unimateNotes:${user.id}` : null;
+
+  const selectedNote = notes.find((note) => note.id === selectedNoteId);
+  const hasUnsavedChanges =
+    Boolean(selectedNote) &&
+    (title !== selectedNote!.title ||
+      body !== selectedNote!.body ||
+      selectedCourse !== (selectedNote!.course || "") ||
+      JSON.stringify(tags) !== JSON.stringify(selectedNote!.tags) ||
+      JSON.stringify(formatting) !== JSON.stringify(selectedNote!.formatting));
+
+  const confirmDiscardUnsaved = () =>
+    !hasUnsavedChanges ||
+    window.confirm("This note has unsaved changes. Discard them and continue?");
 
   const tagColors = [
     "#FEF3C7",
@@ -112,7 +182,7 @@ function Notes() {
     try {
       const saved = localStorage.getItem(notesStorageKey);
       if (saved) {
-        const parsedNotes = JSON.parse(saved);
+        const parsedNotes = normalizeStoredNotes(JSON.parse(saved));
         setNotes(parsedNotes);
         if (parsedNotes.length > 0) {
           setSelectedNoteId(parsedNotes[0].id);
@@ -145,6 +215,7 @@ function Notes() {
   }, [notes, notesStorageKey, hasLoadedNotes]);
 
   const handleCreateNote = () => {
+    if (!confirmDiscardUnsaved()) return;
     const newNote: Note = {
       id: Date.now().toString(),
       title: "Untitled Note",
@@ -160,7 +231,9 @@ function Notes() {
       },
       tags: [],
       pinned: false,
-      course: selectedCourse || undefined,
+      // The picker below is reset to "No course" for the fresh note, so the
+      // note itself must start unassigned or it would read as instantly dirty.
+      course: undefined,
     };
     setNotes([newNote, ...notes]);
     setSelectedNoteId(newNote.id);
@@ -172,6 +245,9 @@ function Notes() {
   };
 
   const handleDeleteNote = (id: string) => {
+    const target = notes.find((note) => note.id === id);
+    const label = target?.title?.trim() || "Untitled Note";
+    if (!window.confirm(`Delete “${label}”? This cannot be undone.`)) return;
     const updatedNotes = notes.filter((note) => note.id !== id);
     setNotes(updatedNotes);
     if (selectedNoteId === id) {
@@ -210,7 +286,9 @@ function Notes() {
             formatting,
             tags,
             pinned: note.pinned,
-            course: selectedCourse || note.course,
+            // "" means the user chose "No course" — clear it rather than
+            // silently keeping the old assignment.
+            course: selectedCourse || undefined,
             updatedAt: new Date().toISOString(),
           }
         : note,
@@ -220,6 +298,8 @@ function Notes() {
   };
 
   const handleSelectNote = (note: Note) => {
+    if (note.id === selectedNoteId) return;
+    if (!confirmDiscardUnsaved()) return;
     setSelectedNoteId(note.id);
     setTitle(note.title);
     setBody(note.body);
@@ -269,8 +349,6 @@ function Notes() {
     });
 
   const allTags = Array.from(new Set(notes.flatMap((note) => note.tags || [])));
-
-  const selectedNote = notes.find((note) => note.id === selectedNoteId);
 
   return (
     <div className="min-h-[calc(100vh-12rem)] bg-background" aria-busy={!hasLoadedNotes}>

@@ -41,12 +41,37 @@ export const Route = createFileRoute("/ask")({
 function AskAccessGate() {
   const billing = useBillingStatus();
 
-  if (billing.isLoading) {
+  if (billing.isLoading || (billing.isError && billing.isFetching)) {
     return (
       <main className="grid min-h-[calc(100vh-73px)] place-items-center bg-background px-4">
         <div className="text-center" role="status" aria-live="polite">
           <LoaderCircle className="mx-auto h-6 w-6 animate-spin text-primary" aria-hidden="true" />
           <p className="mt-3 text-sm font-medium text-foreground">Checking your UniMate plan…</p>
+        </div>
+      </main>
+    );
+  }
+
+  // A failed plan check is not "not Pro" — never show a paying student the
+  // upgrade paywall because of a transient billing outage.
+  if (billing.isError) {
+    return (
+      <main className="grid min-h-[calc(100vh-73px)] place-items-center bg-background px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            We couldn't check your UniMate plan
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground" role="alert">
+            Your account and plan are unchanged — this is a temporary connection problem. Try again
+            in a moment.
+          </p>
+          <button
+            type="button"
+            onClick={() => void billing.refetch()}
+            className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:brightness-95"
+          >
+            Try again
+          </button>
         </div>
       </main>
     );

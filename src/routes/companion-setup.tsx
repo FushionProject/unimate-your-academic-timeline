@@ -58,10 +58,12 @@ function CompanionSetup() {
               <SetupStep number="1" title="Confirm Companion access">
                 {billing.isLoading
                   ? "Checking your UniMate plan…"
-                  : isPro
-                    ? "Your account has UniMate Pro. Companion access is ready."
-                    : "Browser Companion AI is a Pro feature. You can keep using Free or test the Pro checkout in Stripe’s sandbox."}
-                {!billing.isLoading && !isPro && (
+                  : billing.isError
+                    ? "We couldn't check your plan right now. Your access is unchanged — refresh this page to try again."
+                    : isPro
+                      ? "Your account has UniMate Pro. Companion access is ready."
+                      : "Browser Companion AI is a Pro feature. You can keep using Free or test the Pro checkout in Stripe’s sandbox."}
+                {!billing.isLoading && !billing.isError && !isPro && (
                   <Link
                     to="/upgrade"
                     className="mt-3 inline-flex min-h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"

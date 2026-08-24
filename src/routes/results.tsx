@@ -14,6 +14,10 @@ const itemSchema = z.object({
 
 type SyllabusItem = z.infer<typeof itemSchema>;
 
+// Each editable row needs an identity that survives title edits — keying rows
+// on the title remounts the input mid-keystroke and drops focus.
+type EditableSyllabusItem = SyllabusItem & { rowId: string };
+
 const storedResultSchema = z.object({
   items: z.array(itemSchema),
   syllabusText: z.string().optional(),
@@ -30,12 +34,14 @@ function Results() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { resultId } = Route.useSearch();
-  const [items, setItems] = useState<SyllabusItem[]>(() => {
+  const [items, setItems] = useState<EditableSyllabusItem[]>(() => {
     if (!resultId || typeof window === "undefined") return [];
     const stored = sessionStorage.getItem(`${SYLLABUS_RESULT_STORAGE_PREFIX}${resultId}`);
     if (!stored) return [];
     try {
-      return storedResultSchema.parse(JSON.parse(stored)).items;
+      return storedResultSchema
+        .parse(JSON.parse(stored))
+        .items.map((item) => ({ ...item, rowId: crypto.randomUUID() }));
     } catch {
       return [];
     }
@@ -161,7 +167,7 @@ function Results() {
                   <div className="max-h-[650px] space-y-3 overflow-y-auto pr-1">
                     {items.map((item, index) => (
                       <div
-                        key={`${item.title}-${index}`}
+                        key={item.rowId}
                         className="rounded-2xl border border-border/60 bg-background/65 p-4"
                       >
                         <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_130px_145px_auto] sm:items-center">
