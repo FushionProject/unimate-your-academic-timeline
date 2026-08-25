@@ -10,6 +10,17 @@ export const Route = createFileRoute("/signup")({
 
 function friendlyAuthError(message: string, code?: string) {
   const lower = message.toLowerCase();
+  // Checked first: transport failures arrive as plain messages from
+  // supabase-js and must not be matched by the broader keyword guesses below,
+  // or be shown to the student verbatim as "Failed to fetch".
+  if (
+    code === "network_error" ||
+    lower.includes("fetch") ||
+    lower.includes("network") ||
+    lower.includes("load failed")
+  ) {
+    return "We couldn't reach UniMate. Check your connection and try again.";
+  }
   if (code === "weak_password" || lower.includes("weak") || lower.includes("password")) {
     return "Use a stronger password with at least 6 characters.";
   }
