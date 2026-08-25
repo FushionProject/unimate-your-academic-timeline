@@ -21,7 +21,15 @@ function friendlyAuthError(message: string, code?: string): string {
   if (code === "email_not_confirmed" || lower.includes("email not confirmed")) {
     return "Check your email confirmation link before signing in.";
   }
-  if (code === "network_error") {
+  // supabase-js reports transport failures through the returned error rather
+  // than throwing, so "Failed to fetch" reaches here as a plain message and
+  // would otherwise be shown to the student verbatim.
+  if (
+    code === "network_error" ||
+    lower.includes("fetch") ||
+    lower.includes("network") ||
+    lower.includes("load failed")
+  ) {
     return "We couldn't reach UniMate. Check your connection and try again.";
   }
   return message;
