@@ -12,6 +12,7 @@ const files = execFileSync(
 
 const signatures = [
   ["private key", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
+  ["OpenAI secret", /\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}\b/],
   ["Stripe secret", /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/],
   ["Stripe webhook secret", /\bwhsec_[A-Za-z0-9]{16,}\b/],
   ["Groq secret", /\bgsk_[A-Za-z0-9]{16,}\b/],

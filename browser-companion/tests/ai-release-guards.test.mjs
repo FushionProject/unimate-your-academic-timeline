@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const source = fs.readFileSync(new URL("../../src/server.ts", import.meta.url), "utf8");
+const provider = fs.readFileSync(new URL("../../src/lib/ai-provider.ts", import.meta.url), "utf8");
 let passed = 0;
 const check = (label, condition) => {
   assert.ok(condition, label);
@@ -20,7 +21,9 @@ check(
 );
 check(
   "rate limits preserve Retry-After",
-  /AI_RATE_LIMITED/.test(source) && /retry-after/.test(source),
+  /AI_RATE_LIMITED/.test(provider) &&
+    /readAiProviderError/.test(source) &&
+    /retry-after/.test(source),
 );
 check("empty model responses are typed failures", /AI_EMPTY_RESPONSE/.test(source));
 check(

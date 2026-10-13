@@ -15,6 +15,8 @@ import {
   AI_COMPLETIONS_URL,
   aiCompletionBody,
   productionAiProtectionReady,
+  AiProviderError,
+  readAiProviderError,
 } from "./lib/ai-provider";
 import { courseworkEvidence } from "./lib/coursework-grounding";
 import type { CourseFact, AssignmentFact } from "./lib/coursework-grounding";
@@ -170,16 +172,6 @@ class CompanionUpstreamError extends Error {
   }
 }
 
-class AiRateLimitError extends Error {
-  retryAfterSeconds: number;
-
-  constructor(retryAfterSeconds = 0) {
-    super("UniMate’s AI is temporarily busy.");
-    this.name = "AiRateLimitError";
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-}
-
 async function fetchWithTimeout(
   input: string | URL,
   init: RequestInit,
@@ -229,28 +221,20 @@ function companionErrorResponse(error: unknown): Response {
   return aiErrorResponse(error);
 }
 
-function upstreamRetryAfterSeconds(response: Response): number {
-  const value = response.headers.get("retry-after");
-  if (!value) return 0;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds)) return Math.max(0, Math.ceil(seconds));
-  const date = Date.parse(value);
-  return Number.isFinite(date) ? Math.max(0, Math.ceil((date - Date.now()) / 1_000)) : 0;
-}
-
 function aiErrorResponse(error: unknown): Response {
-  if (error instanceof AiRateLimitError) {
-    const waitText = error.retryAfterSeconds
-      ? ` Try again in about ${error.retryAfterSeconds} seconds.`
-      : " Please wait a moment and try again.";
+  if (error instanceof AiProviderError) {
     return jsonResponse(
       {
-        error: `UniMate’s AI is temporarily rate limited.${waitText}`,
-        code: "AI_RATE_LIMITED",
-        phase: "ai",
+        error: error.message,
+        code: error.code,
+        phase: error.phase,
+        retryable: error.retryable,
+        retryAfterSeconds: error.retryAfterSeconds,
       },
-      429,
-      error.retryAfterSeconds ? { "retry-after": String(error.retryAfterSeconds) } : undefined,
+      error.status,
+      error.retryable && error.retryAfterSeconds
+        ? { "retry-after": String(error.retryAfterSeconds) }
+        : undefined,
     );
   }
   if (error instanceof CompanionUpstreamError) {
@@ -260,14 +244,26 @@ function aiErrorResponse(error: unknown): Response {
     );
   }
   return jsonResponse(
-    { error: "UniMate’s AI request failed.", code: "AI_PROVIDER_ERROR", phase: "ai" },
+    {
+      error:
+        "I couldn’t connect to UniMate’s AI just now. Your question is still here—please try again.",
+      code: "AI_PROVIDER_ERROR",
+      phase: "ai",
+      retryable: true,
+    },
     502,
   );
 }
 
 function aiNotConfiguredResponse(): Response {
   return jsonResponse(
-    { error: "UniMate’s AI is not configured.", code: "AI_NOT_CONFIGURED", phase: "ai" },
+    {
+      error:
+        "UniMate’s AI connection needs attention. Your saved work is still here. Please check back later.",
+      code: "AI_NOT_CONFIGURED",
+      phase: "ai",
+      retryable: false,
+    },
     503,
   );
 }
@@ -662,11 +658,11 @@ async function runCapacityTracked<T>(
     await completeCapacitySafely(
       reservation,
       userId,
-      error instanceof CompanionUpstreamError || error instanceof AiRateLimitError
+      error instanceof CompanionUpstreamError || error instanceof AiProviderError
         ? "provider_error"
         : "cancelled",
       undefined,
-      error instanceof AiRateLimitError ? "rate_limited" : "ai_error",
+      error instanceof AiProviderError ? error.code.toLowerCase() : "ai_error",
     );
     throw error;
   }
@@ -1209,20 +1205,13 @@ async function aiTextCompletion(
     ),
   );
   if (!res.ok) {
+    const failure = await readAiProviderError(res);
     await recordProviderSignal({
       provider: "openai",
       success: false,
-      rateLimited: res.status === 429,
+      rateLimited: failure.code === "AI_RATE_LIMITED",
     }).catch(() => undefined);
-    if (res.status === 429) {
-      throw new AiRateLimitError(upstreamRetryAfterSeconds(res));
-    }
-    throw new CompanionUpstreamError(
-      "AI_PROVIDER_ERROR",
-      "ai",
-      res.status,
-      `AI provider request failed (${res.status}).`,
-    );
+    throw failure;
   }
   const data = (await res.json()) as AiChatResponse;
   const answer = stripThinkBlock(data.choices?.[0]?.message?.content || "");
@@ -1304,15 +1293,14 @@ async function handleDashboardAI(request: Request): Promise<Response> {
       const requestDiagnostics = companionRequestDiagnostics(provenance, studentMessage);
 
       if (!aiApiKey) {
-        return jsonResponse(
-          {
-            error: "UniMate’s AI is not configured.",
-            code: "AI_NOT_CONFIGURED",
-            phase: "ai",
-            companionDiagnostics: requestDiagnostics,
-          },
-          503,
+        await completeCapacitySafely(
+          reservation,
+          entitlement.user.id,
+          "provider_error",
+          undefined,
+          "ai_not_configured",
         );
+        return aiNotConfiguredResponse();
       }
 
       const history = normalizeCompanionHistory(chatHistory);
@@ -1349,11 +1337,11 @@ async function handleDashboardAI(request: Request): Promise<Response> {
         await completeCapacitySafely(
           reservation,
           entitlement.user.id,
-          error instanceof CompanionUpstreamError || error instanceof AiRateLimitError
+          error instanceof CompanionUpstreamError || error instanceof AiProviderError
             ? "provider_error"
             : "cancelled",
           undefined,
-          error instanceof AiRateLimitError ? "rate_limited" : "ai_error",
+          error instanceof AiProviderError ? error.code.toLowerCase() : "ai_error",
         );
         return aiErrorResponse(error);
       }
@@ -1887,10 +1875,14 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
     const aiApiKey = process.env.OPENAI_API_KEY;
 
     if (!aiApiKey) {
-      return jsonResponse(
-        { error: "UniMate’s AI is not configured.", code: "AI_NOT_CONFIGURED", phase: "ai" },
-        503,
+      await completeCapacitySafely(
+        reservation,
+        entitlement.user.id,
+        "provider_error",
+        undefined,
+        "ai_not_configured",
       );
+      return aiNotConfiguredResponse();
     }
 
     const userPrompt =
@@ -1951,20 +1943,13 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
       );
 
       if (!providerResponse.ok) {
+        const failure = await readAiProviderError(providerResponse);
         await recordProviderSignal({
           provider: "openai",
           success: false,
-          rateLimited: providerResponse.status === 429,
+          rateLimited: failure.code === "AI_RATE_LIMITED",
         }).catch(() => undefined);
-        if (providerResponse.status === 429) {
-          throw new AiRateLimitError(upstreamRetryAfterSeconds(providerResponse));
-        }
-        throw new CompanionUpstreamError(
-          "AI_PROVIDER_ERROR",
-          "ai",
-          providerResponse.status,
-          `AI provider request failed (${providerResponse.status}).`,
-        );
+        throw failure;
       }
 
       const providerData = (await providerResponse.json()) as AiChatResponse;
@@ -1995,11 +1980,11 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
       await completeCapacitySafely(
         reservation,
         entitlement.user.id,
-        error instanceof CompanionUpstreamError || error instanceof AiRateLimitError
+        error instanceof CompanionUpstreamError || error instanceof AiProviderError
           ? "provider_error"
           : "cancelled",
         undefined,
-        error instanceof AiRateLimitError ? "rate_limited" : "ai_error",
+        error instanceof AiProviderError ? error.code.toLowerCase() : "ai_error",
       );
       return aiErrorResponse(error);
     }

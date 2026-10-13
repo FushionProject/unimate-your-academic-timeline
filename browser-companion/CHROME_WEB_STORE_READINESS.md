@@ -1,6 +1,6 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-Status reviewed: August 12, 2026. This is a local readiness package only. Nothing
+Source readiness reviewed: October 12, 2026. This is a local readiness package only. Nothing
 was uploaded, submitted, purchased, or published.
 
 ## Release decision
@@ -9,21 +9,25 @@ was uploaded, submitted, purchased, or published.
 icons and an in-product, affirmative privacy-consent gate. The remaining blockers
 are operational/legal items that cannot be truthfully completed in source code:
 
-1. Publish a public Privacy Policy URL and Terms URL owned by UniMate.
+1. Verify the production domain serves the Privacy Policy, Terms, and Support
+   pages already implemented at `/privacy`, `/terms`, and `/support`.
 2. Confirm the legal entity/developer name, support email, data-retention periods,
    subprocessors, deletion process, and the AI provider's launch-environment data
    terms with the product owner or counsel.
-3. Configure a production HTTPS `UNIMATE_API_URL`; the local generated config
-   currently points to `http://localhost:8080` and must never be packaged for the
-   store.
+3. Configure and verify a production HTTPS `UNIMATE_API_URL`. The example config
+   defaults to `http://localhost:8080`; generated local configuration has not
+   been inspected for this review and must be verified before packaging.
 4. Create current 1280x800 store screenshots from the production-configured
    extension and provide a 440x280 promotional tile.
-5. Provide a real install URL and a clear Pro post-purchase installation flow.
-   The current Pro page advertises the extension but has no installation action.
+5. Supply the approved listing URL as `VITE_COMPANION_STORE_URL`. The implemented
+   `/companion-setup` flow already checks Pro access and displays the installation
+   action only for an active Pro account and a verified Store detail URL.
 6. Confirm ownership and release rights for `assets/mascot.png` and the logo used
    for extension icons. Keep written provenance with the release record.
 7. Complete a manual installed-extension test against production auth, Pro
    entitlement, HTTPS backend, restricted pages, and account sign-out.
+8. Verify both durable quota migrations/flags and the approved AI spending cap
+   before any paid test. A budget approval alone does not configure enforcement.
 
 ## Single purpose
 
@@ -78,8 +82,10 @@ categories used. Only **Allow and continue** stores consent. **Not now** closes
 the panel and transmits nothing. Consent is versioned so a future material data
 practice change can require a new decision.
 
-The backend also rejects `SEND_CHAT` unless the current consent version is stored,
+The extension background worker also rejects `SEND_CHAT` unless the current consent version is stored,
 which prevents a stale or modified content-script flow from bypassing the gate.
+Consent is checked again before capture and before transmission. Students can
+review the disclosure and pause page sharing from the panel.
 
 The consent screen links to `https://unimate.site/privacy`. Confirm that the
 production domain serves that page before packaging or submission.
@@ -201,6 +207,10 @@ submission.
       the manual launch tests.
 - [ ] Verify the manifest version is higher than any package already uploaded.
 - [ ] Inspect the final archive file list and scan it for secrets before upload.
+- [ ] Confirm `manifest.json` is at the ZIP root, without a containing directory.
+      The packager validates its allow-listed entries and preserves the previous
+      release archive if a replacement fails validation. Automated packaging
+      tests use synthetic public configuration, never real credentials.
 - [ ] Upload privately/unlisted first if that matches the launch plan; do not
       publish until privacy, support, listing, and smoke-test blockers are closed.
 

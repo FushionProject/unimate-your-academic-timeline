@@ -4,6 +4,8 @@ import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, Sparkles } from "lu
 import { useAuth } from "../lib/auth-context";
 import { useBillingStatus } from "../lib/profile";
 import { PRO_FEATURES, PRO_PLAN } from "../lib/plan-catalog";
+import { readBillingActionResponse } from "../lib/billing-response";
+import { getCompanionStoreUrl } from "../lib/companion-store";
 
 export const Route = createFileRoute("/upgrade")({ component: Upgrade });
 
@@ -18,7 +20,7 @@ function secureStripeUrl(value: unknown, host: string): string | null {
 }
 
 function Upgrade() {
-  const { user, session } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [error, setError] = useState("");
@@ -31,6 +33,7 @@ function Upgrade() {
   const [confirming, setConfirming] = useState(false);
   const billing = useBillingStatus({ refetchInterval: confirming ? 2000 : false });
   const status = billing.data;
+  const companionStoreUrl = getCompanionStoreUrl(import.meta.env.VITE_COMPANION_STORE_URL);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -59,16 +62,18 @@ function Upgrade() {
         Authorization: `Bearer ${session.access_token}`,
       },
     });
-    const data = (await response.json()) as {
-      error?: string;
-      url?: string | null;
-      alreadySubscribed?: boolean;
-    };
-    if (!response.ok) throw new Error(data.error || "Billing is temporarily unavailable.");
-    return data;
+    return readBillingActionResponse(response);
   };
 
   const handleUpgrade = async () => {
+    if (
+      checkoutLoading ||
+      confirming ||
+      !status ||
+      status.state === "not_configured" ||
+      status.temporarilyUnavailable
+    )
+      return;
     setError("");
     setCheckoutLoading(true);
     try {
@@ -86,7 +91,13 @@ function Upgrade() {
       if (!url) throw new Error("Stripe did not return a valid secure link.");
       window.location.assign(url);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Checkout could not start.");
+      setError(
+        caught instanceof TypeError
+          ? "We couldn’t reach billing. Check your connection and try again."
+          : caught instanceof Error
+            ? caught.message
+            : "Checkout could not start.",
+      );
       setCheckoutLoading(false);
     }
   };
@@ -100,7 +111,13 @@ function Upgrade() {
       if (!url) throw new Error("Stripe did not return a valid billing-management link.");
       window.location.assign(url);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Billing management could not open.");
+      setError(
+        caught instanceof TypeError
+          ? "We couldn’t reach billing. Check your connection and try again."
+          : caught instanceof Error
+            ? caught.message
+            : "Billing management could not open.",
+      );
       setPortalLoading(false);
     }
   };
@@ -124,11 +141,17 @@ function Upgrade() {
           Your school day, with a little backup. {PRO_PLAN.monthlyPrice} per month · cancel anytime.
         </p>
 
-        {!user ? (
+        {authLoading ? (
+          <div className="py-8" role="status">
+            <Loader2 aria-hidden className="mx-auto h-6 w-6 animate-spin" />
+            <p className="mt-3 text-sm text-muted-foreground">Checking your account…</p>
+          </div>
+        ) : !user ? (
           <>
             <p className="mb-4 text-sm text-muted-foreground">Sign in before upgrading.</p>
             <Link
               to="/signin"
+              search={{ next: "upgrade" }}
               className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground"
             >
               Sign in
@@ -139,13 +162,13 @@ function Upgrade() {
             <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
             <p className="mt-3 text-sm text-muted-foreground">Checking your Pro access…</p>
           </div>
-        ) : billing.isError ? (
+        ) : billing.isError || !status ? (
           <div className="py-4">
             <p className="text-sm font-medium text-foreground">
               We couldn't check your Pro access right now.
             </p>
             <p className="mt-2 text-sm text-muted-foreground" role="alert">
-              Your plan is unchanged — this is a temporary connection problem.
+              We haven’t changed your plan. Check your connection and try again.
             </p>
             <button
               type="button"
@@ -165,14 +188,16 @@ function Upgrade() {
                 role="status"
                 aria-live="polite"
               >
-                <p className="text-sm font-medium text-foreground">Checkout complete.</p>
+                <p className="text-sm font-medium text-foreground">
+                  Checking your checkout result.
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Stripe is confirming your Pro access. This usually takes a few seconds.
                 </p>
               </div>
             )}
             {success && !confirming && !status?.isPro && (
-              <div className="mb-5 rounded-xl bg-secondary px-4 py-3 text-left" role="status">
+              <div className="mb-5 rounded-xl bg-muted px-4 py-3 text-left" role="status">
                 <p className="text-sm font-medium text-foreground">
                   Confirmation is taking longer than expected.
                 </p>
@@ -183,7 +208,7 @@ function Upgrade() {
             )}
             {canceled && (
               <p
-                className="mb-5 rounded-xl bg-secondary px-4 py-3 text-sm text-muted-foreground"
+                className="mb-5 rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground"
                 role="status"
               >
                 Checkout canceled. Your account was not changed.
@@ -265,16 +290,35 @@ function Upgrade() {
                     <Feature key={feature}>{feature}</Feature>
                   ))}
                 </ul>
+                {!companionStoreUrl && (
+                  <p className="mb-5 rounded-xl border border-border p-3 text-left text-xs leading-5 text-muted-foreground">
+                    Browser Companion’s public Chrome Web Store installation isn’t available yet.
+                    Pro study help is available in Ask UniMate here in the app.
+                  </p>
+                )}
+                {status.state === "not_configured" && (
+                  <BillingWarning>
+                    Subscriptions aren’t available right now. You can keep using your free account
+                    and check back later.
+                  </BillingWarning>
+                )}
                 <button
                   type="button"
                   onClick={handleUpgrade}
-                  disabled={checkoutLoading || confirming}
+                  disabled={
+                    checkoutLoading ||
+                    confirming ||
+                    status.state === "not_configured" ||
+                    status.temporarilyUnavailable
+                  }
                   className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:brightness-95 disabled:opacity-50"
                 >
                   {checkoutLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {status?.state === "canceled" || status?.state === "unpaid"
-                    ? "Restart Pro"
-                    : "Upgrade to Pro"}
+                  {status.state === "not_configured" || status.temporarilyUnavailable
+                    ? "Subscriptions temporarily unavailable"
+                    : status?.state === "canceled" || status?.state === "unpaid"
+                      ? "Restart Pro"
+                      : "Upgrade to Pro"}
                 </button>
                 <p className="mt-3 text-xs leading-5 text-muted-foreground">
                   Renews monthly. AI allowances reset each calendar month in UTC and don’t roll

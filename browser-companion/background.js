@@ -20,12 +20,16 @@ const MAX_REQUEST_CACHE = 100;
 const MAX_PENDING_PERSISTENCE = 100;
 
 class CompanionError extends Error {
-  constructor(message, { code = "COMPANION_ERROR", phase = "runtime", retryAfterMs = 0 } = {}) {
+  constructor(
+    message,
+    { code = "COMPANION_ERROR", phase = "runtime", retryAfterMs = 0, retryable } = {},
+  ) {
     super(message);
     this.name = "CompanionError";
     this.code = code;
     this.phase = phase;
     this.retryAfterMs = retryAfterMs;
+    this.retryable = retryable;
   }
 }
 
@@ -111,6 +115,18 @@ async function parseResponse(response, phase = "network") {
     body = { error: text || `Request failed (${response.status})` };
   }
   if (!response.ok) {
+    if (
+      ["AI_BILLING_UNAVAILABLE", "AI_CONFIGURATION_ERROR", "AI_NOT_CONFIGURED"].includes(body?.code)
+    ) {
+      throw new CompanionError(
+        "AI help is temporarily unavailable while UniMate restores service.",
+        {
+          code: body.code,
+          phase: "ai",
+          retryable: false,
+        },
+      );
+    }
     const authRequired = response.status === 401 || body?.code === "AUTH_REQUIRED";
     const proRequired =
       response.status === 402 || (response.status === 403 && body?.code === "PRO_REQUIRED");
@@ -122,6 +138,7 @@ async function parseResponse(response, phase = "network") {
         code: "AI_RATE_LIMITED",
         phase,
         retryAfterMs: retryMs,
+        retryable: body?.retryable !== false,
       });
     }
     throw new CompanionError(
@@ -135,6 +152,7 @@ async function parseResponse(response, phase = "network") {
               ? "BACKEND_UNAVAILABLE"
               : "BACKEND_REQUEST_FAILED",
         phase: authRequired ? "auth" : proRequired ? "entitlement" : phase,
+        retryable: body?.retryable === false ? false : undefined,
       },
     );
   }
@@ -178,6 +196,11 @@ async function fetchBackendWithBoundedRetry(url, options, phase) {
     });
   let response = await fetchWithTimeout(url, options, AI_TIMEOUT_MS, timeoutError());
   if (response.status !== 429) return response;
+  const failure = await response
+    .clone()
+    .json()
+    .catch(() => null);
+  if (failure?.retryable === false) return response;
   const waitMs = retryAfterMs(response);
   // Retry only when the server explicitly asks for a short wait. Long or
   // missing retry windows are surfaced immediately instead of tying up the
@@ -601,6 +624,7 @@ function sanitizePageContext(pageContext, sender) {
 }
 
 async function callTextChat(session, message, pageContext, history, requestId) {
+  await requirePrivacyConsent();
   const response = await fetchBackendWithBoundedRetry(
     `${config.UNIMATE_API_URL.replace(/\/$/, "")}/api/dashboard-ai`,
     {
@@ -629,6 +653,7 @@ async function callTextChat(session, message, pageContext, history, requestId) {
 }
 
 async function callScreenshotChat(session, message, pageContext, imageDataUrl, history, requestId) {
+  await requirePrivacyConsent();
   const response = await fetchBackendWithBoundedRetry(
     `${config.UNIMATE_API_URL.replace(/\/$/, "")}/api/analyze-screenshot`,
     {
@@ -713,12 +738,14 @@ async function captureActiveTab(sender) {
       );
     }
     await assertStillActive();
+    await requirePrivacyConsent();
     let image = await chrome.tabs.captureVisibleTab(windowId, { format: "jpeg", quality: 65 });
     if (typeof image !== "string" || !image.startsWith("data:image/")) {
       throw new Error("Chrome returned an invalid capture.");
     }
     if (image.length > 2_400_000) {
       await assertStillActive();
+      await requirePrivacyConsent();
       image = await chrome.tabs.captureVisibleTab(windowId, { format: "jpeg", quality: 35 });
     }
     if (image.length > 2_500_000) {
@@ -1014,6 +1041,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         errorCode: companionError.code,
         errorPhase: companionError.phase,
         retryAfterMs: companionError.retryAfterMs || 0,
+        retryable: companionError.retryable,
       });
     });
   return true;

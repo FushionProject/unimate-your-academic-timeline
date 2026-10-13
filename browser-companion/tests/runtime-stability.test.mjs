@@ -32,6 +32,8 @@ function createHarness() {
     dropPrepareAcknowledgement: false,
     captureError: null,
     captureUiHidden: false,
+    privacyConsentAccepted: true,
+    revokeConsentDuringPrepare: false,
     visionResponses: [],
     requests: [],
   };
@@ -40,7 +42,12 @@ function createHarness() {
       local: {
         async get(key) {
           if (key === "unimateCompanionPrivacyConsent") {
-            return { unimateCompanionPrivacyConsent: { accepted: true, version: 1 } };
+            return {
+              unimateCompanionPrivacyConsent: {
+                accepted: state.privacyConsentAccepted,
+                version: 1,
+              },
+            };
           }
           return { unimateCompanionSession: session };
         },
@@ -74,6 +81,7 @@ function createHarness() {
         }
         if (request?.type === "PREPARE_COMPANION_CAPTURE") {
           state.captureUiHidden = true;
+          if (state.revokeConsentDuringPrepare) state.privacyConsentAccepted = false;
           if (state.dropPrepareAcknowledgement) {
             throw new Error("The message port closed before a response was received.");
           }
@@ -367,6 +375,43 @@ assert.doesNotMatch(
 {
   const { listeners, state } = createHarness();
   state.visionResponses.push(
+    new Response(
+      JSON.stringify({
+        code: "AI_BILLING_UNAVAILABLE",
+        retryable: false,
+        error: "AI help is unavailable",
+      }),
+      {
+        status: 503,
+        headers: { "content-type": "application/json", "retry-after": "0.001" },
+      },
+    ),
+  );
+  const response = await dispatch(
+    listeners.runtime,
+    {
+      type: "SEND_CHAT",
+      message: "Explain this",
+      context: { visiblePageText: "Course material" },
+      history: [],
+    },
+    { tab: { id: 11, windowId: 1, url: "https://course.example/" } },
+  );
+  assert.equal(response.ok, false);
+  assert.equal(response.errorCode, "AI_BILLING_UNAVAILABLE");
+  assert.equal(response.errorPhase, "ai");
+  assert.equal(response.retryable, false);
+  assert.equal(
+    state.requests.filter(({ href }) => href.endsWith("/api/analyze-screenshot")).length,
+    1,
+    "A provider billing outage must not retry the model",
+  );
+  assert.equal(state.requests.filter(({ href }) => href.endsWith("/api/dashboard-ai")).length, 0);
+}
+
+{
+  const { listeners, state } = createHarness();
+  state.visionResponses.push(
     new Response(JSON.stringify({ error: "Too many requests" }), {
       status: 429,
       headers: { "content-type": "application/json", "retry-after": "0.001" },
@@ -473,6 +518,21 @@ assert.doesNotMatch(
 // A lost acknowledgement can happen after the content script has already
 // hidden the host. Restoration must still be attempted and capture must fail
 // closed without leaving UniMate invisible.
+{
+  const { context, state } = createHarness();
+  state.revokeConsentDuringPrepare = true;
+  await assert.rejects(
+    context.__runtimeExports.captureActiveTab({ tab: { id: 11, windowId: 1 } }),
+    (error) => error.code === "PRIVACY_CONSENT_REQUIRED",
+  );
+  assert.equal(
+    state.captures.length,
+    0,
+    "Pausing sharing while capture prepares must prevent the screenshot",
+  );
+  assert.equal(state.captureUiHidden, false, "A paused capture must restore the panel");
+}
+
 {
   const { context, state } = createHarness();
   state.dropPrepareAcknowledgement = true;

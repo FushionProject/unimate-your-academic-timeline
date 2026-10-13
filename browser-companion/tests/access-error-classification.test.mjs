@@ -36,6 +36,31 @@ const background = loadFunctions(
   ["CompanionError", "retryAfterMs", "parseResponse"],
   { Date },
 );
+const content = loadFunctions(
+  "../content.js",
+  ["studentFacingError", "isRetryableMessagingError"],
+  {},
+);
+for (const code of ["AI_BILLING_UNAVAILABLE", "AI_CONFIGURATION_ERROR", "AI_NOT_CONFIGURED"]) {
+  await assert.rejects(
+    background.api.parseResponse(
+      new Response(JSON.stringify({ code, error: "Provider unavailable", retryable: false }), {
+        status: 503,
+      }),
+      "screenshot-analysis",
+    ),
+    (error) => {
+      assert.equal(error.code, code);
+      assert.equal(error.retryable, false);
+      assert.equal(error.phase, "ai");
+      assert.equal(content.api.isRetryableMessagingError(error), false);
+      const message = content.api.studentFacingError(error);
+      assert.match(message, /Your question is saved/);
+      assert.doesNotMatch(message, /try again|upgrade|sign in/i);
+      return true;
+    },
+  );
+}
 for (const [status, code, expectedCode, expectedPhase] of [
   [403, "PRO_REQUIRED", "PRO_REQUIRED", "entitlement"],
   [403, "AUTH_REQUIRED", "AUTH_REQUIRED", "auth"],

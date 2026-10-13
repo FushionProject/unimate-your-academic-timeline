@@ -2,15 +2,19 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import { z } from "zod";
 import {
   AI_COMPLETIONS_URL,
   DEFAULT_AI_MODEL,
   aiModel,
   aiCompletionBody,
   productionAiProtectionReady,
+  AiProviderError,
+  readAiProviderError,
 } from "../../src/lib/ai-provider.ts";
 import { courseworkEvidence } from "../../src/lib/coursework-grounding.ts";
 import { entitlementFor } from "../../src/lib/ai-entitlements.ts";
+import { getCompanionAccessState } from "../../src/lib/companion-store.ts";
 
 const source = fs.readFileSync(new URL("../../src/server.ts", import.meta.url), "utf8");
 const ast = ts.createSourceFile("server.ts", source, ts.ScriptTarget.Latest, true);
@@ -79,23 +83,31 @@ assert.equal(
 // Execute the real provider transport, replacing only network and accounting.
 {
   const calls = [];
+  const completions = [];
+  const signals = [];
+  let networkFailure = false;
   let reply = new Response(
     JSON.stringify({ choices: [{ message: { content: "A helpful answer" } }] }),
   );
   const context = serverHelpers(
-    ["CompanionUpstreamError", "AiRateLimitError", "aiTextCompletion"],
+    ["CompanionUpstreamError", "aiTextCompletion", "aiErrorResponse", "runCapacityTracked"],
     {
       AI_COMPLETIONS_URL,
       aiCompletionBody,
+      AiProviderError,
+      readAiProviderError,
       AI_PROVIDER_TIMEOUT_MS: 45000,
       withAiProviderCapacity: (operation) => operation(),
       fetchWithTimeout: async (...args) => {
         calls.push(args);
+        if (networkFailure) throw new TypeError("private-network-detail");
         return reply;
       },
-      recordProviderSignal: async () => {},
+      recordProviderSignal: async (signal) => signals.push(signal),
+      completeCapacitySafely: async (...args) => completions.push(args),
+      jsonResponse: (body, status = 200, headers) =>
+        new Response(JSON.stringify(body), { status, headers }),
       stripThinkBlock: (value) => value.trim(),
-      upstreamRetryAfterSeconds: (response) => Number(response.headers.get("retry-after")),
     },
   );
   const signal = new AbortController().signal;
@@ -118,11 +130,375 @@ assert.equal(
     context.api.aiTextCompletion("fixture", [], { maxTokens: 100 }),
     (error) => error.retryAfterSeconds === 7,
   );
+  for (const [status, code, expectedCode] of [
+    [429, "insufficient_quota", "AI_BILLING_UNAVAILABLE"],
+    [429, "billing_hard_limit_reached", "AI_BILLING_UNAVAILABLE"],
+    [429, "project_spend_limit_exceeded", "AI_BILLING_UNAVAILABLE"],
+    [429, "organization_spend_limit_exceeded", "AI_BILLING_UNAVAILABLE"],
+    [429, "organization_usage_limit_exceeded", "AI_BILLING_UNAVAILABLE"],
+    [401, "invalid_api_key", "AI_CONFIGURATION_ERROR"],
+    [403, "permission_denied", "AI_CONFIGURATION_ERROR"],
+  ]) {
+    reply = new Response(JSON.stringify({ error: { code, message: "private-provider-detail" } }), {
+      status,
+      headers: { "retry-after": "1" },
+    });
+    let failure;
+    const previousCalls = calls.length;
+    try {
+      await context.api.runCapacityTracked({ requestId: "fixture" }, "student", () =>
+        context.api.aiTextCompletion("fixture", [], { maxTokens: 100 }),
+      );
+    } catch (error) {
+      failure = error;
+    }
+    assert.ok(failure instanceof AiProviderError);
+    assert.equal(failure.code, expectedCode);
+    assert.equal(failure.retryAfterSeconds, 0);
+    const response = context.api.aiErrorResponse(failure);
+    const body = await response.json();
+    assert.equal(response.status, 503);
+    assert.equal(body.retryable, false);
+    assert.equal(response.headers.get("retry-after"), null);
+    assert.doesNotMatch(JSON.stringify(body), /private-provider-detail/);
+    assert.equal(calls.length, previousCalls + 1);
+    assert.equal(
+      signals.at(-1).rateLimited,
+      false,
+      "Billing failures are not a traffic rate limit",
+    );
+    assert.equal(completions.at(-1)[2], "provider_error");
+    assert.equal(completions.at(-1)[4], expectedCode.toLowerCase());
+  }
   reply = new Response(JSON.stringify({ choices: [] }));
   await assert.rejects(
     context.api.aiTextCompletion("fixture", [], { maxTokens: 100 }),
     (error) => error.code === "AI_EMPTY_RESPONSE",
   );
+  networkFailure = true;
+  try {
+    await context.api.aiTextCompletion("fixture", [], { maxTokens: 100 });
+    assert.fail("Transport failure must not be treated as an answer");
+  } catch (error) {
+    const response = context.api.aiErrorResponse(error);
+    const body = await response.json();
+    assert.equal(response.status, 502);
+    assert.equal(body.retryable, true);
+    assert.doesNotMatch(JSON.stringify(body), /private-network-detail/);
+  }
+}
+
+// Execute the screenshot route, including its real transport, serializer and
+// capacity completion; only external services and grounding are fixtures.
+{
+  const calls = [];
+  const signals = [];
+  const completions = [];
+  let reply;
+  const context = serverHelpers(
+    ["CompanionUpstreamError", "aiErrorResponse", "handleAnalyzeScreenshot"],
+    {
+      AI_COMPLETIONS_URL,
+      aiCompletionBody,
+      AiProviderError,
+      readAiProviderError,
+      AI_PROVIDER_TIMEOUT_MS: 45000,
+      MAX_IMAGE_DATA_URL_CHARS: 2500000,
+      process: { env: { OPENAI_API_KEY: "fixture-key" } },
+      jsonResponse: (body, status = 200, headers) =>
+        new Response(JSON.stringify(body), { status, headers }),
+      rejectLargeRequest: () => null,
+      requireCompanionEntitlement: async () => ({ user: { id: "student" } }),
+      enforceUserRateLimit: () => null,
+      aiFeatureEnabled: () => true,
+      parseJsonBody: (request) => request.json(),
+      reserveProductEntitlementOrResponse: async () => ({ requestId: "fixture-reservation" }),
+      normalizeProvenance: () => ({}),
+      resolveCurrentCompanionTask: (provenance) => ({ provenance, intent: "explain" }),
+      companionRequestDiagnostics: () => ({}),
+      buildProvenanceBlock: () => "Screenshot evidence",
+      buildTutorTaskInstruction: () => "Explain",
+      normalizeCompanionHistory: () => [],
+      companionMaxTokens: () => 500,
+      withAiProviderCapacity: (operation) => operation(),
+      fetchWithTimeout: async (...args) => {
+        calls.push(args);
+        return reply;
+      },
+      recordProviderSignal: async (signal) => signals.push(signal),
+      completeCapacitySafely: async (...args) => completions.push(args),
+      stripThinkBlock: (value) => value.trim(),
+      generateGroundedCompanionAnswer: async ({ callModel }) => ({
+        answer: await callModel("Grounded fixture instruction"),
+      }),
+    },
+  );
+  const cases = [
+    [429, "insufficient_quota", 503, "AI_BILLING_UNAVAILABLE", false],
+    [429, "billing_hard_limit_reached", 503, "AI_BILLING_UNAVAILABLE", false],
+    [429, "project_spend_limit_exceeded", 503, "AI_BILLING_UNAVAILABLE", false],
+    [429, "organization_spend_limit_exceeded", 503, "AI_BILLING_UNAVAILABLE", false],
+    [429, "organization_usage_limit_exceeded", 503, "AI_BILLING_UNAVAILABLE", false],
+    [401, "invalid_api_key", 503, "AI_CONFIGURATION_ERROR", false],
+    [403, "permission_denied", 503, "AI_CONFIGURATION_ERROR", false],
+    [429, "rate_limit_exceeded", 429, "AI_RATE_LIMITED", true],
+    [503, "server_error", 502, "AI_PROVIDER_ERROR", true],
+  ];
+  for (const [upstreamStatus, code, publicStatus, publicCode, retryable] of cases) {
+    reply = new Response(JSON.stringify({ error: { code, message: "private-provider-secret" } }), {
+      status: upstreamStatus,
+      headers: { "retry-after": "8" },
+    });
+    const request = new Request("https://unimate.test/api/analyze-screenshot", {
+      method: "POST",
+      body: JSON.stringify({ imageBase64: "data:image/png;base64,AAAA", question: "Explain this" }),
+    });
+    const previousCalls = calls.length;
+    const response = await context.api.handleAnalyzeScreenshot(request);
+    const body = await response.json();
+    assert.equal(response.status, publicStatus);
+    assert.equal(body.code, publicCode);
+    assert.equal(body.phase, "ai");
+    assert.equal(body.retryable, retryable);
+    assert.equal(response.headers.get("retry-after"), retryable ? "8" : null);
+    assert.doesNotMatch(JSON.stringify(body), /private-provider|fixture-key/);
+    assert.equal(calls.length, previousCalls + 1, "Never automatically retry a provider failure");
+    assert.equal(calls.at(-1)[4], request.signal);
+    const sentBody = JSON.parse(calls.at(-1)[1].body);
+    assert.equal(sentBody.messages.at(-1).content[1].image_url.url, "data:image/png;base64,AAAA");
+    assert.equal(signals.at(-1).rateLimited, publicCode === "AI_RATE_LIMITED");
+    assert.equal(completions.at(-1)[2], "provider_error");
+    assert.equal(completions.at(-1)[4], publicCode.toLowerCase());
+  }
+  const unknown = context.api.aiErrorResponse(new Error("private-provider-secret"));
+  assert.equal(unknown.status, 502);
+  assert.equal((await unknown.json()).retryable, true);
+}
+
+// Execute the Ask client adapter with simulated API responses, proving the
+// server's retry decision survives parsing and reaches the composer unchanged.
+{
+  const clientSource = fs.readFileSync(
+    new URL("../../src/functions/ask-unimate.ts", import.meta.url),
+    "utf8",
+  );
+  let reply;
+  const context = vm.createContext({
+    exports: {},
+    crypto,
+    fetch: async () => reply,
+    require: (name) => {
+      if (name === "zod") return { z };
+      if (name === "../lib/auth-fetch") return { getAuthHeaders: async () => ({}) };
+      throw new Error(`Unexpected client dependency: ${name}`);
+    },
+  });
+  vm.runInContext(
+    ts.transpileModule(clientSource, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+    }).outputText,
+    context,
+  );
+  for (const [code, retryable, status] of [
+    ["AI_BILLING_UNAVAILABLE", false, 503],
+    ["AI_CONFIGURATION_ERROR", false, 503],
+    ["AI_NOT_CONFIGURED", false, 503],
+    ["AI_RATE_LIMITED", true, 429],
+  ]) {
+    reply = new Response(
+      JSON.stringify({ error: "Safe helpful message", code, phase: "ai", retryable }),
+      { status },
+    );
+    await assert.rejects(
+      context.exports.askUniMate({ question: "Explain inertia" }),
+      (error) =>
+        error instanceof context.exports.UniMateApiError &&
+        error.retryable === retryable &&
+        error.code === code &&
+        error.status === status,
+    );
+  }
+  assert.equal(
+    new context.exports.UniMateApiError("Unavailable", 503, "AI_BILLING_UNAVAILABLE").retryable,
+    false,
+  );
+}
+
+// Execute the actual Ask gate with billing snapshots, including an HTTP-success
+// response carrying stale Free data while the subscription provider is offline.
+{
+  const askSource = fs.readFileSync(new URL("../../src/routes/ask.tsx", import.meta.url), "utf8");
+  const askAst = ts.createSourceFile(
+    "ask.tsx",
+    askSource,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const gate = askAst.statements.find((node) => node.name?.text === "AskAccessGate");
+  assert.ok(gate);
+  let billing;
+  let refetches = 0;
+  const context = vm.createContext({
+    useBillingStatus: () => billing,
+    getCompanionAccessState,
+    AskProIntroduction: "paywall",
+    Ask: "chat",
+    LoaderCircle: "loader",
+    React: {
+      createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
+    },
+  });
+  vm.runInContext(
+    ts.transpileModule(gate.getText(askAst), {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React },
+    }).outputText,
+    context,
+  );
+  const nodes = (tree) =>
+    tree && typeof tree === "object" ? [tree, ...tree.children.flatMap(nodes)] : [];
+  const snapshot = (data, other = {}) => ({
+    isPending: false,
+    isError: false,
+    isFetching: false,
+    data,
+    refetch: () => {
+      refetches++;
+    },
+    ...other,
+  });
+  for (const isPro of [false, true]) {
+    billing = snapshot({ isPro, temporarilyUnavailable: true });
+    let tree = context.AskAccessGate();
+    assert.equal(
+      nodes(tree).some((node) => node.type === "paywall" || node.type === "chat"),
+      false,
+    );
+    assert.ok(nodes(tree).some((node) => node.props.role === "alert"));
+    const button = nodes(tree).find((node) => node.type === "button");
+    button.props.onClick();
+    billing.isFetching = true;
+    tree = context.AskAccessGate();
+    assert.equal(nodes(tree).find((node) => node.type === "button").props.disabled, true);
+  }
+  assert.equal(refetches, 2);
+  billing = snapshot({ isPro: false });
+  assert.equal(context.AskAccessGate().type, "paywall");
+  billing = snapshot({ isPro: true });
+  assert.equal(context.AskAccessGate().type, "chat");
+  for (const options of [{ isError: true }, { data: undefined }]) {
+    billing = snapshot({ isPro: false }, options);
+    assert.ok(nodes(context.AskAccessGate()).some((node) => node.props.role === "alert"));
+  }
+  billing = snapshot(undefined, { isPending: true });
+  assert.ok(nodes(context.AskAccessGate()).some((node) => node.props.role === "status"));
+
+  let supportAttributes;
+  function inspect(node) {
+    if (ts.isJsxOpeningElement(node)) {
+      const attributes = Object.fromEntries(
+        node.attributes.properties
+          .filter(ts.isJsxAttribute)
+          .map((attribute) => [attribute.name.getText(askAst), attribute.initializer?.text]),
+      );
+      if (attributes.to === "/support") supportAttributes = attributes;
+    }
+    ts.forEachChild(node, inspect);
+  }
+  inspect(askAst);
+  assert.equal(
+    supportAttributes?.target,
+    "_blank",
+    "Support must not unmount the unsaved Ask draft",
+  );
+  assert.match(supportAttributes.rel, /noopener/);
+  assert.match(supportAttributes.rel, /noreferrer/);
+  assert.match(supportAttributes["aria-label"], /new tab.*draft stays here/);
+}
+
+// Provider error bodies are untrusted and bounded; public failures never expose
+// raw credentials or confuse the app's provider billing with a student plan.
+{
+  const classify = (status, error, headers) =>
+    readAiProviderError(new Response(JSON.stringify({ error }), { status, headers }));
+  const syntheticSecret = ["sk", "fixture", "never", "expose"].join("-");
+  for (const code of [
+    "insufficient_quota",
+    "billing_hard_limit_reached",
+    "billing_not_active",
+    "usage_limit_reached",
+    "credit_balance_exhausted",
+    "project_spend_limit_exceeded",
+    "organization_spend_limit_exceeded",
+    "organization_usage_limit_exceeded",
+  ]) {
+    const error = await classify(429, { code, message: syntheticSecret }, { "retry-after": "30" });
+    assert.equal(error.code, "AI_BILLING_UNAVAILABLE");
+    assert.equal(error.phase, "ai");
+    assert.equal(error.status, 503);
+    assert.equal(error.retryable, false);
+    assert.equal(error.retryAfterSeconds, 0);
+    assert.equal((JSON.stringify(error) + error.message).includes(syntheticSecret), false);
+  }
+  assert.equal(
+    (
+      await classify(429, {
+        message: "You exceeded your current quota, please check your plan and billing details.",
+      })
+    ).code,
+    "AI_BILLING_UNAVAILABLE",
+  );
+  const throttled = await classify(
+    429,
+    { code: "rate_limit_exceeded", message: "Requests per minute exceeded" },
+    { "retry-after": "2.5" },
+  );
+  assert.equal(throttled.code, "AI_RATE_LIMITED");
+  assert.equal(throttled.retryable, true);
+  assert.equal(throttled.retryAfterSeconds, 3);
+  assert.equal(
+    (
+      await classify(429, {
+        code: "rate_limit_exceeded",
+        message: "You exceeded your current quota of requests",
+      })
+    ).code,
+    "AI_RATE_LIMITED",
+    "Explicit provider rate code takes precedence over vague quota wording",
+  );
+  for (const value of ["invalid", "-4"])
+    assert.equal((await classify(429, {}, { "retry-after": value })).retryAfterSeconds, 0);
+  assert.equal(
+    (await classify(429, {}, { "retry-after": "999999999999" })).retryAfterSeconds,
+    86400,
+  );
+  for (const status of [401, 403, 404])
+    assert.equal(
+      (await classify(status, {})).status,
+      503,
+      "Provider authorization must not sign the student out",
+    );
+  assert.equal((await classify(400, { code: "model_not_found" })).code, "AI_CONFIGURATION_ERROR");
+  assert.equal((await classify(400, {})).retryable, false);
+  assert.equal((await classify(503, {})).retryable, true);
+  assert.equal(
+    (await readAiProviderError(new Response("<html>Unavailable</html>", { status: 502 }))).code,
+    "AI_PROVIDER_ERROR",
+  );
+  let cancelled = false;
+  const oversized = new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("x".repeat(17000)));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    }),
+    { status: 500 },
+  );
+  assert.equal((await readAiProviderError(oversized)).code, "AI_PROVIDER_ERROR");
+  assert.equal(cancelled, true, "Stop reading an oversized provider error instead of buffering it");
 }
 
 // Compile the production guard with DEV=false and verify it never spends or

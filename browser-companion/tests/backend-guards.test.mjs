@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 
 const serverPath = new URL("../../src/server.ts", import.meta.url);
 const source = await readFile(serverPath, "utf8");
+const provider = await readFile(new URL("../../src/lib/ai-provider.ts", import.meta.url), "utf8");
 
 assert.match(
   source,
@@ -58,7 +59,10 @@ assert.match(
   /fetchWithTimeout\([\s\S]*AI_PROVIDER_TIMEOUT_MS,/,
   "Companion vision-model calls must have a bounded timeout",
 );
-assert.match(source, /code: "AI_RATE_LIMITED"[\s\S]*429/);
+assert.match(provider, /new AiProviderError\(\s*"AI_RATE_LIMITED",\s*429,/);
+assert.match(source, /error instanceof AiProviderError/);
+assert.match(source, /retryable: error\.retryable/);
+assert.match(source, /"retry-after": String\(error\.retryAfterSeconds\)/);
 assert.doesNotMatch(
   source.slice(
     source.indexOf("async function handleAnalyzeScreenshot"),

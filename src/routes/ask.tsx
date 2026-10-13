@@ -18,7 +18,7 @@ import {
   GraduationCap,
   ArrowUpRight,
 } from "lucide-react";
-import { askUniMate } from "../functions/ask-unimate";
+import { askUniMate, UniMateApiError } from "../functions/ask-unimate";
 import ReactMarkdown from "react-markdown";
 import { LogoMark } from "../components/logo-mark";
 import { useCourses, useAssignments } from "../lib/courses";
@@ -26,6 +26,7 @@ import { PRO_PLAN } from "../lib/plan-catalog";
 import { ProtectedRoute } from "../components/protected-route";
 import { useAuth } from "../lib/auth-context";
 import { useBillingStatus } from "../lib/profile";
+import { getCompanionAccessState } from "../lib/companion-store";
 import {
   createCompanionConversation,
   deleteCompanionConversation,
@@ -50,8 +51,9 @@ export const Route = createFileRoute("/ask")({
 
 function AskAccessGate() {
   const billing = useBillingStatus();
+  const access = getCompanionAccessState(billing);
 
-  if (billing.isLoading || (billing.isError && billing.isFetching)) {
+  if (access === "checking") {
     return (
       <main className="grid min-h-[calc(100vh-73px)] place-items-center bg-background px-4">
         <div className="text-center" role="status" aria-live="polite">
@@ -64,7 +66,7 @@ function AskAccessGate() {
 
   // A failed plan check is not "not Pro" — never show a paying student the
   // upgrade paywall because of a transient billing outage.
-  if (billing.isError) {
+  if (access === "unknown") {
     return (
       <main className="grid min-h-[calc(100vh-73px)] place-items-center bg-background px-4">
         <div className="max-w-md text-center">
@@ -77,17 +79,18 @@ function AskAccessGate() {
           </p>
           <button
             type="button"
+            disabled={billing.isFetching}
             onClick={() => void billing.refetch()}
             className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:brightness-95"
           >
-            Try again
+            {billing.isFetching ? "Checking your plan…" : "Try again"}
           </button>
         </div>
       </main>
     );
   }
 
-  if (!billing.data?.isPro) return <AskProIntroduction />;
+  if (access === "free") return <AskProIntroduction />;
   return <Ask />;
 }
 
@@ -245,6 +248,7 @@ function Ask() {
     message: string;
     question: string;
     mode: "normal" | "simpler" | "deeper";
+    retryable: boolean;
   } | null>(null);
   const [usage, setUsage] = useState<{ used: number; limit: number; period: string } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -590,6 +594,7 @@ function Ask() {
       setSendError({
         question: questionToSend,
         mode,
+        retryable: !(error instanceof UniMateApiError) || error.retryable,
         message:
           error instanceof Error
             ? error.message
@@ -1013,14 +1018,26 @@ function Ask() {
                 className="mx-auto mb-3 flex max-w-3xl items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-3 text-sm"
               >
                 <p>{sendError.message}</p>
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => void handleSend(sendError.question, sendError.mode)}
-                  className="shrink-0 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold"
-                >
-                  Try again
-                </button>
+                {sendError.retryable ? (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void handleSend(sendError.question, sendError.mode)}
+                    className="shrink-0 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold"
+                  >
+                    Try again
+                  </button>
+                ) : (
+                  <Link
+                    to="/support"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Get help (opens in a new tab; your draft stays here)"
+                    className="shrink-0 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold"
+                  >
+                    Get help
+                  </Link>
+                )}
               </div>
             )}
             <form

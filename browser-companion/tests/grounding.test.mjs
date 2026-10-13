@@ -13,6 +13,7 @@ import {
   normalizeProvenance,
   resolveCompanionReference,
 } from "../../src/lib/companion-grounding.ts";
+import { readAiProviderError } from "../../src/lib/ai-provider.ts";
 
 const serverSource = fs.readFileSync(new URL("../../src/server.ts", import.meta.url), "utf8");
 let passed = 0;
@@ -266,11 +267,48 @@ check(
 );
 check(
   "upstream 429 is preserved for bounded extension retry",
-  serverSource.includes("class AiRateLimitError") &&
-    serverSource.includes("upstreamRetryAfterSeconds") &&
-    serverSource.includes("return jsonResponse(") &&
+  serverSource
+    .slice(
+      serverSource.indexOf("async function aiTextCompletion"),
+      serverSource.indexOf("async function handleDashboardAI"),
+    )
+    .includes("readAiProviderError(res)") &&
+    serverSource
+      .slice(
+        serverSource.indexOf("async function handleAnalyzeScreenshot"),
+        serverSource.indexOf("async function handleAiUsageSummary"),
+      )
+      .includes("readAiProviderError(providerResponse)") &&
+    serverSource.includes("error instanceof AiProviderError") &&
+    serverSource.includes("retryable: error.retryable") &&
     serverSource.includes('"retry-after": String(error.retryAfterSeconds)') &&
-    serverSource.includes("new AiRateLimitError(upstreamRetryAfterSeconds(providerResponse))"),
+    serverSource.includes("error.retryable && error.retryAfterSeconds"),
+);
+const rateLimited = await readAiProviderError(
+  new Response(JSON.stringify({ error: { code: "rate_limit_exceeded" } }), {
+    status: 429,
+    headers: { "retry-after": "3" },
+  }),
+);
+check(
+  "true provider rate limits remain retryable429 with their retry window",
+  rateLimited.status === 429 &&
+    rateLimited.code === "AI_RATE_LIMITED" &&
+    rateLimited.retryable &&
+    rateLimited.retryAfterSeconds === 3,
+);
+const billingUnavailable = await readAiProviderError(
+  new Response(JSON.stringify({ error: { code: "insufficient_quota" } }), {
+    status: 429,
+    headers: { "retry-after": "3" },
+  }),
+);
+check(
+  "provider billing limits are not student rate limits",
+  billingUnavailable.status === 503 &&
+    billingUnavailable.code === "AI_BILLING_UNAVAILABLE" &&
+    !billingUnavailable.retryable &&
+    billingUnavailable.retryAfterSeconds === 0,
 );
 
 console.log(`PASS ${passed} screenshot-first tutor grounding assertions`);

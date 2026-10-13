@@ -19,19 +19,31 @@ const errorSchema = z.object({
   error: z.string(),
   code: z.string().optional(),
   phase: z.string().optional(),
+  retryable: z.boolean().optional(),
 });
 
 export class UniMateApiError extends Error {
   status: number;
   code?: string;
   phase?: string;
+  retryable: boolean;
 
-  constructor(message: string, status: number, code?: string, phase?: string) {
+  constructor(message: string, status: number, code?: string, phase?: string, retryable?: boolean) {
     super(message);
     this.name = "UniMateApiError";
     this.status = status;
     this.code = code;
     this.phase = phase;
+    this.retryable =
+      retryable ??
+      ![
+        "AI_BILLING_UNAVAILABLE",
+        "AI_CONFIGURATION_ERROR",
+        "AI_NOT_CONFIGURED",
+        "AI_REQUEST_REJECTED",
+        "QUOTA_EXCEEDED",
+        "PRO_REQUIRED",
+      ].includes(code || "");
   }
 }
 
@@ -84,6 +96,7 @@ export async function askUniMate(data: {
       response.status,
       parsed.success ? parsed.data.code : undefined,
       parsed.success ? parsed.data.phase : undefined,
+      parsed.success ? parsed.data.retryable : undefined,
     );
   }
 

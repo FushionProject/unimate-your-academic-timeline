@@ -6,6 +6,7 @@ import { extractPdfText } from "../lib/pdf";
 import { ProtectedRoute } from "../components/protected-route";
 import { createSyllabusResultId, SYLLABUS_RESULT_STORAGE_PREFIX } from "../lib/syllabus-results";
 import { LogoMark } from "../components/logo-mark";
+import { removeBrowserStorage, writeBrowserStorage } from "../lib/browser-storage";
 
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
@@ -19,15 +20,19 @@ export const Route = createFileRoute("/planner")({
 
 function TabButton({
   active,
+  disabled,
   onClick,
   children,
 }: {
   active: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
     <button
+      type="button"
+      disabled={disabled}
       onClick={onClick}
       aria-pressed={active}
       className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition ${
@@ -45,14 +50,22 @@ function Planner() {
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pdfText, setPdfText] = useState("");
+  const [pastedText, setPastedText] = useState("");
   const [extractingPdf, setExtractingPdf] = useState(false);
   const [pdfError, setPdfError] = useState("");
   const [processingError, setProcessingError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const latestPdfRead = useRef(0);
+  const parseInFlight = useRef(false);
   const navigate = useNavigate();
 
   const handlePdfFile = async (file: File) => {
+    if (parseInFlight.current) return;
+    const readId = ++latestPdfRead.current;
+    setPdfText("");
+    setFilename(null);
+    setExtractingPdf(false);
+    setProcessingError("");
     if (file.type !== "application/pdf") {
       setPdfError("Please choose a PDF file.");
       return;
@@ -67,34 +80,52 @@ function Planner() {
     setExtractingPdf(true);
     try {
       const text = await extractPdfText(file);
+      if (readId !== latestPdfRead.current) return;
       if (!text) {
         setPdfError("Couldn't find any text in that PDF — it may be a scanned image.");
       } else {
         setPdfText(text);
       }
     } catch (error) {
+      if (readId !== latestPdfRead.current) return;
       console.error("Error extracting PDF text:", error);
       setPdfError("Failed to read that PDF. Please try another file.");
     } finally {
-      setExtractingPdf(false);
+      if (readId === latestPdfRead.current) setExtractingPdf(false);
     }
   };
 
   const handleMapSemester = async () => {
-    const syllabusText = tab === "pdf" ? pdfText : textareaRef.current?.value || "";
-    if (!syllabusText.trim()) {
+    const syllabusText = tab === "pdf" ? pdfText : pastedText;
+    if (parseInFlight.current || extractingPdf || !syllabusText.trim()) {
       return;
     }
 
+    const resultId = createSyllabusResultId();
+    const storageKey = `${SYLLABUS_RESULT_STORAGE_PREFIX}${resultId}`;
+    if (!writeBrowserStorage(() => sessionStorage, storageKey, "{}")) {
+      setProcessingError(
+        "Your browser couldn’t keep a review draft. Allow browser storage, then try again. Your syllabus is still here.",
+      );
+      return;
+    }
+    removeBrowserStorage(() => sessionStorage, storageKey);
+    parseInFlight.current = true;
     setLoading(true);
     setProcessingError("");
     try {
       const result = await parseSyllabus({ syllabusText });
-      const resultId = createSyllabusResultId();
-      sessionStorage.setItem(
-        `${SYLLABUS_RESULT_STORAGE_PREFIX}${resultId}`,
+      const stored = writeBrowserStorage(
+        () => sessionStorage,
+        storageKey,
         JSON.stringify({ items: result.items, syllabusText }),
       );
+      if (!stored) {
+        setProcessingError(
+          "Your timeline was read, but this browser couldn’t keep the review draft. Free some browser storage and try again. Your syllabus is still here.",
+        );
+        return;
+      }
       navigate({
         to: "/results",
         search: { resultId },
@@ -108,6 +139,7 @@ function Planner() {
         );
       }
     } finally {
+      parseInFlight.current = false;
       setLoading(false);
     }
   };
@@ -166,10 +198,22 @@ function Planner() {
           />
           <div className="relative rounded-3xl border border-border/60 bg-card/90 backdrop-blur-xl p-2 shadow-[var(--shadow-card)]">
             <div className="flex items-center gap-1 rounded-2xl bg-secondary/60 p-1">
-              <TabButton active={tab === "pdf"} onClick={() => setTab("pdf")}>
+              <TabButton
+                active={tab === "pdf"}
+                disabled={loading}
+                onClick={() => {
+                  if (!loading) setTab("pdf");
+                }}
+              >
                 <Upload className="h-3.5 w-3.5" /> Upload PDF
               </TabButton>
-              <TabButton active={tab === "text"} onClick={() => setTab("text")}>
+              <TabButton
+                active={tab === "text"}
+                disabled={loading}
+                onClick={() => {
+                  if (!loading) setTab("text");
+                }}
+              >
                 <FileText className="h-3.5 w-3.5" /> Paste text
               </TabButton>
             </div>
@@ -192,9 +236,12 @@ function Planner() {
                       const f = e.dataTransfer.files?.[0];
                       if (f) handlePdfFile(f);
                     }}
-                    onClick={() => inputRef.current?.click()}
+                    aria-disabled={loading}
+                    onClick={() => {
+                      if (!loading) inputRef.current?.click();
+                    }}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
+                      if (!loading && (event.key === "Enter" || event.key === " ")) {
                         event.preventDefault();
                         inputRef.current?.click();
                       }
@@ -208,11 +255,13 @@ function Planner() {
                     <input
                       ref={inputRef}
                       type="file"
+                      disabled={loading}
                       accept="application/pdf"
                       aria-label="Choose syllabus PDF"
                       className="hidden"
                       onChange={(e) => {
                         const f = e.target.files?.[0];
+                        e.target.value = "";
                         if (f) handlePdfFile(f);
                       }}
                     />
@@ -246,7 +295,9 @@ function Planner() {
                 </div>
               ) : (
                 <textarea
-                  ref={textareaRef}
+                  value={pastedText}
+                  onChange={(event) => setPastedText(event.target.value)}
+                  disabled={loading}
                   placeholder="Paste your syllabus text here…"
                   aria-label="Syllabus text"
                   className="w-full h-48 rounded-xl border border-border bg-secondary/40 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
@@ -255,7 +306,9 @@ function Planner() {
 
               <button
                 onClick={handleMapSemester}
-                disabled={loading || extractingPdf || (tab === "pdf" && !pdfText)}
+                disabled={
+                  loading || extractingPdf || !(tab === "pdf" ? pdfText : pastedText).trim()
+                }
                 className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold transition-transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed bg-[#F5C518] text-[#1a1a1a]"
               >
                 {loading ? (

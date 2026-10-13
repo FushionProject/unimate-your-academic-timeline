@@ -250,6 +250,14 @@ export function capacityErrorPayload(reservation: CapacityReservation): {
     : reservation.code === "AI_SYSTEM_UNAVAILABLE" || reservation.code === "PROVIDER_UNAVAILABLE"
       ? 503
       : 429;
+  const retryable = ![
+    "FREE_DAILY_LIMIT_REACHED",
+    "FREE_MONTHLY_LIMIT_REACHED",
+    "PRO_FAIR_USE_LIMIT_REACHED",
+    "AI_SYSTEM_UNAVAILABLE",
+    "DUPLICATE_IN_FLIGHT",
+    "DUPLICATE_REQUEST",
+  ].includes(reservation.code);
   return {
     status,
     headers:
@@ -260,6 +268,7 @@ export function capacityErrorPayload(reservation: CapacityReservation): {
       error: messages[reservation.code] || "AI help is temporarily unavailable. Please try again.",
       code: reservation.code,
       retryAfterSeconds: reservation.retryAfterSeconds,
+      retryable,
     },
   };
 }

@@ -201,6 +201,7 @@
             error.code = response?.errorCode || "COMPANION_ERROR";
             error.phase = response?.errorPhase || "runtime";
             error.retryAfterMs = Number(response?.retryAfterMs || 0);
+            error.retryable = response?.retryable;
             error.backgroundResponded = true;
             return reject(error);
           }
@@ -213,6 +214,7 @@
   }
 
   function isRetryableMessagingError(error) {
+    if (error?.retryable === false) return false;
     return /receiving end does not exist|message port closed|could not establish connection/i.test(
       String(error?.message || ""),
     );
@@ -388,6 +390,13 @@
 
   function studentFacingError(error, captureAttempted = false) {
     const raw = String(error?.message || "");
+    if (
+      ["AI_BILLING_UNAVAILABLE", "AI_CONFIGURATION_ERROR", "AI_NOT_CONFIGURED"].includes(
+        error?.code,
+      )
+    ) {
+      return "AI help is temporarily unavailable while UniMate restores service. Your question is saved below.";
+    }
     if (error?.code === "AUTH_REQUIRED" || error?.phase === "auth") {
       return "Your UniMate session has ended. Sign in again to continue.";
     }
@@ -396,6 +405,9 @@
     }
     if (error?.phase === "entitlement") {
       return "UniMate couldn't verify your Pro access. Please try again in a moment.";
+    }
+    if (error?.retryable === false) {
+      return "AI help is temporarily unavailable. Your question is saved below.";
     }
     if (/429|rate limit|too many requests/i.test(raw)) {
       return error?.retryAfterMs > 0

@@ -4,6 +4,7 @@ import { CheckCircle2, ExternalLink, LockKeyhole, MonitorCheck } from "lucide-re
 import { ProtectedRoute } from "../components/protected-route";
 import { useBillingStatus } from "../lib/profile";
 import { LogoMark } from "../components/logo-mark";
+import { getCompanionAccessState, getCompanionStoreUrl } from "../lib/companion-store";
 
 export const Route = createFileRoute("/companion-setup")({
   validateSearch: (search: Record<string, unknown>): { welcome?: string } => ({
@@ -16,27 +17,12 @@ export const Route = createFileRoute("/companion-setup")({
   ),
 });
 
-function storeUrl(): string | null {
-  const value = import.meta.env.VITE_COMPANION_STORE_URL?.trim();
-  if (!value) return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" &&
-      url.hostname === "chromewebstore.google.com" &&
-      url.pathname.startsWith("/detail/") &&
-      /^\/detail\/[^/]+\/[a-p]{32}\/?$/.test(url.pathname)
-      ? url.toString()
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 function CompanionSetup() {
-  const url = storeUrl();
+  const url = getCompanionStoreUrl(import.meta.env.VITE_COMPANION_STORE_URL);
   const { welcome } = Route.useSearch();
   const billing = useBillingStatus();
-  const isPro = Boolean(billing.data?.isPro);
+  const access = getCompanionAccessState(billing);
+  const isPro = access === "pro";
 
   return (
     <main className="min-h-screen bg-background">
@@ -64,14 +50,14 @@ function CompanionSetup() {
             </h2>
             <ol className="mt-6 space-y-5">
               <SetupStep number="1" title="Confirm Companion access">
-                {billing.isLoading
+                {access === "checking"
                   ? "Checking your UniMate plan…"
-                  : billing.isError
+                  : access === "unknown"
                     ? "We couldn’t check your plan right now. Try checking again below."
                     : isPro
                       ? "Your account has UniMate Pro. Companion access is ready."
                       : "Start with your Free account, then upgrade to Pro. Companion unlocks only after your purchase is confirmed."}
-                {!billing.isLoading && !billing.isError && !isPro && (
+                {access === "free" && (
                   <Link
                     to="/upgrade"
                     className="mt-3 inline-flex min-h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"
@@ -89,15 +75,19 @@ function CompanionSetup() {
                     ? "Checking access…"
                     : isPro
                       ? "Refresh access"
-                      : "Already upgraded? Check access"}
+                      : access === "unknown"
+                        ? "Try checking again"
+                        : "Already upgraded? Check access"}
                 </button>
               </SetupStep>
               <SetupStep number="2" title="Install the Chrome extension">
-                {!isPro
-                  ? "Installation unlocks after this account has confirmed Pro access."
-                  : url
-                    ? "Open the verified Chrome Web Store listing and choose Add to Chrome."
-                    : "The Chrome Web Store install link isn’t available yet. You can still study with Ask UniMate while Companion installation is being prepared."}
+                {access === "checking" || access === "unknown"
+                  ? "The install action will appear once we can confirm your Pro access and the Store listing is available."
+                  : !isPro
+                    ? "Installation unlocks after this account has confirmed Pro access."
+                    : url
+                      ? "Open the UniMate Chrome Web Store listing and choose Add to Chrome."
+                      : "The Chrome Web Store install link isn’t available yet. You can still study with Ask UniMate while Companion installation is being prepared."}
                 {isPro && url && (
                   <a
                     href={url}
@@ -132,17 +122,27 @@ function CompanionSetup() {
               <StatusRow
                 ready={isPro}
                 icon={LockKeyhole}
-                label={isPro ? "Pro access active" : "Pro access required for Companion AI"}
+                label={
+                  access === "checking"
+                    ? "Checking your plan…"
+                    : access === "unknown"
+                      ? "Plan access could not be confirmed"
+                      : isPro
+                        ? "Pro access active"
+                        : "Pro access required for Companion AI"
+                }
               />
               <StatusRow
                 ready={isPro && Boolean(url)}
                 icon={MonitorCheck}
                 label={
-                  !isPro
-                    ? "Installation locked until Pro is active"
-                    : url
-                      ? "Public install link ready"
-                      : "Chrome Web Store link pending"
+                  access === "checking" || access === "unknown"
+                    ? "Installation waiting for access check"
+                    : !isPro
+                      ? "Installation locked until Pro is active"
+                      : url
+                        ? "Public install link ready"
+                        : "Chrome Web Store link pending"
                 }
               />
             </div>

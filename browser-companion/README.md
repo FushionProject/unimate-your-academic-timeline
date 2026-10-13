@@ -1,4 +1,8 @@
-# UniMate Browser Companion V2
+# UniMate Browser Companion
+
+Implementation notes updated October 12, 2026. Automated checks do not establish
+that a production deployment, Store listing, or real installed-Chrome test has
+passed. See the release gates below.
 
 A Chrome Manifest V3 extension that adds a persistent UniMate mascot and Pro-only
 screenshot-aware tutor to ordinary web pages.
@@ -14,14 +18,17 @@ screenshot-aware tutor to ordinary web pages.
    packaging should run `npm run companion:configure`, which omits diagnostics.
 3. Confirm the reviewed Companion database changes have been applied to the
    target Supabase project before testing chat persistence. Do not assume this
-   from the repository state. See `SUPABASE_RELEASE_MIGRATION_REVIEW.md`; SQL is
-   intentionally unapplied on this branch.
+   from the repository state. See `SUPABASE_RELEASE_MIGRATION_REVIEW.md` and
+   `AI_ENTITLEMENT_ROLLOUT.md`; neither source files nor historical audit reports
+   prove the current deployment's migration state.
 4. Start UniMate with `npm run dev`, or point the extension at the deployed app.
 5. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**,
    and select the `browser-companion` directory.
 6. Open any regular `http`, `https`, or permitted `file` page and click the
-   yellow mascot. Sign in with an existing UniMate account whose
-   `profiles.is_pro` value is `true`.
+   yellow mascot. Review the consent notice, then sign in with an existing
+   UniMate account. Free accounts can open the Pro upgrade page, but cannot
+   collect page context or send Companion AI requests. Validate paid access
+   through the approved billing flow; do not edit profile flags to unlock users.
 
 The first time the panel opens, students must accept the page-context privacy
 notice before the extension reads or captures page content. Declining closes the
@@ -59,8 +66,9 @@ refresh open pages. Chrome blocks extensions on internal pages such as
   `/auth/v1/user`, requests the server-owned `/api/billing-status` decision, and
   blocks non-Pro chat. This keeps Stripe lifecycle state and development
   overrides consistent between the website and extension.
-- AI reasoning and intent handling live on the UniMate backend. No Groq key is
-  exposed and no AI API was added.
+- AI reasoning and intent handling live on the UniMate backend. The server uses
+  OpenAI; no AI provider key belongs in the extension. Only the public Supabase
+  client configuration and HTTPS UniMate origin are packaged.
 - Each user and assistant message is stored in `companion_chats`. RLS restricts
   SELECT and INSERT to rows where `auth.uid() = user_id`.
 - The web app's **Ask UniMate** page reads and writes the same authenticated
@@ -71,11 +79,20 @@ refresh open pages. Chrome blocks extensions on internal pages such as
   extension resolves that preference on every open/send and only loads or
   writes messages belonging to the selected conversation.
 - Extension auth is stored in `chrome.storage.local`, isolated from websites.
-  It uses the existing UniMate account; V1 does not create accounts.
+  It uses the existing UniMate account and does not create a second account.
+- Same-page follow-ups survive panel reopening. A navigation or conversation
+  switch resets the model's local page history; older saved messages remain
+  visible but are not evidence about the new page.
+- Failed questions remain in the composer. An answer that could not sync has a
+  save-only retry, with no second model call. Provider billing/configuration
+  outages retain the question without asking the student to upgrade or retry.
+- Page sharing can be paused from the panel. Consent is checked again immediately
+  before capture and before the context is sent to the backend.
 
 ## Explicit exclusions
 
-There is no Stripe or billing UI, Canvas API/LMS integration, or
+Checkout and billing management happen in the website; the extension only opens
+the website's upgrade page. There is no Canvas API/LMS integration or
 highlight-to-explain action. Flashcard and quiz-me are conversational AI
 formats—not new database-backed product subsystems. Highlighted text is passive
 context and never triggers a request.
@@ -84,8 +101,8 @@ context and never triggers a request.
 
 - A one-click session handoff from the UniMate website to avoid entering the
   same credentials in the extension.
-- Streaming responses, conversation grouping, delete/export controls, and
-  retention settings.
+- Streaming responses, in-panel conversation management/export, and retention
+  settings. Named conversation selection and deletion already exist in Ask UniMate.
 - Optional per-site permissions instead of broad host access.
 - Store screenshots and promotional artwork, automated Playwright extension
   tests, opt-in telemetry, and Chrome Web Store submission.
@@ -108,10 +125,8 @@ context and never triggers a request.
   and server-only development overrides stay outside the extension bundle.
 - Screenshot capture occurs only after Send. It does not continuously capture,
   persist screenshots, or use a screen-sharing picker.
-- The exact V1 schema has no conversation or page identifier. Persisted history
-  is displayed across sites, but only messages created in the current page
-  session are sent back to the model. V2 should add durable conversation
-  scoping before supporting sensitive or multi-project workflows.
+- Durable chats are scoped by conversation and account. Model follow-up context
+  is kept only for the current page session, not durably scoped to a page URL.
 - Direct REST inserts rely on the SQL migration, Data API exposure, grants, and
   RLS all being deployed correctly.
 
@@ -136,3 +151,24 @@ regression.
 See `CHROME_WEB_STORE_READINESS.md` for permission justifications, privacy/data
 disclosures, listing copy, asset requirements, packaging checks, and the legal
 and operational blockers that must be closed before submission.
+
+## Release gates
+
+1. Verify the production backend, paid-Pro entitlement, required migrations,
+   durable quota flags, and an approved provider spending ceiling. The owner's
+   current $25/month AI budget is an authorization, not evidence that a provider
+   or application-side cap has been applied.
+2. Confirm the canonical domain, published privacy/terms/support pages, monitored
+   support mailbox, asset rights, and publisher-account/listing details.
+3. Configure a production HTTPS origin with debug disabled. Run
+   `npm run companion:package`; the ZIP includes only approved runtime files,
+   has `manifest.json` at its root, and rejects unsafe client configuration.
+   This command creates a local archive only; it does not upload or publish.
+4. Test that exact release in real Chrome with synthetic coursework and isolated
+   Free/Pro accounts. Cover consent decline/pause, paid unlock, active-tab
+   capture, reload recovery, chat sync, sign-out, and restricted pages. Live AI
+   tests require the approved budget to be configured first.
+5. Prepare current listing screenshots and promotional artwork, submit through
+   the approved publisher account, and obtain the listing URL. Set
+   `VITE_COMPANION_STORE_URL` to the verified Chrome Web Store detail URL and
+   redeploy the website so Pro users see the install action.

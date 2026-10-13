@@ -3,6 +3,7 @@ import { Check, Sparkles } from "lucide-react";
 import { useAuth } from "../lib/auth-context";
 import { FREE_FEATURES, PRO_FEATURES, PRO_PLAN } from "../lib/plan-catalog";
 import { useBillingStatus } from "../lib/profile";
+import { getCompanionStoreUrl } from "../lib/companion-store";
 
 export const Route = createFileRoute("/pricing")({ component: Pricing });
 
@@ -22,6 +23,7 @@ function PlanFeatures({ items }: { items: readonly string[] }) {
 function Pricing() {
   const { user } = useAuth();
   const billing = useBillingStatus();
+  const companionStoreUrl = getCompanionStoreUrl(import.meta.env.VITE_COMPANION_STORE_URL);
 
   return (
     <main className="mx-auto min-h-[calc(100vh-73px)] max-w-5xl px-4 py-14 sm:px-6 sm:py-20">
@@ -49,7 +51,7 @@ function Pricing() {
           <p className="mt-1 text-xs text-muted-foreground">No card required</p>
           <PlanFeatures items={FREE_FEATURES} />
           <Link
-            to={user ? "/" : "/signup"}
+            to={user ? "/dashboard" : "/signup"}
             className="mt-8 inline-flex min-h-12 w-full items-center justify-center rounded-xl border border-border bg-background px-5 text-sm font-semibold transition hover:border-primary"
           >
             {user ? "Open your dashboard" : "Create a free account"}
@@ -70,6 +72,12 @@ function Pricing() {
           </p>
           <p className="mt-1 text-xs text-muted-foreground">Billed monthly · cancel anytime</p>
           <PlanFeatures items={PRO_FEATURES} />
+          {!companionStoreUrl && (
+            <p className="mt-5 rounded-xl border border-border bg-background/60 p-3 text-xs leading-5 text-muted-foreground">
+              Browser Companion’s public Chrome Web Store installation isn’t available yet. Ask
+              UniMate works here in the app.
+            </p>
+          )}
           <Link
             to={user ? "/upgrade" : "/signup"}
             search={user ? {} : { next: "upgrade" }}
