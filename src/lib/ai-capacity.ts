@@ -110,7 +110,9 @@ async function serviceRpc<T>(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
-    signal,
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(8_000)])
+      : AbortSignal.timeout(8_000),
   });
   if (!response.ok) throw new Error("AI_USAGE_RPC_UNAVAILABLE");
   const text = await response.text();
@@ -141,10 +143,10 @@ export async function reserveAiCapacity(options: {
       p_request_id: requestId,
       p_feature: options.feature,
       p_entitlement: options.entitlement,
-      p_provider: options.provider || process.env.AI_TEXT_PROVIDER || "groq",
+      p_provider: options.provider || "openai",
       p_daily_limit: override ? -1 : limits.daily,
       p_monthly_limit: override ? -1 : limits.monthly,
-      p_global_daily_limit: integerEnv("AI_GLOBAL_DAILY_REQUEST_LIMIT", 50_000),
+      p_global_daily_limit: integerEnv("AI_GLOBAL_DAILY_REQUEST_LIMIT", 1_000),
       p_estimated_input_tokens: estimateTokens(options.input),
     },
     options.request.signal,
@@ -186,7 +188,7 @@ export async function recordProviderSignal(options: {
   if (!durableQuotasEnabled() || process.env.AI_PROVIDER_CIRCUIT_BREAKER_ENABLED === "false")
     return;
   await serviceRpc<void>("record_ai_provider_signal", {
-    p_provider: options.provider || process.env.AI_TEXT_PROVIDER || "groq",
+    p_provider: options.provider || "openai",
     p_success: options.success,
     p_rate_limited: options.rateLimited === true,
     p_error_threshold: integerEnv("AI_PROVIDER_ERROR_THRESHOLD", 5, 1),
@@ -264,10 +266,22 @@ export function capacityErrorPayload(reservation: CapacityReservation): {
 
 export function needsWebSearch(question: string): boolean {
   const normalized = question.toLowerCase();
-  const explicit = /\b(search|look up|browse|web|online|source|citation|link)\b/.test(normalized);
-  const current =
-    /\b(today|tonight|latest|current|currently|recent|news|this week|this month|price|weather|schedule|score|election|president|ceo|law|regulation|202[5-9])\b/.test(
+  const explicit = /\b(search|look up|browse|web|online|sources?|citations?|links?)\b/.test(
+    normalized,
+  );
+  // Relative dates in a student's planner are account context, not internet
+  // research. Searching them leaks unnecessary context and adds paid calls.
+  const personalPlanning =
+    /\b(study|homework|assignments?|coursework|semester|syllabus|exams?|quiz|planner)\b|\b(my|our) (classes|courses|deadlines|schedule|grades)\b/.test(
       normalized,
     );
+  const current =
+    /\b(latest|recent|news|prices?|weather|election|president|ceo|regulations?)\b/.test(
+      normalized,
+    ) ||
+    (!personalPlanning &&
+      /\b(today|tonight|currently|this week|this month|schedule|score|202[5-9])\b|\bcurrent (information|events|rules|prices|polic|leader|president|news|law)/.test(
+        normalized,
+      ));
   return explicit || current;
 }

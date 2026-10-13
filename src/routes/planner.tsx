@@ -5,6 +5,7 @@ import { parseSyllabus, SyllabusParseError } from "../functions/parse-syllabus";
 import { extractPdfText } from "../lib/pdf";
 import { ProtectedRoute } from "../components/protected-route";
 import { createSyllabusResultId, SYLLABUS_RESULT_STORAGE_PREFIX } from "../lib/syllabus-results";
+import { LogoMark } from "../components/logo-mark";
 
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
@@ -115,17 +116,40 @@ function Planner() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-20">
         <div className="mb-8 text-center">
+          <LogoMark className="mx-auto mb-5 h-12 w-12" />
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-            Build your timeline
+            YOUR SEMESTER, ONE CLASS AT A TIME
           </p>
-          <h1 className="mb-2 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Add your syllabus
+          <h1 className="mb-3 font-serif-display text-4xl tracking-tight text-foreground sm:text-5xl">
+            Let’s turn your syllabus into a plan.
           </h1>
           <p className="text-muted-foreground">
-            Paste text for the fastest start, or upload a text-based PDF. You can review everything
-            before saving it to your dashboard.
+            Bring one class to start. UniMate finds the dates; you check them before they appear in
+            Today.
           </p>
         </div>
+
+        <ol
+          className="mx-auto mb-8 flex max-w-lg items-center justify-between gap-2 text-xs text-muted-foreground"
+          aria-label="Syllabus setup progress"
+        >
+          <li className="flex items-center gap-2 font-semibold text-foreground" aria-current="step">
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-primary">1</span> Add
+            syllabus
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-full border border-border">
+              2
+            </span>{" "}
+            Review dates
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-full border border-border">
+              3
+            </span>{" "}
+            Find your focus
+          </li>
+        </ol>
 
         <div className="relative">
           <div

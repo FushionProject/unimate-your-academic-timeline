@@ -11,12 +11,18 @@ import {
   MessageSquarePlus,
   LoaderCircle,
   LockKeyhole,
-  Puzzle,
+  BookOpen,
+  CalendarDays,
+  PenLine,
+  ListChecks,
+  GraduationCap,
+  ArrowUpRight,
 } from "lucide-react";
 import { askUniMate } from "../functions/ask-unimate";
 import ReactMarkdown from "react-markdown";
 import { LogoMark } from "../components/logo-mark";
-import { useCourses, useAssignments, getAcademicContext } from "../lib/courses";
+import { useCourses, useAssignments } from "../lib/courses";
+import { PRO_PLAN } from "../lib/plan-catalog";
 import { ProtectedRoute } from "../components/protected-route";
 import { useAuth } from "../lib/auth-context";
 import { useBillingStatus } from "../lib/profile";
@@ -31,6 +37,10 @@ import {
 } from "../lib/companion-chats";
 
 export const Route = createFileRoute("/ask")({
+  validateSearch: (search: Record<string, unknown>): { prompt?: string; course?: string } => ({
+    prompt: typeof search.prompt === "string" ? search.prompt.slice(0, 4000) : undefined,
+    course: typeof search.course === "string" ? search.course.slice(0, 100) : undefined,
+  }),
   component: () => (
     <ProtectedRoute>
       <AskAccessGate />
@@ -87,32 +97,35 @@ function AskProIntroduction() {
       <div className="mx-auto max-w-4xl">
         <header className="text-center">
           <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-primary">
-            <Puzzle className="h-6 w-6 text-primary-foreground" aria-hidden="true" />
+            <Sparkles className="h-6 w-6 text-primary-foreground" aria-hidden="true" />
           </div>
           <p className="mt-5 text-xs font-bold uppercase tracking-[0.2em] text-primary">
-            Ask UniMate + Browser Companion
+            Meet Ask UniMate
           </p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-            Your AI study partner is included with Pro
+            Big school day? Let’s figure it out together.
           </h1>
           <p className="mx-auto mt-3 max-w-2xl leading-7 text-muted-foreground">
-            Ask questions here, continue the same conversation beside any study page, and get help
-            with what is visible on your screen.
+            The concept that won’t click. The essay you can’t start. The week that feels like too
+            much. Bring it here, and leave with a clearer next step.
           </p>
         </header>
 
         <section className="mt-8 grid overflow-hidden rounded-3xl border border-border bg-card shadow-[var(--shadow-card)] md:grid-cols-[1fr_0.78fr]">
           <div className="p-6 sm:p-8">
-            <h2 className="text-xl font-semibold">How it works</h2>
+            <h2 className="text-xl font-semibold">A little backup, across your school day</h2>
             <ol className="mt-6 space-y-5">
-              <ProStep number="1" title="Upgrade to UniMate Pro">
-                Unlock Ask UniMate and the Browser Companion for this account.
+              <ProStep number="1" title="Make it make sense">
+                Break down a concept, work through an example, or practice with questions at your
+                pace.
               </ProStep>
-              <ProStep number="2" title="Install the Chrome extension">
-                Once Pro is active, UniMate guides you to the verified extension listing.
+              <ProStep number="2" title="Turn a busy week into a plan">
+                Use your saved courses and deadlines to choose what comes next and build a realistic
+                study session.
               </ProStep>
-              <ProStep number="3" title="Use one conversation everywhere">
-                Choose “Use in browser” and continue that chat from UniMate or the extension.
+              <ProStep number="3" title="Find your words">
+                Get thoughtful feedback on your draft, organize your argument, and keep your own
+                voice.
               </ProStep>
             </ol>
           </div>
@@ -121,25 +134,28 @@ function AskProIntroduction() {
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-background">
               <LockKeyhole className="h-5 w-5 text-primary" aria-hidden="true" />
             </div>
-            <h2 className="mt-4 font-semibold">Pro access required</h2>
+            <h2 className="mt-4 font-semibold">Included with UniMate Pro</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Free accounts can still use the timeline, dashboard, notes, and two syllabus parses.
-              AI conversations and screen-aware help unlock with Pro.
+              {PRO_PLAN.textMonthly} AI messages each calendar month, shared across Ask and the
+              Browser Companion. Your saved courses help keep the conversation relevant.
             </p>
             <div className="mt-6 flex flex-col gap-2">
               <Link
                 to="/upgrade"
                 className="inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"
               >
-                Get UniMate Pro · $5.99/month
+                Get UniMate Pro · {PRO_PLAN.monthlyPrice}/month
               </Link>
               <Link
-                to="/companion-setup"
+                to="/pricing"
                 className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background px-4 text-sm font-semibold"
               >
-                See Browser Companion setup
+                Compare plans and allowances
               </Link>
             </div>
+            <p className="mt-4 text-xs leading-5 text-muted-foreground">
+              Start right here. No extension needed. Cancel anytime.
+            </p>
           </aside>
         </section>
       </div>
@@ -180,16 +196,57 @@ interface Message {
   }[];
   relatedConcepts?: string[];
   createdAt?: string;
+  grounding?: { label: string; detail: string };
 }
 
 const starterPrompts = [
-  "What should I focus on today?",
-  "Explain my next assignment in simpler terms",
-  "Help me plan the next 45 minutes",
+  {
+    title: "Make it click",
+    detail: "Explain a tricky concept",
+    icon: BookOpen,
+    prompt:
+      "Help me understand a concept I'm stuck on. Ask me what topic I'm studying, then explain it with an example.",
+  },
+  {
+    title: "Plan my time",
+    detail: "Make room for the real world",
+    icon: CalendarDays,
+    prompt:
+      "Help me plan a realistic 45-minute study session using my saved assignments. If you need more context, ask me.",
+  },
+  {
+    title: "Quiz me",
+    detail: "Practice, one question at a time",
+    icon: GraduationCap,
+    prompt:
+      "Help me practice for an exam. Ask me the topic and level, then quiz me one question at a time with feedback.",
+  },
+  {
+    title: "Read my draft",
+    detail: "Feedback that keeps my voice",
+    icon: PenLine,
+    prompt:
+      "I'd like feedback on a draft. Ask me to paste it and share the assignment requirements, then help me improve it without rewriting it for me.",
+  },
+  {
+    title: "Find my next step",
+    detail: "Sort through what's due",
+    icon: ListChecks,
+    prompt:
+      "Help me decide what to work on next from my saved deadlines. Tell me what's urgent and suggest one manageable first step.",
+  },
 ];
 
 function Ask() {
-  const [question, setQuestion] = useState("");
+  const search = Route.useSearch();
+  const [question, setQuestion] = useState(search.prompt || "");
+  const [selectedCourseId, setSelectedCourseId] = useState(search.course || "");
+  const [sendError, setSendError] = useState<{
+    message: string;
+    question: string;
+    mode: "normal" | "simpler" | "deeper";
+  } | null>(null);
+  const [usage, setUsage] = useState<{ used: number; limit: number; period: string } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -202,15 +259,27 @@ function Ask() {
   );
   const [conversationBusy, setConversationBusy] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const questionInputRef = useRef<HTMLInputElement>(null);
+  const questionInputRef = useRef<HTMLTextAreaElement>(null);
   const historyRequestRef = useRef(0);
   const activeUserIdRef = useRef<string | null>(null);
   const selectedConversationIdRef = useRef<string | null>(null);
   const localMessageIdsRef = useRef(new Set<string>());
+  const sendingRef = useRef(false);
   const { user } = useAuth();
-  const { data: courses = [] } = useCourses();
+  const { data: courses = [], isError: coursesError, isLoading: coursesLoading } = useCourses();
   const { data: assignments = [] } = useAssignments();
   const userId = user?.id ?? null;
+  const selectedCourse = courses.find((course) => course.id === selectedCourseId);
+  const upcomingCount = assignments.filter(
+    (assignment) =>
+      !assignment.completed && (!selectedCourse || assignment.course_id === selectedCourse.id),
+  ).length;
+
+  useEffect(() => {
+    if (search.prompt) setQuestion(search.prompt);
+    setSelectedCourseId(search.course || "");
+    setSendError(null);
+  }, [search.prompt, search.course]);
 
   activeUserIdRef.current = userId;
   selectedConversationIdRef.current = selectedConversationId;
@@ -225,7 +294,8 @@ function Ask() {
       const rows = await loadCompanionChats(userId, selectedConversationId);
       if (
         requestNumber !== historyRequestRef.current ||
-        activeUserIdRef.current !== requestedUserId
+        activeUserIdRef.current !== requestedUserId ||
+        selectedConversationIdRef.current !== selectedConversationId
       ) {
         return;
       }
@@ -267,6 +337,7 @@ function Ask() {
     setHistoryNotice("");
     try {
       let dashboard = await loadConversationDashboard(userId);
+      if (activeUserIdRef.current !== userId) return;
       if (dashboard.conversations.length === 0) {
         const firstConversation = await createCompanionConversation(userId, "My first chat");
         await setBrowserConversation(userId, firstConversation.id);
@@ -275,6 +346,7 @@ function Ask() {
           activeBrowserConversationId: firstConversation.id,
         };
       }
+      if (activeUserIdRef.current !== userId) return;
       setConversations(dashboard.conversations);
       setActiveBrowserConversationId(dashboard.activeBrowserConversationId);
       setSelectedConversationId((current) =>
@@ -307,13 +379,15 @@ function Ask() {
   }, [userId, refreshConversationDashboard]);
 
   useEffect(() => {
+    historyRequestRef.current += 1;
     localMessageIdsRef.current.clear();
     setMessages([]);
+    setSendError(null);
     if (selectedConversationId) void refreshSharedHistory();
   }, [selectedConversationId, refreshSharedHistory]);
 
   const handleCreateConversation = async () => {
-    if (!userId || conversationBusy) return;
+    if (!userId || conversationBusy || loading) return;
     setConversationBusy(true);
     setConversationNotice("Creating a new chat…");
     setHistoryNotice("");
@@ -342,7 +416,7 @@ function Ask() {
   };
 
   const handleDeleteConversation = async (conversation: CompanionConversation) => {
-    if (!userId || conversationBusy) return;
+    if (!userId || conversationBusy || loading) return;
     if (!window.confirm(`Delete “${conversation.title}” and all of its messages?`)) return;
     setConversationBusy(true);
     setConversationNotice("Deleting chat…");
@@ -406,7 +480,7 @@ function Ask() {
 
   const getConversationHistory = () => {
     return messages.map((msg) => ({
-      role: msg.type === "user" ? "user" : "assistant",
+      role: msg.type === "user" ? ("user" as const) : ("assistant" as const),
       content: msg.content,
     }));
   };
@@ -415,8 +489,16 @@ function Ask() {
     overrideQuestion?: string,
     mode: "normal" | "simpler" | "deeper" = "normal",
   ) => {
-    const questionToSend = overrideQuestion || question;
-    if (!questionToSend.trim() || loading || !selectedConversationId) return;
+    const questionToSend = (overrideQuestion || question).trim();
+    if (
+      !questionToSend ||
+      sendingRef.current ||
+      historyLoading ||
+      !selectedConversationId ||
+      (selectedCourseId && !selectedCourse)
+    )
+      return;
+    sendingRef.current = true;
 
     const requestUserId = userId;
     const requestConversationId = selectedConversationId;
@@ -431,33 +513,29 @@ function Ask() {
     setMessages((prev) => [...prev, userMessage]);
     setQuestion("");
     setLoading(true);
+    setSendError(null);
 
     try {
-      // Course/grade context is populated automatically from the planner.
-      const combinedClassContext: string[] = [];
-      let academicContextStr = "";
-
-      if (courses.length > 0) {
-        academicContextStr = getAcademicContext(courses, assignments, 12);
-        if (academicContextStr) {
-          combinedClassContext.push("Courses synced from planner");
-        }
-      }
-
       const result = await askUniMate({
         question: questionToSend,
         conversationHistory: getConversationHistory(),
-        classContext: combinedClassContext,
         mode,
-        canvasContext: academicContextStr,
+        selectedCourseId: selectedCourse?.id,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
-      if (activeUserIdRef.current !== requestUserId) return;
+      if (
+        activeUserIdRef.current !== requestUserId ||
+        selectedConversationIdRef.current !== requestConversationId
+      )
+        return;
+      if (result.usage) setUsage(result.usage);
       const aiMessage: Message = {
         id: `local-ai-${crypto.randomUUID()}`,
         type: "ai",
         content: result.answer,
         sources: result.webResults,
         relatedConcepts: result.relatedConcepts || [],
+        grounding: result.grounding,
       };
       localMessageIdsRef.current.add(aiMessage.id);
       setMessages((prev) => [...prev, aiMessage]);
@@ -501,18 +579,24 @@ function Ask() {
         }
       }
     } catch (error) {
-      if (activeUserIdRef.current !== requestUserId) return;
-      const errorMessage: Message = {
-        id: `local-error-${crypto.randomUUID()}`,
-        type: "ai",
-        content:
+      if (
+        activeUserIdRef.current !== requestUserId ||
+        selectedConversationIdRef.current !== requestConversationId
+      )
+        return;
+      localMessageIdsRef.current.delete(userMessage.id);
+      setMessages((current) => current.filter((message) => message.id !== userMessage.id));
+      setQuestion((current) => current || questionToSend);
+      setSendError({
+        question: questionToSend,
+        mode,
+        message:
           error instanceof Error
             ? error.message
-            : "I couldn't finish that response. Please try again in a moment.",
-      };
-      localMessageIdsRef.current.add(errorMessage.id);
-      setMessages((prev) => [...prev, errorMessage]);
+            : "I couldn't finish that response. Your question is saved below — let's try again.",
+      });
     } finally {
+      sendingRef.current = false;
       if (activeUserIdRef.current === requestUserId) setLoading(false);
     }
   };
@@ -527,18 +611,36 @@ function Ask() {
   const handleConceptClick = (concept: string) => handleSend(concept, "normal");
 
   return (
-    <div className="min-h-[calc(100vh-12rem)] bg-background flex flex-col">
-      <div className="mx-auto flex w-full max-w-7xl flex-1 overflow-hidden rounded-2xl border border-border/60 bg-card/20">
-        <aside className="hidden w-72 shrink-0 flex-col border-r border-border/60 bg-card/50 md:flex">
+    <main className="mx-auto flex min-h-[calc(100dvh-10rem)] max-w-7xl flex-col px-3 py-5 sm:px-6 sm:py-7">
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <LogoMark className="h-10 w-10" />
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Ask UniMate</h1>
+            <p className="text-xs text-muted-foreground">Your school day, with a little backup.</p>
+          </div>
+        </div>
+        <Link
+          to="/upgrade"
+          className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-foreground"
+        >
+          Pro ·{" "}
+          {usage && usage.limit > 0
+            ? `${Math.max(0, usage.limit - usage.used)} messages left this month`
+            : `${PRO_PLAN.textMonthly} messages / month`}
+        </Link>
+      </header>
+      <div className="flex min-h-[38rem] w-full flex-1 overflow-hidden rounded-3xl border border-border/60 bg-card/50 shadow-[var(--shadow-card)]">
+        <aside className="hidden w-64 shrink-0 flex-col border-r border-border/60 bg-card/50 md:flex">
           <div className="flex items-center justify-between border-b border-border/60 p-4">
             <div>
               <p className="text-sm font-semibold text-foreground">Your chats</p>
-              <p className="text-xs text-muted-foreground">Choose what follows you</p>
+              <p className="text-xs text-muted-foreground">Pick up where you left off</p>
             </div>
             <button
               type="button"
               onClick={handleCreateConversation}
-              disabled={conversationBusy}
+              disabled={conversationBusy || loading}
               className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-50"
               aria-label="Create a new conversation"
               title="New conversation"
@@ -571,6 +673,7 @@ function Ask() {
                   <button
                     type="button"
                     onClick={() => setSelectedConversationId(conversation.id)}
+                    disabled={loading}
                     className="w-full truncate rounded-md px-1 py-1 text-left text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
                     aria-current={selected ? "true" : undefined}
                     title={conversation.title}
@@ -595,7 +698,7 @@ function Ask() {
                     <button
                       type="button"
                       onClick={() => handleDeleteConversation(conversation)}
-                      disabled={conversationBusy}
+                      disabled={conversationBusy || loading}
                       className="rounded-lg p-1.5 text-muted-foreground opacity-60 hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
                       aria-label={`Delete ${conversation.title}`}
                     >
@@ -606,11 +709,23 @@ function Ask() {
               );
             })}
           </div>
+          <div className="border-t border-border/60 p-4">
+            <p className="text-xs leading-5 text-muted-foreground">
+              Want help beside your coursework?
+            </p>
+            <Link
+              to="/companion-setup"
+              className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-foreground"
+            >
+              Set up Browser Companion <ArrowUpRight className="h-3 w-3" />
+            </Link>
+          </div>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center justify-between border-b border-border/60 px-4 py-3 md:hidden">
             <select
               value={selectedConversationId || ""}
+              disabled={loading}
               onChange={(event) => setSelectedConversationId(event.target.value)}
               className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm"
               aria-label="Choose conversation"
@@ -625,7 +740,7 @@ function Ask() {
             <button
               type="button"
               onClick={handleCreateConversation}
-              disabled={conversationBusy}
+              disabled={conversationBusy || loading}
               className="ml-2 grid h-10 w-10 place-items-center rounded-xl bg-primary text-primary-foreground"
               aria-label="Create a new conversation"
             >
@@ -645,6 +760,49 @@ function Ask() {
                 <MonitorCheck className="h-4 w-4" />
               </button>
             )}
+          </div>
+          {conversationNotice && (
+            <p
+              className="mx-4 mt-3 rounded-xl bg-primary/10 px-3 py-2 text-xs text-foreground md:hidden"
+              role="status"
+              aria-live="polite"
+            >
+              {conversationNotice}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-background/50 px-4 py-3 sm:px-6">
+            <label htmlFor="ask-course" className="text-xs font-medium text-muted-foreground">
+              Focus
+            </label>
+            <select
+              id="ask-course"
+              value={selectedCourseId}
+              disabled={loading || coursesLoading}
+              onChange={(event) => setSelectedCourseId(event.target.value)}
+              className="min-h-9 max-w-full rounded-lg border border-border bg-background px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <option value="">All my schoolwork</option>
+              {selectedCourseId && !selectedCourse && (
+                <option value={selectedCourseId}>Course unavailable — choose a focus</option>
+              )}
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.course_code || course.name}
+                  {course.course_code ? ` · ${course.name}` : ""}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-muted-foreground">
+              {coursesError
+                ? "Course context couldn’t load. General help is still available."
+                : coursesLoading
+                  ? "Loading your courses…"
+                  : selectedCourseId && !selectedCourse
+                    ? "Choose an available course or all schoolwork."
+                    : courses.length
+                      ? `${selectedCourse ? selectedCourse.course_code || selectedCourse.name : `${courses.length} saved courses`} · ${upcomingCount} open assignments`
+                      : "Add courses in your dashboard for more personal help."}
+            </span>
           </div>
           {/* Conversation Area */}
           <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
@@ -671,23 +829,37 @@ function Ask() {
                 Opening your conversation…
               </div>
             ) : messages.length === 0 ? (
-              <div className="flex min-h-[22rem] flex-col items-center justify-center text-center">
-                <LogoMark className="h-16 w-16 mb-5 sm:h-20 sm:w-20" />
-                <h2 className="font-serif-display text-2xl font-medium text-foreground mb-2">
-                  Ask UniMate
+              <div className="mx-auto flex min-h-[25rem] max-w-2xl flex-col items-center justify-center text-center">
+                <div className="mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-primary/15">
+                  <Sparkles className="h-7 w-7 text-primary" aria-hidden="true" />
+                </div>
+                <h2 className="font-serif-display mb-3 text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+                  What’s on your mind?
                 </h2>
-                <p className="max-w-md text-sm text-muted-foreground">
-                  Ask here or from the Browser Companion. Your conversation follows your UniMate
-                  account between both places.
+                <p className="max-w-md text-sm leading-6 text-muted-foreground">
+                  Bring the messy question, the packed week, or the thing that just isn’t clicking.
+                  We’ll find a place to start.
                 </p>
-                <div className="mt-5 flex max-w-xl flex-wrap justify-center gap-2">
+                <div className="mt-7 grid w-full grid-cols-1 gap-2 text-left sm:grid-cols-2">
                   {starterPrompts.map((prompt) => (
                     <button
-                      key={prompt}
-                      onClick={() => handleSend(prompt)}
-                      className="rounded-full border border-border bg-card/70 px-3 py-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+                      key={prompt.title}
+                      type="button"
+                      onClick={() => {
+                        setQuestion(prompt.prompt);
+                        questionInputRef.current?.focus();
+                      }}
+                      className="group flex min-h-20 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-4 py-3 text-left transition hover:border-primary/50 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
-                      {prompt}
+                      <prompt.icon className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                      <span>
+                        <span className="block text-sm font-semibold text-foreground">
+                          {prompt.title}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {prompt.detail}
+                        </span>
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -718,6 +890,12 @@ function Ask() {
                         <div className="prose prose-sm max-w-none text-sm prose-headings:mb-2 prose-headings:mt-3 prose-p:my-2 prose-li:my-0.5">
                           <ReactMarkdown>{message.content}</ReactMarkdown>
                         </div>
+                        {message.grounding && (
+                          <p className="mt-3 border-t border-border/60 pt-2 text-[11px] leading-5 text-muted-foreground">
+                            <span className="font-semibold">{message.grounding.label}:</span>{" "}
+                            {message.grounding.detail}
+                          </p>
+                        )}
                         {message.type === "ai" && (
                           <>
                             <div className="mt-3 flex gap-2">
@@ -738,10 +916,11 @@ function Ask() {
                             </div>
                             {message.relatedConcepts && message.relatedConcepts.length > 0 && (
                               <div className="mt-3 flex flex-wrap gap-2">
-                                {message.relatedConcepts.map((concept, index) => (
+                                {message.relatedConcepts.map((concept) => (
                                   <button
                                     key={concept}
                                     onClick={() => handleConceptClick(concept)}
+                                    disabled={loading}
                                     className="inline-flex items-center gap-1.5 text-xs rounded-full px-3 py-1 transition-colors bg-primary/10 text-primary hover:bg-primary/20"
                                   >
                                     <Sparkles className="h-3 w-3" />
@@ -788,7 +967,7 @@ function Ask() {
                       className={`rounded-2xl rounded-tl-sm px-4 py-3 ${"bg-card/60 border border-border/60"}`}
                     >
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>Thinking</span>
+                        <span>Let’s work through this…</span>
                         <span className="flex gap-1" aria-hidden="true">
                           <div className="h-2 w-2 rounded-full bg-muted-foreground/40 animate-bounce" />
                           <div
@@ -816,49 +995,108 @@ function Ask() {
                 <span>{historyNotice}</span>
                 <button
                   type="button"
-                  onClick={() => void refreshSharedHistory()}
+                  onClick={() =>
+                    void (selectedConversationId
+                      ? refreshSharedHistory()
+                      : refreshConversationDashboard())
+                  }
+                  disabled={loading || historyLoading || conversationBusy}
                   className="shrink-0 font-medium underline underline-offset-2"
                 >
                   Refresh
                 </button>
               </div>
             )}
-            <div className="mx-auto flex max-w-3xl gap-2 sm:gap-3">
-              <input
+            {sendError && (
+              <div
+                role="alert"
+                className="mx-auto mb-3 flex max-w-3xl items-center justify-between gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-3 text-sm"
+              >
+                <p>{sendError.message}</p>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => void handleSend(sendError.question, sendError.mode)}
+                  className="shrink-0 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSend();
+              }}
+              className="mx-auto max-w-3xl rounded-2xl border border-border bg-background p-2 shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10"
+            >
+              <label htmlFor="ask-question" className="sr-only">
+                Message Ask UniMate
+              </label>
+              <textarea
+                id="ask-question"
                 ref={questionInputRef}
-                type="text"
+                rows={3}
+                maxLength={4000}
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Ask UniMate anything…"
+                placeholder="What are we working through today?"
                 aria-label="Ask UniMate a question"
+                aria-describedby="ask-composer-help"
                 disabled={!selectedConversationId || historyLoading}
-                className="flex-1 rounded-full border border-border/60 bg-background px-5 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all disabled:opacity-50"
+                className="block max-h-64 min-h-20 w-full resize-y rounded-xl bg-transparent px-3 py-2 text-sm leading-6 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.nativeEvent.isComposing) void handleSend();
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    void handleSend();
+                  }
                 }}
               />
-              <button
-                onClick={() => handleSend()}
-                disabled={loading || historyLoading || !selectedConversationId || !question.trim()}
-                aria-label="Send question"
-                title="Send question"
-                className="h-12 w-12 rounded-full flex items-center justify-center transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed bg-primary text-primary-foreground"
-              >
-                <Send className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => void refreshSharedHistory()}
-                disabled={historyLoading || loading}
-                aria-label="Refresh shared Companion history"
-                title="Refresh shared Companion history"
-                className="h-12 w-12 rounded-full flex items-center justify-center transition hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 bg-primary/10 text-primary"
-              >
-                <History className="h-5 w-5" />
-              </button>
-            </div>
+              <div className="flex items-center justify-between gap-3 px-2 pb-1">
+                <p id="ask-composer-help" className="text-[11px] text-muted-foreground">
+                  Shift + Enter for a new line
+                  {question.length > 3500 ? ` · ${4000 - question.length} characters left` : ""}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void refreshSharedHistory()}
+                    disabled={!selectedConversationId || historyLoading || loading}
+                    aria-label="Refresh shared Companion history"
+                    title="Refresh shared Companion history"
+                    className="grid h-9 w-9 place-items-center rounded-xl text-muted-foreground transition hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40"
+                  >
+                    <History className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={
+                      loading ||
+                      historyLoading ||
+                      !selectedConversationId ||
+                      !question.trim() ||
+                      Boolean(selectedCourseId && !selectedCourse)
+                    }
+                    aria-label="Send question"
+                    title="Send question"
+                    className="h-10 w-10 rounded-xl flex items-center justify-center transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed bg-primary text-primary-foreground"
+                  >
+                    {loading ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </form>
+            <p className="mx-auto mt-2 max-w-3xl text-center text-[10px] leading-5 text-muted-foreground">
+              Uses your messages and saved course details. Paste readings or a draft when you want
+              source-specific help. Check important requirements with your course materials.
+            </p>
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

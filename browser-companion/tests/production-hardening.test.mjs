@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const server = await readFile(new URL("../../src/server.ts", import.meta.url), "utf8");
+const provider = await readFile(new URL("../../src/lib/ai-provider.ts", import.meta.url), "utf8");
 const background = await readFile(new URL("../background.js", import.meta.url), "utf8");
 const content = await readFile(new URL("../content.js", import.meta.url), "utf8");
 const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
@@ -22,8 +23,9 @@ assert.match(server, /searchParams\.get\("reconcile"\) !== "false"/);
 assert.match(server, /"cache-control", "no-store"/);
 assert.match(server, /function withSecurityHeaders/);
 assert.match(server, /"x-frame-options", "DENY"/);
-assert.match(server, /GROQ_TEXT_MODEL/);
-assert.match(server, /GROQ_VISION_MODEL/);
+assert.match(provider, /OPENAI_TEXT_MODEL/);
+assert.match(provider, /OPENAI_VISION_MODEL/);
+assert.match(server, /aiCompletionBody/);
 
 assert.match(background, /inFlightChatRequests/);
 assert.match(background, /isTrustedUniMatePage\(sender\)/);

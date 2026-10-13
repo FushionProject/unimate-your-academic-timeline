@@ -9,8 +9,8 @@ const sidebar = fs.readFileSync(
 
 assert.match(
   rootRoute,
-  /<div className="flex min-w-0 flex-1">\s*<Sidebar \/>/,
-  "the application sidebar must render independently of public/private route state",
+  /\{\(!isPublicPage \|\| classic\) && <Sidebar \/>\}/,
+  "public premium pages should stay focused while classic keeps the application sidebar",
 );
 assert.doesNotMatch(
   rootRoute,
@@ -19,8 +19,8 @@ assert.doesNotMatch(
 );
 assert.match(
   sidebar,
-  /label: "Pricing", to: "\/pricing"/,
-  "the persistent desktop sidebar must include the pricing route",
+  /label: "Browser Companion", to: "\/companion-setup"/,
+  "the persistent desktop sidebar must include Browser Companion setup and plan access",
 );
 
 console.log("PASS application shell regression checks");

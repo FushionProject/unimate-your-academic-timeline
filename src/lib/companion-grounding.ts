@@ -57,9 +57,12 @@ Tutor behavior:
 - Reclassify the current request from the current message and fresh page sources. Conversation history is conversational background only and must never override a clearly visible current section or task label.
 - Resolve references such as "number 4" across questions, sections, headings, cards, steps, list items, and paragraphs. Never assume every number means a question.
 - Solve or answer first. Explain briefly next. Summarize only when asked.
-- For a problem, start with "Answer:" or "Correct answer:", then give the shortest useful work.
+- For a problem, start with "Answer:" or "Correct answer:", then give the shortest useful work, unless the student requested a hint or a guided walkthrough.
 - For an explanation, explain the concept directly. For notes, give the requested summary. For flashcards or a quiz, create them directly.
 - Be conversational and concise. Usually use 2–6 short lines. Offer more detail only when useful.
+- Be a patient study partner: use natural, kind language, explain unfamiliar terms, and make the next step feel manageable. Avoid forced cheerleading, judgment, or treating confusion as a failure.
+- Match the student's pace. If they ask for a hint, give one useful hint without revealing the full solution. If they feel stuck or overwhelmed, briefly acknowledge it and start with one small, concrete step.
+- Connect follow-up questions to the conversation where helpful, but re-check every page-specific fact against the current screenshot or supplied text.
 - Never narrate the browser or inventory the page. Do not begin with "I see", "The page contains", or "This appears to be".
 - Never use report headings such as "Visible on page", "Evidence", "What is missing", or "Suggested next step".
 
@@ -80,13 +83,7 @@ export const GROUNDED_FALLBACK_ANSWER =
   "I can’t read enough of the relevant question to answer reliably. Scroll to it, highlight it, capture it again, or paste the exact text.";
 
 export type CompanionIntent =
-  | "solve"
-  | "answer"
-  | "explain"
-  | "summarize"
-  | "flashcard"
-  | "quiz-me"
-  | "general-help";
+  "solve" | "answer" | "explain" | "summarize" | "flashcard" | "quiz-me" | "general-help";
 export const COMPANION_PROMPT_TEMPLATE_ID = "screenshot-first-tutor-v2";
 
 export type CompanionReferenceResolution = {

@@ -4,9 +4,12 @@ import { CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useAuth } from "../lib/auth-context";
 import { NEW_ACCOUNT_SETUP_KEY } from "../lib/auth-context";
 import { isSupabaseConfigured } from "../lib/supabase";
+import { authDestinationPath, validateAuthIntentSearch } from "../lib/auth-destination";
+import { removeBrowserStorage } from "../lib/browser-storage";
 
 export const Route = createFileRoute("/signin")({
   component: SignIn,
+  validateSearch: validateAuthIntentSearch,
 });
 
 function friendlyAuthError(message: string, code?: string): string {
@@ -36,6 +39,7 @@ function friendlyAuthError(message: string, code?: string): string {
 }
 
 function SignIn() {
+  const { next } = Route.useSearch();
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -59,11 +63,8 @@ function SignIn() {
       if (error) {
         setError(friendlyAuthError(error, errorCode));
       } else {
-        const needsSetup = localStorage.getItem(NEW_ACCOUNT_SETUP_KEY) === "pending";
-        if (needsSetup) localStorage.removeItem(NEW_ACCOUNT_SETUP_KEY);
-        await navigate(
-          needsSetup ? { to: "/companion-setup", search: { welcome: "1" } } : { to: "/dashboard" },
-        );
+        removeBrowserStorage(() => localStorage, NEW_ACCOUNT_SETUP_KEY);
+        await navigate({ to: authDestinationPath(next) });
       }
     } catch {
       setError("We couldn't sign you in. Check your connection and try again.");
@@ -77,7 +78,9 @@ function SignIn() {
       <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card p-6 shadow-[var(--shadow-card)] sm:p-8">
         <h1 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">Welcome back</h1>
         <p className="mb-7 text-sm leading-6 text-muted-foreground">
-          Sign in to pick up where you left off.
+          {next === "upgrade"
+            ? "Sign in to review UniMate Pro and choose whether to subscribe."
+            : "Sign in to pick up where you left off."}
         </p>
 
         {!isSupabaseConfigured && (
@@ -177,7 +180,11 @@ function SignIn() {
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
           Don't have an account?{" "}
-          <Link to="/signup" className="font-medium text-foreground underline underline-offset-4">
+          <Link
+            to="/signup"
+            search={next ? { next } : {}}
+            className="font-medium text-foreground underline underline-offset-4"
+          >
             Create one
           </Link>
         </p>

@@ -21,7 +21,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
-    const stored = typeof window !== "undefined" ? localStorage.getItem("theme") : null;
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem("theme");
+    } catch {
+      /* Private/storage-restricted browsing. */
+    }
     const themeToApply: Theme = stored === "dark" ? "dark" : "light";
     setTheme(themeToApply);
     applyTheme(themeToApply);
@@ -30,7 +35,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const updateTheme = (nextTheme: Theme) => {
     setTheme(nextTheme);
     if (typeof window !== "undefined") {
-      localStorage.setItem("theme", nextTheme);
+      try {
+        localStorage.setItem("theme", nextTheme);
+      } catch {
+        /* Keep this session usable. */
+      }
       applyTheme(nextTheme);
     }
   };

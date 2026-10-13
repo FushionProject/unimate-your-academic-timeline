@@ -270,7 +270,7 @@ check(
     serverSource.includes("upstreamRetryAfterSeconds") &&
     serverSource.includes("return jsonResponse(") &&
     serverSource.includes('"retry-after": String(error.retryAfterSeconds)') &&
-    serverSource.includes("new AiRateLimitError(upstreamRetryAfterSeconds(groqResponse))"),
+    serverSource.includes("new AiRateLimitError(upstreamRetryAfterSeconds(providerResponse))"),
 );
 
 console.log(`PASS ${passed} screenshot-first tutor grounding assertions`);

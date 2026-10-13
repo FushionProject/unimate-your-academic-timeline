@@ -41,7 +41,7 @@ assert.match(
   "Client abandonment must cancel upstream work without leaking listeners",
 );
 const textCompletionSource = source.slice(
-  source.indexOf("async function groqTextCompletion"),
+  source.indexOf("async function aiTextCompletion"),
   source.indexOf("async function handleDashboardAI"),
 );
 const visionSource = source.slice(

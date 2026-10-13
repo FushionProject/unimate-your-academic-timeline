@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, Sparkles } from "lucide-react";
 import { useAuth } from "../lib/auth-context";
 import { useBillingStatus } from "../lib/profile";
+import { PRO_FEATURES, PRO_PLAN } from "../lib/plan-catalog";
 
 export const Route = createFileRoute("/upgrade")({ component: Upgrade });
 
@@ -120,7 +121,7 @@ function Upgrade() {
         </div>
         <h1 className="mb-1 text-2xl font-bold text-foreground">UniMate Pro</h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          Keep UniMate beside your coursework for $5.99 per month.
+          Your school day, with a little backup. {PRO_PLAN.monthlyPrice} per month · cancel anytime.
         </p>
 
         {!user ? (
@@ -236,6 +237,18 @@ function Upgrade() {
                     Manage billing
                   </button>
                 )}
+                <Link
+                  to="/ask"
+                  className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"
+                >
+                  Start with Ask UniMate
+                </Link>
+                <Link
+                  to="/companion-setup"
+                  className="mt-3 inline-block text-sm text-muted-foreground underline underline-offset-4"
+                >
+                  Set up the optional Browser Companion
+                </Link>
               </div>
             ) : (
               <>
@@ -248,9 +261,9 @@ function Upgrade() {
                   </BillingWarning>
                 )}
                 <ul className="mb-6 space-y-2 text-left text-sm text-muted-foreground">
-                  <Feature>Browser Companion on supported study pages</Feature>
-                  <Feature>Grounded screen-aware tutoring</Feature>
-                  <Feature>Shared conversations with Ask UniMate</Feature>
+                  {PRO_FEATURES.map((feature) => (
+                    <Feature key={feature}>{feature}</Feature>
+                  ))}
                 </ul>
                 <button
                   type="button"
@@ -263,6 +276,10 @@ function Upgrade() {
                     ? "Restart Pro"
                     : "Upgrade to Pro"}
                 </button>
+                <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                  Renews monthly. AI allowances reset each calendar month in UTC and don’t roll
+                  over. Review your total in Stripe before subscribing.
+                </p>
               </>
             )}
 

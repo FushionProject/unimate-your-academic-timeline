@@ -27,7 +27,7 @@ const report = buildOperationalReadiness(
   {
     VITE_SUPABASE_URL: "https://private-project.supabase.co",
     VITE_SUPABASE_ANON_KEY: "publishable-private-value",
-    GROQ_API_KEY: "provider-private-value",
+    OPENAI_API_KEY: "provider-private-value",
     SUPABASE_SERVICE_ROLE_KEY: "server-only-private-value",
     AI_DURABLE_QUOTAS_ENABLED: "true",
     AI_DURABLE_ENTITLEMENTS_ENABLED: "true",
@@ -39,6 +39,11 @@ const serialized = JSON.stringify(report);
 assert.equal(report.status, "configuration_ready");
 assert.equal(report.billingMode, "test");
 assert.ok(!serialized.includes("private"), "readiness output must not contain input values");
+assert.equal(
+  buildOperationalReadiness({ GROQ_API_KEY: "retired-provider-key" }).checks.aiProvider.status,
+  "not_configured",
+  "A retired provider key must not make OpenAI look ready",
+);
 const readinessKey = "correct-readiness-key-at-least-32-chars";
 assert.equal(readinessKeyMatches(readinessKey, readinessKey), true);
 assert.equal(readinessKeyMatches("wrong-key", readinessKey), false);

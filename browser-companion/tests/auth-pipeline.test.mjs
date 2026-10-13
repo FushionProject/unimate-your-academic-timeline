@@ -19,9 +19,24 @@ assert.match(authContext, /errorCode: error\?\.code/);
 assert.match(authContext, /errorCode: "network_error"/);
 assert.match(
   authContext,
-  /emailRedirectTo: `\$\{window\.location\.origin\}\/companion-setup\?welcome=1`/,
+  /emailRedirectTo: `\$\{window\.location\.origin\}\$\{authDestinationPath\(destination\)\}`/,
 );
 assert.match(authContext, /NEW_ACCOUNT_SETUP_KEY/);
+assert.match(
+  authContext,
+  /setRecoveryMode\(writeBrowserStorage\(/,
+  "recovery must fail closed when storage cannot be written",
+);
+assert.match(
+  authContext,
+  /writeBrowserStorage\(\(\) => localStorage, NEW_ACCOUNT_SETUP_KEY, "pending"\)/,
+  "optional signup hint must not throw after account creation",
+);
+assert.doesNotMatch(
+  authContext,
+  /(?:localStorage|sessionStorage)\.(?:getItem|setItem|removeItem)/,
+  "auth lifecycle must use safe storage helpers",
+);
 
 for (const [name, route] of [
   ["sign-in", signIn],
@@ -42,11 +57,28 @@ assert.match(signUp, /code === "signup_disabled"/);
 assert.match(signUp, /id="signup-error"/);
 assert.match(
   signUp,
-  /navigate\(\{ to: "\/companion-setup", search: \{ welcome: "1" \} \}\)/,
-  "successful sign-up should open Companion onboarding",
+  /navigate\(\{ to: authDestinationPath\(next\) \}\)/,
+  "successful sign-up should use the allowlisted destination, defaulting to Today",
 );
 assert.match(signIn, /NEW_ACCOUNT_SETUP_KEY/);
-assert.match(signIn, /to: "\/companion-setup"/);
+assert.match(
+  signIn,
+  /to: authDestinationPath\(next\)/,
+  "successful sign-in should preserve an explicit plan choice",
+);
+assert.match(
+  signUp,
+  /signUp\(email\.trim\(\), password, next\)/,
+  "confirmation email must preserve the same allowlisted intent",
+);
+for (const route of [signIn, signUp]) {
+  assert.match(route, /validateSearch: validateAuthIntentSearch/);
+  assert.match(
+    route,
+    /search=\{next \? \{ next \} : \{\}\}/,
+    "switching auth forms must preserve the chosen plan",
+  );
+}
 
 assert.match(
   profilesSchema,

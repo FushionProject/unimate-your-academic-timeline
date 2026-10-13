@@ -15,6 +15,7 @@ import { AuthProvider } from "../lib/auth-context";
 import { Sidebar } from "../components/sidebar";
 import { Navbar } from "../components/navbar";
 import { DateWidget } from "../components/date-widget";
+import { useJourneyExperience } from "../lib/journey-experience";
 import { useBillingStatus } from "../lib/profile";
 // import { ScreenAssistant } from "../components/screen-assistant"; // Hidden for now — future rollout
 
@@ -40,7 +41,7 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: { error: unknown; reset: () => void }) {
   console.error(error);
   const router = useRouter();
 
@@ -80,21 +81,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "UniMate — Your all-in-one student assistant." },
+      { title: "UniMate — Your semester, a little lighter." },
       {
         name: "description",
         content:
-          "Keep classes, deadlines, notes, and AI study help together with UniMate, your all-in-one student assistant.",
+          "Turn your syllabus into a plan. See what matters today, get thoughtful school help, and take your UniMate tutor onto the web with Pro.",
       },
       { name: "author", content: "UniMate" },
-      { property: "og:title", content: "UniMate — Your all-in-one student assistant." },
+      { property: "og:title", content: "UniMate — Your semester, a little lighter." },
       {
         property: "og:description",
         content: "Keep classes, deadlines, notes, and AI study help together in one place.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -138,11 +138,15 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const { classic } = useJourneyExperience();
   const isPublicPage =
     pathname === "/" ||
     pathname === "/pricing" ||
     pathname === "/signin" ||
     pathname === "/signup" ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
+    pathname === "/support" ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password";
   const isAuthPage =
@@ -165,12 +169,13 @@ function RootComponent() {
             </a>
             <Navbar />
             <div className="flex min-w-0 flex-1">
-              <Sidebar />
+              {(!isPublicPage || classic) && <Sidebar />}
               <div
                 id="main-content"
-                className={`min-w-0 flex-1 md:ml-16 ${isPublicPage ? "" : "p-4 sm:p-6"}`}
+                className={`min-w-0 flex-1 ${!isPublicPage || classic ? "md:ml-16" : ""} ${isPublicPage ? "" : "p-4 sm:p-6"}`}
               >
                 {!isAuthPage &&
+                  (classic || (!isPublicPage && pathname !== "/dashboard")) &&
                   (isPublicPage ? (
                     <div className="px-4 pt-4 sm:px-6 sm:pt-6">
                       <DateWidget />

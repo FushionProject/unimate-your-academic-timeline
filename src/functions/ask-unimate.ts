@@ -11,6 +11,8 @@ const responseSchema = z.object({
     }),
   ),
   relatedConcepts: z.array(z.string()).optional(),
+  grounding: z.object({ label: z.string(), detail: z.string() }).optional(),
+  usage: z.object({ used: z.number(), limit: z.number(), period: z.string() }).optional(),
 });
 
 const errorSchema = z.object({
@@ -44,8 +46,18 @@ export async function askUniMate(data: {
   classContext?: string[];
   mode?: "normal" | "simpler" | "deeper";
   canvasContext?: string;
+  selectedCourseId?: string;
+  timezone?: string;
 }) {
-  const { question, conversationHistory, classContext, mode = "normal", canvasContext } = data;
+  const {
+    question,
+    conversationHistory,
+    classContext,
+    mode = "normal",
+    canvasContext,
+    selectedCourseId,
+    timezone,
+  } = data;
 
   const response = await fetch("/api/ask-unimate", {
     method: "POST",
@@ -54,7 +66,15 @@ export async function askUniMate(data: {
       "X-UniMate-Request-Id": crypto.randomUUID(),
       ...(await getAuthHeaders()),
     },
-    body: JSON.stringify({ question, conversationHistory, classContext, mode, canvasContext }),
+    body: JSON.stringify({
+      question,
+      conversationHistory,
+      classContext,
+      mode,
+      canvasContext,
+      selectedCourseId,
+      timezone,
+    }),
   });
 
   if (!response.ok) {

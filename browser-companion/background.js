@@ -111,6 +111,9 @@ async function parseResponse(response, phase = "network") {
     body = { error: text || `Request failed (${response.status})` };
   }
   if (!response.ok) {
+    const authRequired = response.status === 401 || body?.code === "AUTH_REQUIRED";
+    const proRequired =
+      response.status === 402 || (response.status === 403 && body?.code === "PRO_REQUIRED");
     const retryMs = retryAfterMs(response);
     if (response.status === 429) {
       const wait =
@@ -124,8 +127,14 @@ async function parseResponse(response, phase = "network") {
     throw new CompanionError(
       body.error || body.message || `UniMate request failed (${response.status}).`,
       {
-        code: response.status >= 500 ? "BACKEND_UNAVAILABLE" : "BACKEND_REQUEST_FAILED",
-        phase,
+        code: authRequired
+          ? "AUTH_REQUIRED"
+          : proRequired
+            ? "PRO_REQUIRED"
+            : response.status >= 500
+              ? "BACKEND_UNAVAILABLE"
+              : "BACKEND_REQUEST_FAILED",
+        phase: authRequired ? "auth" : proRequired ? "entitlement" : phase,
       },
     );
   }
@@ -789,7 +798,12 @@ async function runtimeDiagnostics(sender) {
 
 async function executeChat(payload, sender, session, requestId, requestKey) {
   const conversationId = await ensureActiveConversation(session);
-  const history = Array.isArray(payload.history) ? payload.history : [];
+  const history =
+    payload.conversationId && payload.conversationId !== conversationId
+      ? []
+      : Array.isArray(payload.history)
+        ? payload.history
+        : [];
   const pageContext = sanitizePageContext(payload.context, sender);
   let answer;
   let pipelineDiagnostics = null;
@@ -922,6 +936,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     switch (request?.type) {
       case "AUTH_STATE":
         return authState();
+      case "OPEN_UPGRADE": {
+        if (!configured()) throw new Error("UniMate setup is not ready yet.");
+        await chrome.tabs.create({ url: new URL("/upgrade", config.UNIMATE_API_URL).href });
+        return { opened: true };
+      }
       case "PRIVACY_CONSENT_STATE":
         return privacyConsentState();
       case "SET_PRIVACY_CONSENT":
@@ -957,7 +976,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const requestId = String(request.requestId || "");
         const requestKey = `${session.user.id}:${requestId}`;
         const pending = pendingChatPersistence.get(requestKey);
-        if (!pending) return { saved: true, alreadyComplete: true };
+        if (!pending) {
+          const completed = completedChatRequests.get(requestKey);
+          if (completed && !completed.persistenceWarning)
+            return { saved: true, alreadyComplete: true };
+          throw new CompanionError(
+            "This unsaved answer is no longer available to sync. Copy the answer from this panel to keep it.",
+            { code: "PERSISTENCE_EXPIRED", phase: "persistence" },
+          );
+        }
         await saveExchange(
           session,
           pending.conversationId,
@@ -965,6 +992,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           pending.assistantMessage,
         );
         pendingChatPersistence.delete(requestKey);
+        const completed = completedChatRequests.get(requestKey);
+        if (completed) delete completed.persistenceWarning;
         return { saved: true };
       }
       default:

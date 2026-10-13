@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { authDestinationPath, type AuthDestination } from "./auth-destination";
+import { readBrowserStorage, removeBrowserStorage, writeBrowserStorage } from "./browser-storage";
 
 interface AuthResult {
   error: string | null;
@@ -12,7 +14,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<AuthResult>;
+  signUp: (email: string, password: string, destination?: AuthDestination) => Promise<AuthResult>;
   signIn: (email: string, password: string) => Promise<AuthResult>;
   requestPasswordReset: (email: string) => Promise<AuthResult>;
   updatePassword: (password: string) => Promise<AuthResult>;
@@ -51,15 +53,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => setSession(null))
       .finally(() => setLoading(false));
 
-    setRecoveryMode(sessionStorage.getItem(RECOVERY_SESSION_KEY) === "active");
+    setRecoveryMode(readBrowserStorage(() => sessionStorage, RECOVERY_SESSION_KEY) === "active");
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       if (event === "PASSWORD_RECOVERY") {
-        sessionStorage.setItem(RECOVERY_SESSION_KEY, "active");
-        setRecoveryMode(true);
+        setRecoveryMode(writeBrowserStorage(() => sessionStorage, RECOVERY_SESSION_KEY, "active"));
       } else if (event === "SIGNED_OUT") {
-        sessionStorage.removeItem(RECOVERY_SESSION_KEY);
+        removeBrowserStorage(() => sessionStorage, RECOVERY_SESSION_KEY);
         setRecoveryMode(false);
       }
     });
@@ -75,7 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [loading, session]);
 
-  const signUp = async (email: string, password: string): Promise<AuthResult> => {
+  const signUp = async (
+    email: string,
+    password: string,
+    destination: AuthDestination = "dashboard",
+  ): Promise<AuthResult> => {
     if (!supabase) return { error: NOT_CONFIGURED_ERROR };
     try {
       const response = await fetch("/api/signup-status", { cache: "no-store" });
@@ -89,10 +94,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: `${window.location.origin}/companion-setup?welcome=1` },
+        options: {
+          emailRedirectTo: `${window.location.origin}${authDestinationPath(destination)}`,
+        },
       });
       if (error) return { error: error.message, errorCode: error.code };
-      localStorage.setItem(NEW_ACCOUNT_SETUP_KEY, "pending");
+      writeBrowserStorage(() => localStorage, NEW_ACCOUNT_SETUP_KEY, "pending");
       return { error: null, needsConfirmation: !data.session };
     } catch {
       return unavailableAuthResult();
@@ -118,10 +125,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updatePassword = async (password: string): Promise<AuthResult> => {
     if (!supabase) return { error: NOT_CONFIGURED_ERROR };
-    if (!recoveryMode) return { error: "This password reset link is no longer valid." };
+    if (
+      !recoveryMode ||
+      readBrowserStorage(() => sessionStorage, RECOVERY_SESSION_KEY) !== "active"
+    ) {
+      return {
+        error:
+          "This password reset link is no longer valid. Request a new link and allow browser storage to continue.",
+      };
+    }
     const { error } = await supabase.auth.updateUser({ password });
     if (!error) {
-      sessionStorage.removeItem(RECOVERY_SESSION_KEY);
+      removeBrowserStorage(() => sessionStorage, RECOVERY_SESSION_KEY);
       setRecoveryMode(false);
     }
     return { error: error?.message ?? null };

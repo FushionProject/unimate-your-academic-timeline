@@ -29,6 +29,12 @@ try {
   assert.equal(needsWebSearch("Solve 2x + 4 = 10"), false);
   assert.equal(needsWebSearch("What is the latest federal student aid rule?"), true);
   assert.equal(needsWebSearch("Search for a source about this"), true);
+  assert.equal(needsWebSearch("What should I study tonight?"), false);
+  assert.equal(needsWebSearch("What is due today in my courses?"), false);
+  assert.equal(needsWebSearch("Plan my semester this week"), false);
+  assert.equal(needsWebSearch("I need current information about the Supreme Court"), true);
+  assert.equal(needsWebSearch("Explain the current in this circuit"), false);
+  assert.equal(needsWebSearch("Search for sources for my assignment"), true);
 
   process.env.AI_SYSTEM_MODE = "degraded";
   assert.equal(aiFeatureEnabled("web_search"), false);
@@ -69,6 +75,7 @@ try {
     const body = JSON.parse(String(init?.body));
     assert.equal(body.p_daily_limit, 20);
     assert.equal(body.p_feature, "ask_unimate");
+    assert.equal(body.p_provider, "openai");
     return new Response(
       JSON.stringify({
         allowed: calls === 1,

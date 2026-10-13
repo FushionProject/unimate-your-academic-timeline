@@ -44,8 +44,7 @@ export function useBillingStatus(options?: { refetchInterval?: number | false })
       // A gateway error page is not JSON — never surface a parse exception as
       // the billing error the user reads.
       const data = (await response.json().catch(() => null)) as
-        | (BillingStatus & { error?: string })
-        | null;
+        (BillingStatus & { error?: string }) | null;
       if (!response.ok || !data) {
         throw new Error(data?.error || "Billing status is temporarily unavailable.");
       }

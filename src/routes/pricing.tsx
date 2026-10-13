@@ -1,17 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Check, Sparkles } from "lucide-react";
 import { useAuth } from "../lib/auth-context";
+import { FREE_FEATURES, PRO_FEATURES, PRO_PLAN } from "../lib/plan-catalog";
+import { useBillingStatus } from "../lib/profile";
 
 export const Route = createFileRoute("/pricing")({ component: Pricing });
-
-const freeFeatures = ["Semester timeline and dashboard", "Course notes", "Two AI syllabus parses"];
-
-const proFeatures = [
-  "Everything in Free",
-  "Browser Companion access",
-  "Ask UniMate with fair-use limits",
-  "Shared conversations between UniMate and the Companion",
-];
 
 function PlanFeatures({ items }: { items: readonly string[] }) {
   return (
@@ -28,16 +21,21 @@ function PlanFeatures({ items }: { items: readonly string[] }) {
 
 function Pricing() {
   const { user } = useAuth();
+  const billing = useBillingStatus();
 
   return (
     <main className="mx-auto min-h-[calc(100vh-73px)] max-w-5xl px-4 py-14 sm:px-6 sm:py-20">
       <header className="mx-auto max-w-2xl text-center">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Simple plans</p>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
+          Simple plans
+        </p>
         <h1 className="font-serif-display mt-3 text-5xl font-medium">
-          Choose what fits your semester
+          A little less overwhelmed.
+          <br />A lot more on top of it.
         </h1>
         <p className="mt-5 leading-7 text-muted-foreground">
-          Start free. Upgrade only when you want the Browser Companion and more AI study support.
+          Organize your semester for free. Add Pro for a school assistant that helps you understand,
+          prepare, write, and find your next step.
         </p>
       </header>
 
@@ -49,12 +47,12 @@ function Pricing() {
           </p>
           <p className="mt-7 text-4xl font-bold">$0</p>
           <p className="mt-1 text-xs text-muted-foreground">No card required</p>
-          <PlanFeatures items={freeFeatures} />
+          <PlanFeatures items={FREE_FEATURES} />
           <Link
             to={user ? "/" : "/signup"}
             className="mt-8 inline-flex min-h-12 w-full items-center justify-center rounded-xl border border-border bg-background px-5 text-sm font-semibold transition hover:border-primary"
           >
-            {user ? "Continue with Free" : "Create a free account"}
+            {user ? "Open your dashboard" : "Create a free account"}
           </Link>
         </section>
 
@@ -64,24 +62,63 @@ function Pricing() {
           </span>
           <h2 className="text-2xl font-semibold">UniMate Pro</h2>
           <p className="mt-2 max-w-xs text-sm text-muted-foreground">
-            For students who want UniMate beside them across the web.
+            Help for the whole school day, from “I’m stuck” to “I’ve got this.”
           </p>
-          <p className="mt-7 text-4xl font-bold">$5.99</p>
-          <p className="mt-1 text-xs text-muted-foreground">per month · cancel anytime</p>
-          <PlanFeatures items={proFeatures} />
+          <p className="mt-7 text-4xl font-bold">
+            {PRO_PLAN.monthlyPrice}
+            <span className="text-base font-normal text-muted-foreground"> / month</span>
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Billed monthly · cancel anytime</p>
+          <PlanFeatures items={PRO_FEATURES} />
           <Link
             to={user ? "/upgrade" : "/signup"}
+            search={user ? {} : { next: "upgrade" }}
             className="mt-8 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-primary px-5 text-sm font-bold text-primary-foreground transition hover:brightness-95"
           >
-            {user ? "Choose Pro" : "Create an account for Pro"}
+            {billing.data?.isPro
+              ? "Manage your Pro plan"
+              : user
+                ? "Get UniMate Pro"
+                : "Create an account for Pro"}
           </Link>
         </section>
       </div>
 
-      <p className="mx-auto mt-8 max-w-2xl text-center text-xs leading-5 text-muted-foreground">
-        This page compares plans only. Pro checkout remains separate, and no purchase is made from
-        this page.
-      </p>
+      <section className="mx-auto mt-12 max-w-3xl rounded-2xl border border-border bg-card/60 p-6 sm:p-8">
+        <h2 className="text-lg font-semibold">Know what you’re getting</h2>
+        <div className="mt-5 grid gap-6 text-sm leading-6 sm:grid-cols-2">
+          <div>
+            <h3 className="font-semibold">One allowance, across your schoolwork</h3>
+            <p className="mt-1 text-muted-foreground">
+              AI messages cover Ask UniMate and text help in the Browser Companion. Screen questions
+              have their own allowance. Monthly allowances reset each calendar month in UTC and
+              don’t roll over.
+            </p>
+          </div>
+          <div>
+            <h3 className="font-semibold">Your work stays yours</h3>
+            <p className="mt-1 text-muted-foreground">
+              UniMate helps you learn, plan, and revise. Add your class context for more relevant
+              help, and check important deadlines and requirements against your original course
+              materials.
+            </p>
+          </div>
+          <div>
+            <h3 className="font-semibold">No extension needed to get started</h3>
+            <p className="mt-1 text-muted-foreground">
+              Ask UniMate works right here. The optional Chrome Companion brings the same
+              conversation alongside supported study pages.
+            </p>
+          </div>
+          <div>
+            <h3 className="font-semibold">Cancel when you need to</h3>
+            <p className="mt-1 text-muted-foreground">
+              Manage your subscription through secure Stripe billing. Pro stays available through
+              your paid period when you cancel.
+            </p>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

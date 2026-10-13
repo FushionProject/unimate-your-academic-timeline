@@ -85,7 +85,9 @@ export async function reserveEntitlementUsage(options: {
       requested_feature: options.feature,
       requested_request_id: options.requestId,
     }),
-    signal: options.signal,
+    signal: options.signal
+      ? AbortSignal.any([options.signal, AbortSignal.timeout(8_000)])
+      : AbortSignal.timeout(8_000),
   });
   if (!response.ok) {
     return { allowed: false, used: 0, limit: 0, period: "none", code: "ENTITLEMENT_UNAVAILABLE" };

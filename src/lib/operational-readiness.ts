@@ -1,7 +1,7 @@
 export type OperationalEnvironment = Record<string, string | undefined>;
 
 type ReadinessCheck = {
-  status: "ready" | "not_configured";
+  status: "ready" | "not_configured" | "disabled";
   requiredFor: "core" | "ai" | "search" | "billing" | "operations";
 };
 
@@ -46,7 +46,7 @@ export function buildOperationalReadiness(
   const checks: OperationalReadiness["checks"] = {
     supabaseUrl: check(env.VITE_SUPABASE_URL, "core"),
     supabasePublishableKey: check(env.VITE_SUPABASE_ANON_KEY, "core"),
-    aiProvider: check(env.GROQ_API_KEY, "ai"),
+    aiProvider: check(env.OPENAI_API_KEY, "ai"),
     searchProvider: check(env.SERPAPI_KEY, "search"),
     operatorReadinessKey: check(env.OPERATIONS_READINESS_KEY, "operations"),
     stripeApiKey: check(env.STRIPE_SECRET_KEY, "billing"),

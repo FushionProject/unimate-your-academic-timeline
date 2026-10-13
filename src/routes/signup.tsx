@@ -3,9 +3,11 @@ import { useState, type FormEvent } from "react";
 import { Loader2, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../lib/auth-context";
 import { isSupabaseConfigured } from "../lib/supabase";
+import { authDestinationPath, validateAuthIntentSearch } from "../lib/auth-destination";
 
 export const Route = createFileRoute("/signup")({
   component: SignUp,
+  validateSearch: validateAuthIntentSearch,
 });
 
 function friendlyAuthError(message: string, code?: string) {
@@ -38,6 +40,7 @@ function friendlyAuthError(message: string, code?: string) {
 }
 
 function SignUp() {
+  const { next } = Route.useSearch();
   const { signUp } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -52,13 +55,13 @@ function SignUp() {
     setError("");
     setLoading(true);
     try {
-      const { error, errorCode, needsConfirmation } = await signUp(email.trim(), password);
+      const { error, errorCode, needsConfirmation } = await signUp(email.trim(), password, next);
       if (error) {
         setError(friendlyAuthError(error, errorCode));
       } else if (needsConfirmation) {
         setNeedsConfirmation(true);
       } else {
-        await navigate({ to: "/companion-setup", search: { welcome: "1" } });
+        await navigate({ to: authDestinationPath(next) });
       }
     } catch {
       setError("We couldn't create your account. Check your connection and try again.");
@@ -75,11 +78,15 @@ function SignUp() {
           <h1 className="text-xl font-semibold text-foreground mb-2">Check your email</h1>
           <p className="text-sm text-muted-foreground">
             We sent a confirmation link to <span className="text-foreground">{email}</span>. Click
-            it to activate your account and continue Companion setup. If it does not show up, check
-            your spam folder.
+            it to activate your account{" "}
+            {next === "upgrade"
+              ? "and continue to review UniMate Pro"
+              : "and start building your semester"}
+            . If it does not show up, check your spam folder.
           </p>
           <Link
             to="/signin"
+            search={next ? { next } : {}}
             className="mt-6 inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium bg-primary text-primary-foreground"
           >
             Continue to sign in
@@ -96,7 +103,9 @@ function SignUp() {
           Create your account
         </h1>
         <p className="mb-7 text-sm leading-6 text-muted-foreground">
-          Bring your classes, deadlines, notes, and study help together.
+          {next === "upgrade"
+            ? "Create your account, then review UniMate Pro. You’ll choose whether to subscribe on the next page."
+            : "A little less overwhelm starts here. Create your free account, then bring in your first class."}
         </p>
 
         {!isSupabaseConfigured && (
@@ -184,7 +193,11 @@ function SignUp() {
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
           Already have an account?{" "}
-          <Link to="/signin" className="font-medium text-foreground underline underline-offset-4">
+          <Link
+            to="/signin"
+            search={next ? { next } : {}}
+            className="font-medium text-foreground underline underline-offset-4"
+          >
             Sign in
           </Link>
         </p>

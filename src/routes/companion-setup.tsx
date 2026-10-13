@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { CheckCircle2, ExternalLink, LockKeyhole, MonitorCheck, Puzzle } from "lucide-react";
+import { CheckCircle2, ExternalLink, LockKeyhole, MonitorCheck } from "lucide-react";
 import { ProtectedRoute } from "../components/protected-route";
 import { useBillingStatus } from "../lib/profile";
+import { LogoMark } from "../components/logo-mark";
 
 export const Route = createFileRoute("/companion-setup")({
-  validateSearch: (search: Record<string, unknown>) => ({
+  validateSearch: (search: Record<string, unknown>): { welcome?: string } => ({
     welcome: search.welcome === "1" ? "1" : undefined,
   }),
   component: () => (
@@ -20,7 +21,12 @@ function storeUrl(): string | null {
   if (!value) return null;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : null;
+    return url.protocol === "https:" &&
+      url.hostname === "chromewebstore.google.com" &&
+      url.pathname.startsWith("/detail/") &&
+      /^\/detail\/[^/]+\/[a-p]{32}\/?$/.test(url.pathname)
+      ? url.toString()
+      : null;
   } catch {
     return null;
   }
@@ -37,47 +43,61 @@ function CompanionSetup() {
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
         <header className="text-center">
           <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-primary">
-            <Puzzle className="h-6 w-6 text-primary-foreground" />
+            <LogoMark className="h-10 w-10" />
           </div>
           <p className="mt-5 text-xs font-bold uppercase tracking-[0.2em] text-primary">
-            {welcome ? "Account created · One optional step" : "Browser Companion setup"}
+            {welcome ? "You’re in · Make yourself at home" : "Your study buddy, a tab away"}
           </p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
-            Take UniMate into your browser
+            A little help, right beside your coursework
           </h1>
           <p className="mx-auto mt-3 max-w-2xl leading-7 text-muted-foreground">
-            The Companion is a Chrome extension. Install it once, sign in with this account, and
-            choose which Ask UniMate chat appears while you study.
+            UniMate Companion helps you understand what’s on your page, work through a tricky
+            problem, and keep your place. It’s included with UniMate Pro.
           </p>
         </header>
 
         <section className="mt-8 grid overflow-hidden rounded-3xl border border-border bg-card shadow-[var(--shadow-card)] md:grid-cols-[1fr_0.75fr]">
           <div className="p-6 sm:p-8">
-            <h2 className="text-xl font-semibold">Finish setup</h2>
+            <h2 className="text-xl font-semibold">
+              {isPro ? "Let’s get you connected" : "Your path to Companion"}
+            </h2>
             <ol className="mt-6 space-y-5">
               <SetupStep number="1" title="Confirm Companion access">
                 {billing.isLoading
                   ? "Checking your UniMate plan…"
                   : billing.isError
-                    ? "We couldn't check your plan right now. Your access is unchanged — refresh this page to try again."
+                    ? "We couldn’t check your plan right now. Try checking again below."
                     : isPro
                       ? "Your account has UniMate Pro. Companion access is ready."
-                      : "Browser Companion AI is a Pro feature. You can keep using Free or test the Pro checkout in Stripe’s sandbox."}
+                      : "Start with your Free account, then upgrade to Pro. Companion unlocks only after your purchase is confirmed."}
                 {!billing.isLoading && !billing.isError && !isPro && (
                   <Link
                     to="/upgrade"
                     className="mt-3 inline-flex min-h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"
                   >
-                    View Pro checkout
+                    Explore UniMate Pro
                   </Link>
                 )}
+                <button
+                  type="button"
+                  disabled={billing.isFetching}
+                  onClick={() => void billing.refetch()}
+                  className="mt-3 block text-sm font-semibold text-foreground underline underline-offset-4 disabled:opacity-50"
+                >
+                  {billing.isFetching
+                    ? "Checking access…"
+                    : isPro
+                      ? "Refresh access"
+                      : "Already upgraded? Check access"}
+                </button>
               </SetupStep>
               <SetupStep number="2" title="Install the Chrome extension">
                 {!isPro
                   ? "Installation unlocks after this account has confirmed Pro access."
                   : url
                     ? "Open the verified Chrome Web Store listing and choose Add to Chrome."
-                    : "The extension is built, but its public Chrome Web Store link has not been connected to UniMate yet."}
+                    : "The Chrome Web Store install link isn’t available yet. You can still study with Ask UniMate while Companion installation is being prepared."}
                 {isPro && url && (
                   <a
                     href={url}
@@ -90,12 +110,17 @@ function CompanionSetup() {
                 )}
               </SetupStep>
               <SetupStep number="3" title="Connect this account">
-                Open Uni on the right edge of a normal webpage and sign in with the same UniMate
-                email and password. No second account is created.
+                {isPro
+                  ? "Open Uni on the right edge of a regular webpage. Review the page-sharing notice, then sign in with the same UniMate email and password."
+                  : "Once Pro is active and Companion is installed, connect this same account. You won’t need a second account."}
               </SetupStep>
               <SetupStep number="4" title="Choose your browser chat">
                 In Ask UniMate, select “Use in browser” beside the conversation you want the
                 extension to display.
+                <p className="mt-2">
+                  You choose when to share. Pressing Send shares one image of the visible tab and a
+                  short text sample. Companion does not record continuously.
+                </p>
               </SetupStep>
             </ol>
           </div>
@@ -123,10 +148,11 @@ function CompanionSetup() {
             </div>
             {isPro && !url && (
               <div className="mt-6 rounded-2xl border border-primary/40 bg-primary/10 p-4">
-                <p className="text-sm font-semibold">Why you cannot enable it yet</p>
+                <p className="text-sm font-semibold">Your Pro access is ready</p>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                  UniMate needs the published Chrome Web Store URL. Stripe cannot solve this part;
-                  publishing and connecting the extension listing will.
+                  The public installation link is still being prepared. Your study tools are ready
+                  in Ask UniMate, and this page will show the install button when the listing is
+                  available.
                 </p>
               </div>
             )}

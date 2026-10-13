@@ -33,7 +33,11 @@ add(
   configured("VITE_SUPABASE_URL") && configured("VITE_SUPABASE_ANON_KEY"),
   "VITE_SUPABASE_URL and the publishable key must be configured.",
 );
-add("AI provider configuration", configured("GROQ_API_KEY"), "GROQ_API_KEY must be configured.");
+add(
+  "AI provider configuration",
+  configured("OPENAI_API_KEY"),
+  "OPENAI_API_KEY must be configured; retired Groq/Qwen defaults are no longer used.",
+);
 add(
   "Stripe test configuration",
   /^(sk|rk)_test_/.test(env.STRIPE_SECRET_KEY || "") &&
@@ -76,9 +80,10 @@ add(
 );
 add(
   "Browser Companion Store listing",
-  /^https:\/\/chromewebstore\.google\.com\//.test(env.VITE_COMPANION_STORE_URL || ""),
+  /^https:\/\/chromewebstore\.google\.com\/detail\/[^/]+\/[a-p]{32}\/?(?:\?.*)?$/.test(
+    env.VITE_COMPANION_STORE_URL || "",
+  ),
   "Add the approved Store listing URL after submission.",
-  false,
 );
 
 for (const check of checks) {

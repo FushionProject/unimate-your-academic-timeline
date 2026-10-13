@@ -41,6 +41,11 @@ import {
 import { useSemesterEndDate } from "../hooks/use-semester-end-date";
 import { formatSemesterEndDate } from "../lib/semester-date";
 import { useIsPro } from "../lib/profile";
+import { ExperienceSwitch } from "../components/journey-experience";
+import { askJourneyHref, useJourneyExperience } from "../lib/journey-experience";
+import { SemesterStart } from "../components/semester-start";
+import { LogoMark } from "../components/logo-mark";
+import "../journey.css";
 
 export const Route = createFileRoute("/dashboard")({
   component: () => (
@@ -79,7 +84,9 @@ function companionStoreUrl(): string | null {
   if (!configured) return null;
   try {
     const url = new URL(configured);
-    return url.protocol === "https:" && url.hostname === "chromewebstore.google.com"
+    return url.protocol === "https:" &&
+      url.hostname === "chromewebstore.google.com" &&
+      /^\/detail\/[^/]+\/[a-p]{32}\/?$/.test(url.pathname)
       ? url.toString()
       : null;
   } catch {
@@ -88,6 +95,7 @@ function companionStoreUrl(): string | null {
 }
 
 function Dashboard() {
+  const { classic } = useJourneyExperience();
   const coursesQuery = useCourses();
   const assignmentsQuery = useAssignments();
   const { data: courses = [], isLoading: coursesLoading, isError: coursesError } = coursesQuery;
@@ -283,14 +291,21 @@ function Dashboard() {
         <header className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Semester map
+              {classic ? "Semester map" : format(new Date(), "EEEE, MMMM d")}
             </p>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              See the busy weeks before they arrive.
+            <h1
+              className={
+                classic
+                  ? "text-3xl font-bold tracking-tight text-foreground sm:text-4xl"
+                  : "font-serif-display text-4xl tracking-tight text-foreground sm:text-5xl"
+              }
+            >
+              {classic ? "See the busy weeks before they arrive." : "Let’s make today feel doable."}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              UniMate maps deadline density from your syllabus. It shows when work clusters—it does
-              not pretend to know how difficult your assignments are.
+              {classic
+                ? "UniMate maps deadline density from your syllabus. It shows when work clusters—it does not pretend to know how difficult your assignments are."
+                : "Your next step, your classes, and a little help when you need it."}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -342,6 +357,9 @@ function Dashboard() {
             </Link>
           </div>
         </header>
+        <div className="mb-5 flex justify-end">
+          <ExperienceSwitch />
+        </div>
 
         {loading ? (
           <div
@@ -364,7 +382,7 @@ function Dashboard() {
                 We couldn't load your semester right now.
               </p>
               <p className="mt-2 text-sm leading-6 text-muted-foreground" role="alert">
-                Your courses and deadlines are safe — this is a temporary connection problem.
+                We haven’t changed your saved work. Check your connection, then try loading again.
               </p>
               <button
                 type="button"
@@ -380,7 +398,14 @@ function Dashboard() {
           </div>
         ) : (
           <div className="space-y-6">
-            {courses.length === 0 && (
+            {!classic && (
+              <SemesterStart
+                courseCount={courses.length}
+                deadlineCount={assignments.length}
+                completedCount={dailyBrief.completedCount}
+              />
+            )}
+            {classic && courses.length === 0 && (
               <section className="rounded-3xl border border-[#F5C518]/40 bg-[#F5C518]/10 p-5 sm:p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
                   Your first 10 minutes
@@ -413,7 +438,8 @@ function Dashboard() {
                   </Link>
                 </div>
                 <p className="mt-4 text-xs text-muted-foreground">
-                  Tip: click Uni on the right edge of any page to open the Browser Companion.
+                  Browser Companion is available with Pro. Find setup instructions from the button
+                  above.
                 </p>
               </section>
             )}
@@ -421,9 +447,12 @@ function Dashboard() {
               <section className="overflow-hidden rounded-3xl border border-[#F5C518]/45 bg-card shadow-[var(--shadow-card)]">
                 <div className="grid gap-0 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.75fr)]">
                   <div className="p-5 sm:p-6">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                      Today
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <LogoMark className="h-7 w-7" />
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        {classic ? "Today" : "YOUR NEXT SMALL STEP"}
+                      </p>
+                    </div>
                     {dailyBrief.focus ? (
                       <>
                         <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
@@ -439,30 +468,36 @@ function Dashboard() {
                               : " · Your next deadline"}
                         </p>
                         <div className="mt-5 flex flex-wrap gap-2">
+                          <a
+                            href={askJourneyHref(
+                              `Help me get started on ${dailyBrief.focus.name} for ${dailyBrief.focus.course?.name || "my course"}, due ${format(new Date(dailyBrief.focus.due_at), "MMMM d, yyyy")}. Ask me for the assignment instructions if you need them, then help me choose a manageable first step.`,
+                              dailyBrief.focus.course_id,
+                            )}
+                            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-95"
+                          >
+                            <Sparkles className="h-4 w-4" /> Help me start
+                          </a>
                           <button
                             type="button"
                             onClick={() => handleToggleAssignment(dailyBrief.focus!)}
                             disabled={toggleAssignment.isPending}
-                            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-95 disabled:opacity-50"
+                            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary/50 disabled:opacity-50"
                           >
                             <CheckCircle2 className="h-4 w-4" /> Mark done
                           </button>
-                          <Link
-                            to="/ask"
-                            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary/50"
-                          >
-                            <Sparkles className="h-4 w-4 text-primary" /> Help me start
-                          </Link>
                         </div>
                       </>
                     ) : (
                       <>
                         <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
-                          You’re clear for now.
+                          {assignments.length
+                            ? "You’re clear for now."
+                            : "Your next step will land here."}
                         </h2>
                         <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-                          Nothing unfinished is on your timeline. Capture a note, ask a question, or
-                          enjoy the breathing room.
+                          {assignments.length
+                            ? "Nothing unfinished is on your saved timeline. Capture a note, ask a question, or enjoy the breathing room."
+                            : "Add the dates from your syllabus to see what’s coming up. You can also add a deadline manually below."}
                         </p>
                         <Link
                           to="/notes"
@@ -630,12 +665,22 @@ function Dashboard() {
                       score.
                     </p>
                   </div>
-                  <Link
-                    to="/ask"
+                  <a
+                    href={askJourneyHref(
+                      `Help me plan the week of ${selectedWeek.label}. My saved deadlines for this week are: ${
+                        selectedWeek.items
+                          .filter((item) => !item.completed)
+                          .map(
+                            (item) =>
+                              `${item.name} (${item.course?.name || "course"}), due ${format(new Date(item.due_at), "MMM d")}`,
+                          )
+                          .join("; ") || "none"
+                      }. Ask about my available time before suggesting a schedule.`,
+                    )}
                     className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:border-primary/50"
                   >
                     Plan this week <ChevronRight className="h-3.5 w-3.5" />
-                  </Link>
+                  </a>
                 </div>
               )}
             </section>

@@ -1,10 +1,20 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, CalendarDays, CheckCircle2, Loader2, Save, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  Loader2,
+  Save,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
 import { useAddAssignment, useAddCourse, useAssignments, useCourses } from "../lib/courses";
 import { useAuth } from "../lib/auth-context";
 import { SYLLABUS_RESULT_STORAGE_PREFIX } from "../lib/syllabus-results";
+import { askJourneyHref } from "../lib/journey-experience";
 
 const itemSchema = z.object({
   title: z.string(),
@@ -51,6 +61,7 @@ function Results() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [saved, setSaved] = useState(false);
+  const [savedCourseId, setSavedCourseId] = useState<string>();
   const { data: courses = [] } = useCourses();
   const { data: assignments = [] } = useAssignments();
   const addCourse = useAddCourse();
@@ -103,6 +114,7 @@ function Results() {
         });
         added += 1;
       }
+      setSavedCourseId(course.id);
       setSaved(true);
       setSaveMessage(
         `${added} item${added === 1 ? "" : "s"} added to the semester map${skipped ? `; ${skipped} duplicate${skipped === 1 ? " was" : "s were"} skipped` : ""}.`,
@@ -144,14 +156,14 @@ function Results() {
           <>
             <header className="mb-7">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-                Review first
+                STEP 2 OF 3 · REVIEW YOUR DATES
               </p>
               <h1 className="mt-2 text-3xl font-bold text-foreground">
-                Confirm your semester timeline
+                A quick check, then you’re ready.
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
                 Fix titles or dates and remove anything UniMate misunderstood. Only the items below
-                will be saved to your pressure map.
+                will be saved to your semester timeline.
               </p>
             </header>
 
@@ -256,7 +268,7 @@ function Results() {
                         ) : (
                           <Save className="h-4 w-4" />
                         )}{" "}
-                        Save semester map
+                        Save my class & deadlines
                       </button>
                     ) : (
                       <Link
@@ -284,13 +296,39 @@ function Results() {
             {saved && (
               <div className="rounded-3xl border border-[#F5C518]/40 bg-[#F5C518]/10 p-8 text-center">
                 <CheckCircle2 className="mx-auto h-9 w-9 text-primary" />
-                <h2 className="mt-4 text-xl font-bold text-foreground">Semester map saved</h2>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  STEP 3 OF 3 · FIND YOUR FOCUS
+                </p>
+                <h2 className="mt-2 font-serif-display text-4xl text-foreground">
+                  One class closer to feeling on top of it.
+                </h2>
                 <p className="mt-2 text-sm text-muted-foreground">{saveMessage}</p>
+                <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-muted-foreground">
+                  Your dates are ready in Today. Start with the next deadline, or ask UniMate to
+                  help you find a first step.
+                </p>
+                <div className="mt-6 flex flex-wrap justify-center gap-3">
+                  <Link
+                    to="/dashboard"
+                    className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
+                  >
+                    See what matters today <ArrowRight className="h-4 w-4" />
+                  </Link>
+                  <a
+                    href={askJourneyHref(
+                      `I just added ${courseName.trim()}. Help me get started with this class. Ask what I’m working on and help me choose a practical first step.`,
+                      savedCourseId,
+                    )}
+                    className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-border bg-card px-5 py-3 text-sm font-semibold"
+                  >
+                    <Sparkles className="h-4 w-4" /> Ask UniMate for a hand
+                  </a>
+                </div>
                 <Link
-                  to="/dashboard"
-                  className="mt-5 inline-flex rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+                  to="/planner"
+                  className="mt-6 inline-block text-sm text-muted-foreground underline underline-offset-4"
                 >
-                  View dashboard
+                  Add another class
                 </Link>
               </div>
             )}

@@ -18,6 +18,10 @@
     activeConversationId: null,
     activeConversationTitle: "Browser Companion",
     conversationStartIndex: 0,
+    pageHistory: [],
+    draft: "",
+    pendingSave: null,
+    contextMode: null,
     busy: false,
     captureHidden: false,
     captureStyle: null,
@@ -56,7 +60,7 @@
     .um-root { position: fixed; z-index: 2147483647; right: 0; top: 50%; transform: translateY(-50%); font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #24211d; }
     .um-mascot { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 62px; height: 76px; padding: 0; border: 0; border-radius: 24px 0 0 24px; background: #F5C518; box-shadow: 0 10px 32px rgba(37, 31, 20, .2); cursor: pointer; display: grid; place-items: center; transition: width .18s ease, filter .18s ease; }
     .um-mascot:hover { width: 68px; filter: brightness(1.03); }
-    .um-mascot:focus-visible, .um-icon-button:focus-visible, .um-screen:focus-visible, .um-send:focus-visible, .um-primary:focus-visible, .um-link:focus-visible { outline: 3px solid rgba(36,33,29,.72); outline-offset: 3px; }
+    .um-mascot:focus-visible, .um-icon-button:focus-visible, .um-screen:focus-visible, .um-send:focus-visible, .um-primary:focus-visible, .um-secondary:focus-visible, .um-link:focus-visible { outline: 3px solid rgba(36,33,29,.72); outline-offset: 3px; }
     .um-mascot img { width: 48px; height: 64px; object-fit: contain; pointer-events: none; }
     .um-panel { position: absolute; right: 76px; top: 50%; transform: translateY(-50%) translateX(18px); width: min(380px, calc(100vw - 96px)); height: min(620px, calc(100vh - 32px)); border: 1px solid rgba(36,33,29,.1); border-radius: 24px; background: #FAF7F2; box-shadow: 0 24px 70px rgba(37,31,20,.22); overflow: hidden; overscroll-behavior: contain; display: flex; flex-direction: column; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s; }
     .um-panel.open { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(-50%) translateX(0); transition-delay: 0s; }
@@ -87,6 +91,7 @@
     .um-screen { flex: 0 0 auto; border: 0; padding: 3px 0; background: transparent; color: #675512; cursor: pointer; font: 650 10px/1.2 inherit; }
     .um-screen:disabled { opacity: .45; cursor: default; }
     .um-form { display: flex; align-items: flex-end; gap: 8px; padding: 7px 7px 7px 12px; border: 1px solid rgba(36,33,29,.14); border-radius: 17px; background: #fff; }
+    .um-form:focus-within { border-color: #b39117; box-shadow: 0 0 0 3px rgba(245,197,24,.15); }
     .um-input { flex: 1; resize: none; border: 0; outline: 0; min-height: 30px; max-height: 112px; padding: 7px 0; background: transparent; color: #24211d; font: 500 13px/1.4 inherit; }
     .um-send { flex: 0 0 auto; width: 38px; height: 38px; border: 0; border-radius: 13px; background: #F5C518; color: #2c2508; cursor: pointer; font: 800 17px/1 inherit; }
     .um-send:disabled { opacity: .45; cursor: default; }
@@ -247,7 +252,7 @@
     panel.setAttribute("aria-hidden", String(!state.open));
     mascot.setAttribute("aria-expanded", String(state.open));
     if (state.open) {
-      if (!state.auth) initialize();
+      if (!state.auth || !state.auth.isPro || !state.privacyConsent?.accepted) initialize();
       else if (state.auth.authenticated && state.auth.isPro && !state.busy) {
         void refreshMessagesOnOpen();
       }
@@ -266,8 +271,13 @@
 
   async function refreshMessagesOnOpen() {
     try {
+      if (state.pendingSave) return; // Keep an unsaved answer visible until it is saved.
       const chatState = await send({ type: "LOAD_CHAT_STATE" });
       if (!state.open || state.busy) return;
+      if (state.activeConversationId !== chatState.conversationId) {
+        state.pageHistory = [];
+        state.draft = "";
+      }
       state.messages = chatState.messages;
       state.activeConversationId = chatState.conversationId;
       state.activeConversationTitle = chatState.conversationTitle;
@@ -388,7 +398,9 @@
       return "UniMate couldn't verify your Pro access. Please try again in a moment.";
     }
     if (/429|rate limit|too many requests/i.test(raw)) {
-      return "UniMate is a little busy right now. Wait a moment, then try again.";
+      return error?.retryAfterMs > 0
+        ? `UniMate is a little busy right now. Your question is saved below; try again in about ${Math.ceil(error.retryAfterMs / 1000)} seconds.`
+        : "UniMate is a little busy right now. Your question is saved below; wait a moment, then try again.";
     }
     if (/updated or reloaded|receiving end|message port|could not establish/i.test(raw)) {
       return "UniMate needs to reconnect to this page. Refresh once, then try again.";
@@ -408,18 +420,23 @@
   }
 
   function extractContext() {
-    if (!globalThis.UniMateContextExtractor) {
-      return {
-        highlightedText: "",
-        nearbyText: "",
-        visiblePageText: "",
-        pageTitle: document.title || "",
-        pageUrl: location.href,
-        pageDomain: location.hostname,
-        metrics: { textLength: 0, blockedFrameCount: 0, visualElementCount: 0 },
-      };
+    try {
+      if (globalThis.UniMateContextExtractor) {
+        return globalThis.UniMateContextExtractor.extractRenderedContext();
+      }
+    } catch {
+      // An unusual page can defeat DOM extraction; screenshot capture remains
+      // available after the same consent and entitlement preflight.
     }
-    return globalThis.UniMateContextExtractor.extractRenderedContext();
+    return {
+      highlightedText: "",
+      nearbyText: "",
+      visiblePageText: "",
+      pageTitle: document.title || "",
+      pageUrl: location.href,
+      pageDomain: location.hostname,
+      metrics: { textLength: 0, blockedFrameCount: 0, visualElementCount: 0 },
+    };
   }
 
   function renderAuth(error = "") {
@@ -434,8 +451,8 @@
           configured
             ? `
           <form class="um-login">
-            <input class="um-field um-email" type="email" autocomplete="username" placeholder="UniMate email" required />
-            <input class="um-field um-password" type="password" autocomplete="current-password" placeholder="Password" required />
+            <input class="um-field um-email" type="email" autocomplete="username" placeholder="UniMate email" aria-label="UniMate email" required />
+            <input class="um-field um-password" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password" required />
             <button class="um-primary" type="submit">Sign in to UniMate</button>
           </form>`
             : ""
@@ -457,11 +474,18 @@
         </div>
         ${error ? `<div class="um-status error" role="alert">${escapeHtml(error)}</div>` : ""}
         <button class="um-primary um-consent-accept" type="button">Allow and continue</button>
-        <button class="um-secondary um-consent-decline" type="button">Not now</button>
+        <button class="um-secondary um-consent-decline" type="button">${state.privacyConsent?.accepted ? "Pause page sharing" : "Not now"}</button>
         <p><a href="https://unimate.site/privacy" target="_blank" rel="noreferrer">Read UniMate's Privacy Policy</a></p>
       </div>`;
     body.querySelector(".um-consent-accept").addEventListener("click", handlePrivacyConsent);
-    body.querySelector(".um-consent-decline").addEventListener("click", () => toggle(false));
+    body.querySelector(".um-consent-decline").addEventListener("click", async () => {
+      try {
+        state.privacyConsent = await send({ type: "SET_PRIVACY_CONSENT", accepted: false });
+        toggle(false);
+      } catch {
+        renderPrivacyConsent("We couldn’t save that choice. Please try again.");
+      }
+    });
     queueMicrotask(focusInitialControl);
   }
 
@@ -482,15 +506,23 @@
       <div class="um-auth">
         <div class="um-mark" style="margin:0 auto 16px">✦</div>
         <h2>Meet UniMate Pro</h2>
-        <p>Browser Companion is included with UniMate Pro. Upgrade in UniMate, then reopen this panel to keep studying here.</p>
+        <p>A little help, right beside your coursework. Companion unlocks after your Pro purchase is confirmed.</p>
+        <button class="um-primary um-upgrade" type="button">Explore UniMate Pro</button>
+        <button class="um-secondary um-check-plan" type="button">I’ve upgraded · Check access</button>
         <button class="um-link um-signout" type="button">Sign out</button>
       </div>`;
     body.querySelector(".um-signout").addEventListener("click", handleSignOut);
+    body
+      .querySelector(".um-upgrade")
+      .addEventListener("click", () => send({ type: "OPEN_UPGRADE" }));
+    body.querySelector(".um-check-plan").addEventListener("click", initialize);
     queueMicrotask(focusInitialControl);
   }
 
   function renderChat(status = "", isError = false) {
-    const context = extractContext();
+    if (!state.privacyConsent?.accepted) return renderPrivacyConsent();
+    if (!state.auth?.authenticated) return renderAuth();
+    if (!state.auth.isPro) return renderNotPro();
     const messages = state.messages.length
       ? state.messages
           .map(
@@ -502,36 +534,69 @@
               }</div>`,
           )
           .join("")
-      : `<div class="um-empty"><strong>Ready when you are.</strong>Ask a question, get unstuck, and keep moving${context.highlightedText ? " — I’ll start with your highlighted text" : ""}.</div>`;
+      : `<div class="um-empty"><strong>Let’s work through it together.</strong>Ask me to explain a tricky idea, find a starting point, or walk through a problem. Highlight a passage to help me focus.</div>`;
     body.innerHTML = `
       ${status ? `<div class="um-status ${isError ? "error" : ""}" ${isError ? 'role="alert"' : 'role="status"'}>${escapeHtml(status)}</div>` : ""}
+      ${state.pendingSave ? '<div class="um-status" role="status">This answer has not synced yet. Copy it before continuing without saving if you want to keep it.<button class="um-secondary um-retry-save" type="button">Save this answer again</button><button class="um-link um-skip-save" type="button">Continue without saving</button></div>' : ""}
       <div class="um-messages" role="log" aria-live="polite" aria-relevant="additions text" aria-busy="${state.busy}">${messages}${state.busy ? '<div class="um-thinking" role="status" aria-label="UniMate is thinking"><i></i><i></i><i></i></div>' : ""}</div>
       <div class="um-composer">
         <div class="um-context-row">
           <span class="um-context">${escapeHtml(state.activeConversationTitle)}</span>
-          <span class="um-context">Synced with Ask UniMate</span>
+          <span class="um-context">${state.pendingSave ? "Not yet synced" : "Shared with Ask UniMate"}</span>
         </div>
         <form class="um-form">
-          <textarea class="um-input" rows="1" maxlength="4000" placeholder="Ask about what you see…" aria-label="Ask UniMate about this page" aria-describedby="um-composer-hint"></textarea>
+          <textarea class="um-input" rows="1" maxlength="4000" placeholder="What would you like help with?" aria-label="Ask UniMate about this page" aria-describedby="um-composer-hint">${escapeHtml(state.draft)}</textarea>
           <button class="um-send" type="submit" aria-label="Send" ${state.busy ? "disabled" : ""}>↑</button>
         </form>
         <span id="um-composer-hint" class="um-hidden">Press Enter to send. Press Shift and Enter for a new line.</span>
+        <p class="um-context" style="white-space:normal;margin:8px 4px 0;line-height:1.5">${state.contextMode === "text-fallback" ? "Last answer used visible page text; a screenshot wasn’t available." : "Send shares one image of this tab and a short text sample. Nothing is captured while you type."}</p>
+        <div style="display:flex;justify-content:space-between"><button class="um-link um-privacy-settings" type="button" ${state.busy ? "disabled" : ""}>Page sharing</button><button class="um-link um-signout" type="button" ${state.busy ? "disabled" : ""}>Sign out</button></div>
       </div>`;
     const messagesNode = body.querySelector(".um-messages");
     messagesNode.scrollTop = messagesNode.scrollHeight;
     const input = body.querySelector(".um-input");
     input.addEventListener("input", () => {
+      state.draft = input.value;
       input.style.height = "auto";
       input.style.height = `${Math.min(input.scrollHeight, 112)}px`;
     });
     input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey) {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
         event.preventDefault();
         body.querySelector(".um-form").requestSubmit();
       }
     });
     body.querySelector(".um-form").addEventListener("submit", handleChat);
+    body
+      .querySelector(".um-privacy-settings")
+      .addEventListener("click", () => renderPrivacyConsent());
+    body.querySelector(".um-signout").addEventListener("click", handleSignOut);
+    body.querySelector(".um-retry-save")?.addEventListener("click", retrySaving);
+    body.querySelector(".um-skip-save")?.addEventListener("click", () => {
+      state.pendingSave = null;
+      renderChat(
+        "You can keep studying. The unsaved answer may disappear when this chat refreshes.",
+      );
+    });
     if (!state.busy) queueMicrotask(focusInitialControl);
+  }
+
+  async function retrySaving(event) {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = "Saving…";
+    try {
+      await send({ type: "RETRY_CHAT_PERSISTENCE", requestId: state.pendingSave });
+      state.pendingSave = null;
+      renderChat("Saved. You can pick this up in Ask UniMate, too.");
+    } catch (error) {
+      renderChat(
+        error?.code === "PERSISTENCE_EXPIRED"
+          ? error.message
+          : "Your answer is still here. We couldn’t save it yet; please try again.",
+        true,
+      );
+    }
   }
 
   async function handleSignIn(event) {
@@ -545,13 +610,7 @@
         email: event.currentTarget.querySelector(".um-email").value.trim(),
         password: event.currentTarget.querySelector(".um-password").value,
       });
-      if (!state.auth.isPro) return renderNotPro();
-      const chatState = await send({ type: "LOAD_CHAT_STATE" });
-      state.messages = chatState.messages;
-      state.activeConversationId = chatState.conversationId;
-      state.activeConversationTitle = chatState.conversationTitle;
-      state.conversationStartIndex = state.messages.length;
-      renderChat();
+      await initialize();
     } catch (error) {
       renderAuth(error.message);
     }
@@ -564,6 +623,9 @@
     state.activeConversationId = null;
     state.activeConversationTitle = "Browser Companion";
     state.conversationStartIndex = 0;
+    state.pageHistory = [];
+    state.draft = "";
+    state.pendingSave = null;
     renderAuth();
   }
 
@@ -575,6 +637,9 @@
       state.activeConversationId = null;
       state.activeConversationTitle = "Browser Companion";
       state.conversationStartIndex = 0;
+      state.pageHistory = [];
+      state.draft = "";
+      state.pendingSave = null;
       if (state.open) renderAuth();
     } catch {
       // Untrusted host pages cannot sign the extension out by spoofing a DOM event.
@@ -597,6 +662,27 @@
   }
 
   async function submitChat(message) {
+    if (state.busy) return;
+    if (state.pendingSave)
+      return renderChat(
+        "Please save the answer above before sending your next question. You can also copy it to keep a personal note.",
+        true,
+      );
+    state.busy = true;
+    renderChat("Getting ready to help…");
+    try {
+      state.privacyConsent = await send({ type: "PRIVACY_CONSENT_STATE" });
+      if (!state.privacyConsent.accepted) return renderPrivacyConsent();
+      state.auth = await send({ type: "AUTH_STATE" });
+      if (!state.auth.authenticated) return renderAuth();
+      if (!state.auth.isPro) return renderNotPro();
+    } catch (error) {
+      state.busy = false;
+      renderChat(studentFacingError(error), true);
+      return;
+    } finally {
+      state.busy = false;
+    }
     // V2 is screenshot-first: every explicit Send captures exactly what the
     // student sees. DOM context stays small and supplemental.
     const extractedContext = extractContext();
@@ -613,15 +699,20 @@
     // Persisted chat rows remain visible, but only turns created in this page
     // session are sent back to the model. This prevents claims from another
     // site or an earlier Canvas page becoming evidence in a new conversation.
-    const previousHistory = state.messages.slice(state.conversationStartIndex);
+    const previousHistory = state.pageHistory.slice(-12);
+    const requestPageUrl = location.href;
+    const requestUserId = state.auth.userId;
     const requestId = crypto.randomUUID();
-    state.messages.push({ role: "user", message, created_at: new Date().toISOString() });
+    const optimisticMessage = { role: "user", message, created_at: new Date().toISOString() };
+    state.messages.push(optimisticMessage);
+    state.draft = "";
     state.busy = true;
     renderChat();
     try {
       const result = await send({
         type: "SEND_CHAT",
         requestId,
+        conversationId: state.activeConversationId,
         message,
         context,
         useScreenshot: decision.useScreenshot,
@@ -629,26 +720,40 @@
         contextConfidence: decision.confidence,
         history: previousHistory,
       });
-      state.messages[state.messages.length - 1] = result.user;
-      state.messages.push(result.assistant);
+      if (!state.auth?.authenticated || state.auth.userId !== requestUserId) return;
+      if (result.conversationId && result.conversationId !== state.activeConversationId) {
+        state.activeConversationId = result.conversationId;
+        state.activeConversationTitle = "Browser Companion";
+        state.messages = [result.user, result.assistant];
+        state.pageHistory = [];
+      } else {
+        state.messages[state.messages.length - 1] = result.user;
+        state.messages.push(result.assistant);
+      }
+      if (requestPageUrl === location.href) state.pageHistory.push(result.user, result.assistant);
+      state.contextMode = result.contextMode;
+      if (result.persistenceWarning) state.pendingSave = result.requestId;
       if (result.diagnostics) {
         state.diagnostics = { ...state.diagnostics, ...result.diagnostics };
       }
       state.busy = false;
       renderChat(result.persistenceWarning || undefined);
     } catch (error) {
+      if (!state.auth?.authenticated || state.auth.userId !== requestUserId) return;
       const failureDetails = {
         message: error?.message || "Unknown error",
         code: error?.code || "COMPANION_ERROR",
         phase: error?.phase || "runtime",
       };
       try {
-        // The background persists the user row before calling AI. Re-read the
-        // database after failures so the UI matches the durable history.
-        state.messages = await send({ type: "LOAD_MESSAGES" });
+        // Successful exchanges are persisted atomically. Recover a completed
+        // response if only the extension transport failed after saving it.
+        if (!state.pendingSave) state.messages = await send({ type: "LOAD_MESSAGES" });
       } catch {
-        // Preserve the optimistic message if history itself is unavailable.
+        // Keep earlier answers when the connection is unavailable.
       }
+      state.messages = state.messages.filter((item) => item !== optimisticMessage);
+      if (!state.draft) state.draft = message;
       state.runtime.lastError = failureDetails.message;
       state.runtime.lastErrorCode = failureDetails.code;
       state.runtime.lastErrorPhase = failureDetails.phase;
@@ -671,6 +776,9 @@
   }
 
   async function initialize() {
+    if (state.busy) return;
+    body.innerHTML =
+      '<div class="um-auth" role="status"><p>Checking your Companion access…</p></div>';
     try {
       state.privacyConsent = await send({ type: "PRIVACY_CONSENT_STATE" });
       if (!state.privacyConsent.accepted) return renderPrivacyConsent();
@@ -785,8 +893,9 @@
   syncWebsiteAuthState();
 
   function refreshVisiblePanel() {
-    if (document.visibilityState === "visible" && state.open && !state.busy && state.auth?.isPro) {
-      void refreshMessagesOnOpen();
+    if (document.visibilityState === "visible" && state.open && !state.busy) {
+      if (state.auth?.isPro) void refreshMessagesOnOpen();
+      else void initialize();
     }
   }
   addEventListener("focus", refreshVisiblePanel);
@@ -797,6 +906,8 @@
     if (location.href === currentPageUrl) return;
     currentPageUrl = location.href;
     state.conversationStartIndex = state.messages.length;
+    state.pageHistory = [];
+    state.contextMode = null;
     state.diagnostics = null;
     if (state.open && !state.busy) renderChat();
   }
