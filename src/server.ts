@@ -2131,10 +2131,28 @@ function stripeConfiguration():
   if (!liveMode && !secretKey.startsWith("sk_test_") && !secretKey.startsWith("rk_test_")) {
     return jsonResponse({ error: "Stripe test-mode configuration is invalid." }, 503);
   }
-  const configuredOrigin = process.env.UNIMATE_CANONICAL_ORIGIN?.trim();
+  // Explicit configuration always wins, including invalid values: never hide
+  // a bad canonical origin by silently redirecting to a different deployment.
+  let configuredOrigin = process.env.UNIMATE_CANONICAL_ORIGIN ?? process.env.VITE_UNIMATE_API_URL;
+  if (configuredOrigin === undefined && !liveMode && process.env.VERCEL === "1") {
+    const environments = [process.env.VERCEL_ENV, process.env.VERCEL_TARGET_ENV];
+    const preview =
+      environments.some((value) => value === "preview") &&
+      environments.every((value) => value === undefined || value === "preview");
+    const deploymentHost = process.env.VERCEL_URL;
+    // Only Vercel's immutable deployment URL is eligible, never a request Host,
+    // branch alias, or production URL. Production/live billing needs an explicit origin.
+    if (
+      preview &&
+      deploymentHost &&
+      /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.vercel\.app$/.test(deploymentHost)
+    ) {
+      configuredOrigin = `https://${deploymentHost}`;
+    }
+  }
   let canonicalOrigin: string;
   try {
-    const parsed = new URL(configuredOrigin || process.env.VITE_UNIMATE_API_URL || "");
+    const parsed = new URL(configuredOrigin?.trim() || "");
     const localDevelopment = import.meta.env.DEV && parsed.hostname === "localhost";
     if ((parsed.protocol !== "https:" && !localDevelopment) || parsed.username || parsed.password) {
       throw new Error("invalid origin");

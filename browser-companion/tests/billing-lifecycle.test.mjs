@@ -295,6 +295,156 @@ function fixture() {
   return { state, env, api: context.api, request, event, access };
 }
 
+// Billing return URLs come from explicit operator configuration or Vercel's
+// immutable Preview system hostname, never user-controlled request headers.
+{
+  const preview = {
+    VERCEL: "1",
+    VERCEL_ENV: "preview",
+    VERCEL_TARGET_ENV: "preview",
+    VERCEL_URL: "unimate-synthetic-deployment.vercel.app",
+  };
+  const configuration = (overrides = {}) => {
+    const f = fixture();
+    delete f.env.UNIMATE_CANONICAL_ORIGIN;
+    Object.assign(f.env, preview, overrides);
+    return f.api.stripeConfiguration();
+  };
+  const expectedOrigin = `https://${preview.VERCEL_URL}`;
+  assert.equal(configuration().canonicalOrigin, expectedOrigin);
+  for (const key of ["VERCEL_ENV", "VERCEL_TARGET_ENV"]) {
+    assert.equal(configuration({ [key]: undefined }).canonicalOrigin, expectedOrigin);
+  }
+  assert.equal(
+    configuration({ STRIPE_SECRET_KEY: "rk_test_synthetic" }).canonicalOrigin,
+    expectedOrigin,
+    "restricted test keys support the same Preview-only fallback",
+  );
+  assert.equal(
+    configuration({
+      UNIMATE_CANONICAL_ORIGIN: " https://configured.test/path ",
+      VITE_UNIMATE_API_URL: "https://legacy.test",
+    }).canonicalOrigin,
+    "https://configured.test",
+    "explicit canonical configuration takes precedence",
+  );
+  assert.equal(
+    configuration({ VITE_UNIMATE_API_URL: "https://legacy.test" }).canonicalOrigin,
+    "https://legacy.test",
+    "the existing explicitly configured API origin remains supported",
+  );
+  for (const origin of ["", " ", "not-a-url", "http://unsafe.test", "https://user@unsafe.test"]) {
+    for (const key of ["UNIMATE_CANONICAL_ORIGIN", "VITE_UNIMATE_API_URL"]) {
+      assert.equal(
+        configuration({ [key]: origin }).status,
+        503,
+        `an invalid explicit ${key} never falls through to the Preview hostname`,
+      );
+    }
+  }
+  assert.equal(
+    configuration({ UNIMATE_CANONICAL_ORIGIN: "bad", VITE_UNIMATE_API_URL: "https://legacy.test" })
+      .status,
+    503,
+    "an invalid canonical origin cannot fall through to the legacy configuration either",
+  );
+  for (const overrides of [
+    { VERCEL: undefined },
+    { VERCEL: "true" },
+    { VERCEL_ENV: undefined, VERCEL_TARGET_ENV: undefined },
+    { VERCEL_ENV: "production" },
+    { VERCEL_TARGET_ENV: "production" },
+    { VERCEL_ENV: "development" },
+    { VERCEL_TARGET_ENV: "staging" },
+    { VERCEL_TARGET_ENV: "" },
+    { STRIPE_SECRET_KEY: "sk_live_synthetic", STRIPE_LIVE_MODE_ENABLED: "true" },
+    { STRIPE_SECRET_KEY: "rk_live_synthetic", STRIPE_LIVE_MODE_ENABLED: "true" },
+    { STRIPE_SECRET_KEY: "sk_live_synthetic" },
+    { STRIPE_SECRET_KEY: "invalid-synthetic" },
+  ]) {
+    assert.equal(configuration(overrides).status, 503, "fallback stays Preview/test-mode only");
+  }
+  for (const host of [
+    undefined,
+    "",
+    "vercel.app",
+    "evil.test",
+    "evil.vercel.app.test",
+    "nested.app.vercel.app",
+    "https://app.vercel.app",
+    "app.vercel.app/",
+    "app.vercel.app:443",
+    "app.vercel.app?next=evil",
+    "app.vercel.app#fragment",
+    "user@app.vercel.app",
+    "app.vercel.app\\evil.test",
+    "app.vercel.app.",
+    " app.vercel.app",
+    "app.vercel.app\n",
+    "app_foo.vercel.app",
+    "-app.vercel.app",
+    "app-.vercel.app",
+    `${"a".repeat(64)}.vercel.app`,
+  ]) {
+    assert.equal(configuration({ VERCEL_URL: host }).status, 503, "deployment hostname is strict");
+  }
+  assert.equal(
+    configuration({
+      VERCEL_URL: undefined,
+      VERCEL_BRANCH_URL: "branch.vercel.app",
+      VERCEL_PROJECT_PRODUCTION_URL: "production.vercel.app",
+    }).status,
+    503,
+    "branch and production aliases are not fallback candidates",
+  );
+  assert.equal(
+    configuration({
+      VERCEL_ENV: "production",
+      VERCEL_TARGET_ENV: "production",
+      STRIPE_SECRET_KEY: "sk_live_synthetic",
+      STRIPE_LIVE_MODE_ENABLED: "true",
+      UNIMATE_CANONICAL_ORIGIN: "https://configured.test",
+    }).canonicalOrigin,
+    "https://configured.test",
+    "explicit production origin retains the existing live-mode opt-in contract",
+  );
+
+  const f = fixture();
+  delete f.env.UNIMATE_CANONICAL_ORIGIN;
+  Object.assign(f.env, preview);
+  const spoofedRequest = (path) =>
+    new Request(`https://attacker.test${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer synthetic-user",
+        Host: "attacker.test",
+        "X-Forwarded-Host": "attacker.test",
+      },
+    });
+  assert.equal(
+    (await f.api.handleCreateCheckoutSession(spoofedRequest("/api/create-checkout-session")))
+      .status,
+    200,
+  );
+  const checkoutCall = f.state.calls.find(
+    (call) => call.url.pathname === "/v1/checkout/sessions" && call.method === "POST",
+  );
+  const checkoutBody = new URLSearchParams(checkoutCall.body);
+  assert.equal(new URL(checkoutBody.get("success_url")).origin, expectedOrigin);
+  assert.equal(new URL(checkoutBody.get("cancel_url")).origin, expectedOrigin);
+  assert.equal(
+    (await f.api.handleCreatePortalSession(spoofedRequest("/api/create-portal-session"))).status,
+    200,
+  );
+  const portalCall = f.state.calls.find(
+    (call) => call.url.pathname === "/v1/billing_portal/sessions",
+  );
+  assert.equal(
+    new URL(new URLSearchParams(portalCall.body).get("return_url")).origin,
+    expectedOrigin,
+  );
+}
+
 // A genuine signed lifecycle unlocks only after payment; cancellation takes
 // effect when Stripe's current state ends access, never at the scheduling step.
 {
