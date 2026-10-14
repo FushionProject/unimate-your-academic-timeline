@@ -49,6 +49,21 @@ Additional real-provider checks on October 14:
 
 The full offline suite, typecheck, lint (zero errors/eight existing warnings), secret scan and local Vercel build/artifact tests passed. Private test-browser and backup folders are excluded from lint/format inputs. The pushed `90b6a15` checkpoint also passed [the complete GitHub/Linux verification workflow](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38519205802), including a clean dependency install and emitted-artifact checks. New checks distinguish real provider delivery from fixture coverage. Remaining portal-isolation cases, initial declined Checkout, complete website-state UI coverage and a connected hosted billing end-to-end check still require their own evidence; public release gates remain unchanged.
 
+## Portal isolation and initial-payment decline — October 14, 2026
+
+The same isolated Stripe sandbox and local provider-disabled supervisor were used. Server process ancestry and repository directory were independently checked before sending synthetic authentication. No live charges or hosted deployment occurred.
+
+- Created one additional app-metadata-marked, email-confirmed synthetic test user, with no confirmation email. It remained Free, with no Stripe customer and billing revision zero.
+- Authenticated as that second user, forged the first user's customer/user IDs in both JSON and query parameters. Both real application requests returned 409 without a portal URL. An unsigned request returned 401. Neither account's customer binding changed.
+- Created one portal for the original synthetic customer. Correlated its private URL to exactly one test `billing_portal.session.created` event with the correct customer and localhost return destination. The actual Stripe portal opened and displayed the synthetic email and test billing history.
+- Created one unpaid Checkout and submitted Stripe's documented generic-decline test card `4000000000000002` once. The real browser showed a declined-card alert. Separate provider/application reads verified the session remained unpaid, all three original subscriptions remained canceled, the persisted profile remained Free, and Companion authorization returned 403 `PRO_REQUIRED`.
+- Expired only that journaled unpaid Checkout. Fresh post-expiry checks verified zero open Checkouts, unchanged subscriptions and Free/403 access. The additional synthetic user and historical sandbox records are intentionally retained for reproducible testing; owner coursework was not touched.
+- Added offline tests executing the actual Upgrade route's rendered states and handlers: active/canceling/past-due, unpaid/canceled, unavailable providers, failed reads, network failures, safe redirects, manual Checkout retry, and bounded return confirmation. These tests are not a hosted-browser certification.
+
+The new operator helpers have fixed, private attempt journals and fail closed after uncertain mutations. `stripe-sandbox-portal-isolation.mjs` uses `UNIMATE_STRIPE_TEST_PORTAL=approved` with `status`, `prepare-secondary`, `verify-isolation`, `create-primary-portal`, and `verify-primary-portal`. `stripe-sandbox-initial-decline.mjs` uses `UNIMATE_STRIPE_TEST_INITIAL_DECLINE=approved` with `create`, `status`, and `cleanup`; the operator enters the decline fixture in Stripe's browser UI separately. It never pays automatically or cancels an unexpected subscription. Never repeat a journaled create or disclose its private redirect URL.
+
+Remaining release evidence includes the connected protected-hosted billing journey and complete website/Companion browser-state transitions. Production billing remains blocked on the existing release gates, including explicit live-mode approval and owner decisions on refund/dispute treatment and applicable tax registrations. No tax collection was enabled by these tests.
+
 ### Controlled local helpers
 
 Private configuration belongs only in ignored `.env.local` (Supabase) and `.env.stripe.local` (test billing), never in shell arguments, documentation, browser bundles or logs. After operator review and authorization:
