@@ -17,7 +17,9 @@ committed and pushed as `da82c64`, followed by tested billing checkpoints
 `40057cb` (concurrent Checkout recovery and renewal checks), `794ed35`
 (installed Companion entitlement and native event redelivery checks), and
 `90b6a15` (refund/dispute/race verification and tests-only GitHub checks), and
-`291be77` (real portal isolation/initial decline plus billing UI regressions). GitHub
+`291be77` (real portal isolation/initial decline plus billing UI regressions),
+`5a6f3a4` (dependency cleanup and both hosting adapters), and `fbd059f`
+(cross-version bundled-lock repair and regression). GitHub
 `main` was not changed. This branch is still under verification, not frozen or
 approved for public release. The August record below is historical. The protected
 Preview uploaded October 13 local / October 14 UTC remains on its recorded source;
@@ -114,7 +116,11 @@ needed by npm 10.9.2. Restoring the exact original `@emnapi/core` and
 dependency upgrade or peer-check bypass. Fresh isolated installs with npm 10.9.2
 and 11.6.2 pass, the full audit still reports zero vulnerabilities, and the
 build-config regression now checks completeness of every declared bundle.
-The corrected GitHub/Linux verification is pending; do not promote before it passes.
+The corrected `fbd059f`
+[GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38606056302)
+passed the clean install, audit, secret scan, typecheck, lint, full offline suite,
+both builds and both emitted-artifact checks. No deployment or release promotion
+was performed.
 
 The cleanup review also found a pre-existing sandbox isolation gap: TanStack's
 environment-loading hook ignored `envDir:false`. Existing explicit blank AI keys
@@ -278,7 +284,22 @@ and no public billing, live charge, email-domain change or Store release occurre
 
 Earlier evidence — **October 13, 2026 local / October 14 UTC**: the dedicated UniMate sandbox `acct_1UQHj2IxB8W4eFUh` and its active USD $5.99 monthly test Price were verified. A separate synthetic Free user completed real browser Checkout through the local test server; Checkout, invoice and subscription-created webhook deliveries returned 200 and the profile became Pro. The Companion API changed from Free 403 to passing its Pro gate (`SCREENSHOT_UNAVAILABLE` because this harness deliberately has no AI provider credentials). This earlier run did not claim a paid AI answer, production billing, or installed-extension billing validation.
 
-Real Portal period-end cancellation preserved Pro and exposed the flexible-billing `cancel_at` representation; the local status fix now shows the correct access-end date. Advancing the synthetic customer's clock to period end + 1 delivered deletion with 200 and revoked database/Companion access before any browser return (Free / 403). Real browser repurchase then created one new active subscription (the old one stayed canceled); Checkout/invoice/subscription-created deliveries returned 200, profile Pro was restored at revision 14, and the provider-disabled Companion Pro gate passed. Synthetic-only immediate cancellation returned canceled with a deletion delivery of 200; before any app return, the database was Free at revision 15, billing status was non-Pro, and Companion returned 403 `PRO_REQUIRED`. Both sandbox subscriptions ended canceled and the test clock was ready. Renewal/recovery, refunds/disputes and the other unchecked manual scenarios are still open. See the dated evidence and safe helper commands in [Stripe sandbox manual tests](./STRIPE_SANDBOX_MANUAL_TESTS.md); verify the owned localhost PID/parent/working directory before authenticated helper requests.
+Real Portal period-end cancellation preserved Pro and exposed the flexible-billing
+`cancel_at` representation; the local status fix now shows the correct access-end
+date. Advancing the synthetic customer's clock to period end + 1 delivered deletion
+with 200 and revoked database/Companion access before any browser return (Free / 403).
+Real browser repurchase then created one new active subscription (the old one stayed
+canceled); Checkout/invoice/subscription-created deliveries returned 200, profile
+Pro was restored at revision 14, and the provider-disabled Companion Pro gate passed.
+Synthetic-only immediate cancellation returned canceled with a deletion delivery
+of 200; before any app return, the database was Free at revision 15, billing status
+was non-Pro, and Companion returned 403 `PRO_REQUIRED`. Both sandbox subscriptions
+ended canceled and the test clock was ready. Renewal/recovery and refunds/disputes
+were still open at that earlier checkpoint; the October 14 follow-up above records
+their completion. Hosted/browser-state and other unchecked scenarios remain open.
+See the dated evidence and safe helper commands in
+[Stripe sandbox manual tests](./STRIPE_SANDBOX_MANUAL_TESTS.md); verify the owned
+localhost PID/parent/working directory before authenticated helper requests.
 
 - [x] $5.99 monthly Pro lifecycle implemented in code
 - [x] Live-mode safety lock implemented
@@ -289,10 +310,11 @@ Real Portal period-end cancellation preserved Pro and exposed the flexible-billi
 - [x] Parallel Checkout requests produce one customer and no duplicate subscription (real post-fix pair plus same-session reuse before/after five minutes, October 14)
 - [ ] Webhook signature and test/live-mode validation confirmed
 - [x] Duplicate webhook delivery confirmed safe (native paid-event redelivery twice, October 14)
-- [ ] Customer Portal verified
+- [x] Customer Portal access and ownership isolation verified (real portal plus cross-account/unsigned rejection, October 14)
+- [ ] Customer Portal payment-method editing and protected-hosted return verified
 - [x] Cancellation at period end verified (real Portal and test-clock terminal webhook, October 13 local / October 14 UTC)
 - [x] Immediate cancellation verified (synthetic-only sandbox API, terminal webhook and pre-return access revocation; October 13 local / October 14 UTC)
-- [ ] Failed initial payment verified
+- [x] Failed initial payment verified (real generic-decline browser submission; Free/403 preserved and unpaid Checkout expired, October 14)
 - [x] Failed renewal and recovery verified (real recurring-decline fixture, grace state and original-method recovery, October 14)
 - [x] Renewal with a Stripe test clock verified (paid monthly invoice and delivered webhook, October 14)
 - [x] Refund and dispute reconciliation verified (partial/full refunds, created/closed synthetic dispute, October 14)
@@ -429,7 +451,7 @@ Record only operational metadata—never student content or secrets.
 
 | Time | System | Symptom | Action | Owner | Resolved |
 | ---- | ------ | ------- | ------ | ----- | -------- |
-| October 14, 2026 | GitHub dependency install | npm 10.9.2 rejected missing optional bundled lock records after npm 11 cleanup | Restored exact original bundle metadata; fresh installs pass under both npm versions; added regression | Codex | Local fix verified; GitHub rerun pending |
+| October 14, 2026 | GitHub dependency install | npm 10.9.2 rejected missing optional bundled lock records after npm 11 cleanup | Restored exact original bundle metadata; fresh installs pass under both npm versions; added regression | Codex | Yes; complete GitHub run 38606056302 passed at fbd059f |
 
 ## Final decision
 
