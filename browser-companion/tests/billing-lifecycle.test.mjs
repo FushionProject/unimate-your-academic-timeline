@@ -639,6 +639,45 @@ function fixture() {
   assert.equal(await f.access(), 200);
 }
 
+// Default-grace renewal flow: the warning is not confused with revocation or
+// cancellation. Execute signed events and the actual reconciled status handler,
+// including the draft interval before Stripe finalizes a renewal invoice.
+{
+  const f = fixture();
+  const sub = subscription("sub_grace_renewal");
+  f.state.subscriptions = [sub];
+  f.state.paidInvoices.set(sub.id, [invoice(sub.id)]);
+  assert.equal((await f.event("invoice.paid", invoice(sub.id))).status, 200);
+  const status = async () => {
+    const response = await f.api.handleBillingStatus(f.request("/api/billing-status"));
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  sub.latest_invoice = { ...invoice(sub.id, "draft"), id: "in_next_cycle" };
+  assert.equal((await f.event("customer.subscription.updated", sub)).status, 200);
+  assert.equal((await status()).state, "active");
+  assert.equal(await f.access(), 200, "draft renewal does not revoke a previously paid plan");
+
+  sub.status = "past_due";
+  sub.latest_invoice.status = "open";
+  assert.equal((await f.event("invoice.payment_failed", sub.latest_invoice)).status, 200);
+  const failed = await status();
+  assert.equal(failed.state, "past_due", "billing UI must show the payment warning");
+  assert.equal(failed.isPro, true, "default grace policy keeps previously paid access");
+  assert.equal(failed.canManage, true, "customer can open the portal to recover");
+  assert.equal(failed.cancelAtPeriodEnd, false, "failed payment is not scheduled cancellation");
+  assert.equal(await f.access(), 200);
+
+  const staleFailure = structuredClone(sub.latest_invoice);
+  sub.status = "active";
+  sub.latest_invoice.status = "paid";
+  assert.equal((await f.event("invoice.paid", sub.latest_invoice)).status, 200);
+  assert.equal((await status()).state, "active", "recovery clears the warning");
+  assert.equal((await f.event("invoice.payment_failed", staleFailure)).status, 200);
+  assert.equal((await status()).state, "active", "late failure cannot restore the warning");
+  assert.equal(await f.access(), 200);
+}
+
 // Identical checkout retries remain byte-identical under one Stripe key,
 // including the eight-letter integration label. Browser-supplied prices never
 // enter the production handler's fixed server-owned plan parameters.

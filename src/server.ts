@@ -2806,6 +2806,32 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
       idempotencyKey,
     );
     if (!stripeRes.ok) {
+      if (stripeRes.status === 409) {
+        const failure = (await stripeRes.json().catch(() => null)) as {
+          error?: { code?: string };
+        } | null;
+        if (failure?.error?.code === "idempotency_key_in_use") {
+          // Stripe has not persisted the concurrent request's result yet. Make
+          // one read-only recovery pass; never mint a new key or replay a POST.
+          // https://docs.stripe.com/api/idempotent_requests
+          const currentOwners = await findUserIdsByStripeCustomer(customerId);
+          if (currentOwners.length !== 1 || currentOwners[0] !== authResult.id) {
+            return jsonResponse({ error: "Billing account ownership could not be verified." }, 409);
+          }
+          const pending = await readCustomerCheckouts(customerId, config);
+          if (!pending.hasCurrentSubscription && pending.url) {
+            return jsonResponse({ url: pending.url });
+          }
+          return jsonResponse(
+            {
+              error: "Your checkout is already being prepared. Please try again in a few seconds.",
+              code: "CHECKOUT_IN_PROGRESS",
+            },
+            409,
+            { "Retry-After": "2" },
+          );
+        }
+      }
       console.error("Stripe checkout session failed", { status: stripeRes.status });
       return jsonResponse({ error: "Checkout could not start. Please try again." }, 502);
     }
