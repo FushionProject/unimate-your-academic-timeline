@@ -246,9 +246,16 @@ export async function sandboxRenewal({
     // A prior unknown result blocks every subsequent mutation, even when the
     // remote state has moved into another billing period. Status stays usable.
     for (const name of await fs.readdir(directory)) {
-      if (!/^renewal-[a-f0-9]{64}\.json$/.test(name)) continue;
+      const stepJournal = /^(?:renewal|dispute)-[a-f0-9]{64}\.json$/.test(name);
+      const paymentJournal = /^(?:renewal|dispute)-payment-[a-f0-9]{64}\.json$/.test(name);
+      if (!stepJournal && !paymentJournal) continue;
       const previous = JSON.parse(await readPrivate(path.join(directory, name)));
-      if (previous.state !== "accepted") fail("RENEWAL_UNCERTAIN_JOURNAL_USE_STATUS");
+      if (
+        stepJournal
+          ? previous.state !== "accepted"
+          : !["installed", "restored"].includes(previous.state)
+      )
+        fail("RENEWAL_UNCERTAIN_JOURNAL_USE_STATUS");
     }
     if (payment?.state === "pending") fail("RENEWAL_UNCERTAIN_JOURNAL_USE_STATUS");
     const end = sub.items.data[0].current_period_end;

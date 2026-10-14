@@ -1,7 +1,8 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-Readiness updated: October 13 local / October 14 UTC, 2026. The current audited
-dirty candidate passed its protected hosted screenshot/AI/save/reload flow below.
+Readiness updated: October 14, 2026. The protected hosted screenshot/AI/save/reload
+snapshot below predates the latest pushed billing checks on
+`codex/unimate-premium-revival`; the newer branch has not been deployed there.
 Historical snapshot evidence remains scoped to those specific uploads.
 No custom domain was assigned and nothing was submitted to or published in the
 Chrome Web Store.
@@ -39,9 +40,21 @@ tests passed; these public-release gates remain:
    alone is not enforcement, and the provider spending cap was not exhausted in testing.
 9. Verify the production billing lifecycle, including purchase, renewal,
    cancellation, and entitlement removal. An existing Pro account's successful
-   study request does not establish these behaviors; no Stripe state was changed.
+   study request does not establish these behaviors. The October 14 local-server
+   sandbox checks below are separate, not hosted or production billing approval.
 
 ## Protected hosted-test progress
+
+- **October 14 local sandbox billing follow-up:** actual test Checkout, successful
+  and failed renewals, recovery, native duplicate/stale event redelivery,
+  partial/full refunds and dispute creation/closure reconciled correctly.
+  The installed Companion showed Pro using real persisted entitlement, then
+  reused the same synthetic session after terminal cancellation and showed its
+  upgrade gate (persisted Free revision 42). Zero AI requests, captures or page
+  extractions occurred in these entitlement snapshots. All three synthetic
+  subscriptions ended canceled; no owner purchase or live charge occurred.
+  These finite reopened-panel snapshots do not establish a continuously open
+  panel transition. See [the full sandbox record](../STRIPE_SANDBOX_MANUAL_TESTS.md).
 
 - The approved database backup, local restore verification, and durable quota
   migrations are complete; see `../AI_ENTITLEMENT_ROLLOUT.md` for evidence and scope.
@@ -173,6 +186,10 @@ tests passed; these public-release gates remain:
   source/glob configuration with this toolchain. Keep the finding open for a
   separately verified wrapper migration, or explicit release-risk acceptance;
   do not use an untested forced audit fix to clear the warning.
+  October 14 recheck: the same development-only findings remain. Published
+  wrapper `2.7.2` is the earliest identified stable version dropping the tagger,
+  but it also changes the default hosting adapter to Nitro. This is a candidate
+  for an isolated two-target build migration, not a verified drop-in fix.
 
 Minimal reproducible checks from the repository root:
 

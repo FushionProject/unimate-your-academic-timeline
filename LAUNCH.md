@@ -10,13 +10,25 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - Every completed manual item must include a dated evidence note or link.
 - If a release-blocking check fails, stop promotion and record the response under **Launch incidents**.
 
-## Current candidate — October 13, 2026
+## Current candidate — October 14, 2026
 
-The active candidate is the uncommitted working tree on `codex/unimate-premium-revival`
-above `9011f8c`. The August release record below is historical, not approval to
-publish this candidate. The tested source was uploaded to a new protected Preview
-on October 13 local / October 14 UTC, as recorded below. No domain change, Store
+The active candidate is on `codex/unimate-premium-revival`. The product work was
+committed and pushed as `da82c64`, followed by tested billing checkpoints
+`40057cb` (concurrent Checkout recovery and renewal checks) and `794ed35`
+(installed Companion entitlement and native event redelivery checks). GitHub
+`main` was not changed. This branch is still under verification, not frozen or
+approved for public release. The August record below is historical. The protected
+Preview uploaded October 13 local / October 14 UTC remains on its recorded source;
+later billing changes have not been deployed there. No domain change, Store
 submission, live payment, or public launch was performed.
+
+The tests-only GitHub workflow covers pushes to this candidate and `main`, pull
+requests targeting `main`, and manual runs. It uses pinned official actions,
+read-only repository permissions, no persisted checkout credentials, and the
+verified Node 22.16 application runtime. It runs the full offline tests, typecheck,
+lint, secret scan, and local Vercel build/artifact verification; it does not deploy
+or receive service credentials. Local workflow-policy checks pass. A successful
+GitHub runner execution must be recorded separately from these local results.
 
 - [ ] Freeze and record the exact new release commit and rollback point
 - [x] Re-verify the exact uploaded candidate's Companion study flow in its protected hosted environment
@@ -71,6 +83,11 @@ Current dependency evidence: a fresh audit on October 13 found zero production
 dependency advisories and seven high development findings from
 `GHSA-vfj7-8cjw-p6xm`. The scoped exposure assessment remains in the Companion
 Store-readiness document. This is not an accepted or cleared development risk.
+The October 14 recheck still found seven development findings and zero production
+findings. No patched `braces` release was available. Removing the vulnerable chain
+via `@lovable.dev/vite-tanstack-config@2.7.2` requires a deliberate build-adapter
+migration, not a drop-in audit fix; both Cloudflare and Vercel outputs must be
+preserved and retested. No forced dependency update was performed.
 
 ### Local verification — October 13, 2026
 
@@ -194,7 +211,23 @@ not configured. `npm run release:readiness` now reports these without values.
 
 ## Stripe sandbox
 
-Current evidence — **October 13, 2026 local / October 14 UTC**: the dedicated UniMate sandbox `acct_1UQHj2IxB8W4eFUh` and its active USD $5.99 monthly test Price were verified. A separate synthetic Free user completed real browser Checkout through the local test server; Checkout, invoice and subscription-created webhook deliveries returned 200 and the profile became Pro. The Companion API changed from Free 403 to passing its Pro gate (`SCREENSHOT_UNAVAILABLE` because this harness deliberately has no AI provider credentials). This does not claim a paid AI answer, production billing, or installed-extension billing validation.
+Latest follow-up — **October 14, 2026**: a new real browser sandbox purchase,
+successful renewal, failed renewal with configured past-due grace, payment
+recovery, duplicate paid-event redelivery, stale failure, and predecessor
+cancellation redelivery all reconciled correctly. Partial/full refunds and a
+real synthetic dispute (created, then closed as lost) delivered 200 and preserved
+Pro while the subscription remained active. Final explicit cancellation delivered
+200, made the persisted profile Free at revision 42, and returned Companion
+403 `PRO_REQUIRED` before browser reconciliation. All three test subscriptions
+are canceled. The original successful test payment method was restored.
+The actual installed Companion displayed Pro in the isolated synthetic profile
+during the lifecycle, then reused that session after cancellation and displayed
+the upgrade gate at revision 42 with zero AI requests/captures/extractions. These
+are reopen/snapshot checks, not a continuously open panel transition test.
+These are local-server sandbox results. Hosted Preview still has no Stripe keys,
+and no public billing, live charge, email-domain change or Store release occurred.
+
+Earlier evidence — **October 13, 2026 local / October 14 UTC**: the dedicated UniMate sandbox `acct_1UQHj2IxB8W4eFUh` and its active USD $5.99 monthly test Price were verified. A separate synthetic Free user completed real browser Checkout through the local test server; Checkout, invoice and subscription-created webhook deliveries returned 200 and the profile became Pro. The Companion API changed from Free 403 to passing its Pro gate (`SCREENSHOT_UNAVAILABLE` because this harness deliberately has no AI provider credentials). This earlier run did not claim a paid AI answer, production billing, or installed-extension billing validation.
 
 Real Portal period-end cancellation preserved Pro and exposed the flexible-billing `cancel_at` representation; the local status fix now shows the correct access-end date. Advancing the synthetic customer's clock to period end + 1 delivered deletion with 200 and revoked database/Companion access before any browser return (Free / 403). Real browser repurchase then created one new active subscription (the old one stayed canceled); Checkout/invoice/subscription-created deliveries returned 200, profile Pro was restored at revision 14, and the provider-disabled Companion Pro gate passed. Synthetic-only immediate cancellation returned canceled with a deletion delivery of 200; before any app return, the database was Free at revision 15, billing status was non-Pro, and Companion returned 403 `PRO_REQUIRED`. Both sandbox subscriptions ended canceled and the test clock was ready. Renewal/recovery, refunds/disputes and the other unchecked manual scenarios are still open. See the dated evidence and safe helper commands in [Stripe sandbox manual tests](./STRIPE_SANDBOX_MANUAL_TESTS.md); verify the owned localhost PID/parent/working directory before authenticated helper requests.
 
@@ -206,14 +239,14 @@ Real Portal period-end cancellation preserved Pro and exposed the flexible-billi
 - [x] Successful Checkout completed (real local-server sandbox test, October 13 local / October 14 UTC)
 - [ ] Parallel Checkout requests produce one customer and no duplicate subscription
 - [ ] Webhook signature and test/live-mode validation confirmed
-- [ ] Duplicate webhook delivery confirmed safe
+- [x] Duplicate webhook delivery confirmed safe (native paid-event redelivery twice, October 14)
 - [ ] Customer Portal verified
 - [x] Cancellation at period end verified (real Portal and test-clock terminal webhook, October 13 local / October 14 UTC)
 - [x] Immediate cancellation verified (synthetic-only sandbox API, terminal webhook and pre-return access revocation; October 13 local / October 14 UTC)
 - [ ] Failed initial payment verified
-- [ ] Failed renewal and recovery verified
-- [ ] Renewal with a Stripe test clock verified
-- [ ] Refund and dispute reconciliation verified
+- [x] Failed renewal and recovery verified (real recurring-decline fixture, grace state and original-method recovery, October 14)
+- [x] Renewal with a Stripe test clock verified (paid monthly invoice and delivered webhook, October 14)
+- [x] Refund and dispute reconciliation verified (partial/full refunds, created/closed synthetic dispute, October 14)
 - [ ] Website entitlement verified after every lifecycle state
 - [ ] Browser Companion entitlement verified after every lifecycle state
 - [ ] Development/admin override verified and confirmed disabled in live mode

@@ -338,6 +338,23 @@ for (const action of ["advance-to-renewal", "install-decline"])
     assert.equal((await run("status")).testAccountVerified, true);
     assert.equal(state.writes.length, 1, "unknown mutation never automatically retries");
   });
+for (const kind of ["dispute", "dispute-payment"])
+  for (const state of ["pending", kind.endsWith("payment") ? "installed" : "accepted"])
+    await fixture(async ({ run, root, state: fixtureState }) => {
+      await fs.writeFile(
+        path.join(root, ".stripe-sandbox.local", `${kind}-${"a".repeat(64)}.json`),
+        JSON.stringify({ state }),
+        { mode: 0o600 },
+      );
+      if (state === "pending") {
+        await assert.rejects(run("advance-to-renewal"), /UNCERTAIN_JOURNAL/);
+        assert.equal(fixtureState.writes.length, 0);
+        assert.equal((await run("status")).testAccountVerified, true);
+      } else {
+        await run("advance-to-renewal");
+        assert.equal(fixtureState.writes.length, 1);
+      }
+    });
 console.log(
   "PASS offline synthetic renewal helper: scoped clock steps, decline/restore/payment, identity/amount gates, private journals, no uncertain retries or secret output",
 );

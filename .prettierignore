@@ -2,6 +2,9 @@ node_modules
 dist
 .output
 .vinxi
+.vercel
+.stripe-sandbox.local
+.private-backups
 pnpm-lock.yaml
 package-lock.json
 bun.lock

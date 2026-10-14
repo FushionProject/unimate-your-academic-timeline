@@ -1,0 +1,50 @@
+name: Verify UniMate
+
+on:
+  push:
+    branches: [main, codex/unimate-premium-revival]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Offline tests and Vercel build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      NODE_OPTIONS: --experimental-strip-types
+    steps:
+      # Official release commits; no persisted checkout credentials or secrets.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.16.0"
+          package-manager-cache: false
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Verify workflow safety
+        run: node browser-companion/tests/ci-workflow.test.mjs
+      - name: Scan repository for secrets
+        run: npm run secret:scan
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Full offline test suite
+        run: npm test
+      # This is a local artifact build, not a Vercel CLI deploy or cloud call.
+      - name: Build Vercel artifact
+        run: npm run build:vercel
+      - name: Verify emitted Vercel artifact with synthetic transport
+        run: npm run vercel:test
