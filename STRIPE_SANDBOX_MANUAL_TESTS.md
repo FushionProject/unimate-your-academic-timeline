@@ -2,7 +2,7 @@
 
 Status: **test mode only**. Do not use live keys, enable `STRIPE_LIVE_MODE_ENABLED`, or make live charges while following this checklist.
 
-## Protected Preview infrastructure checkpoint — October 14, 2026
+## Protected Preview purchase checkpoint — October 14, 2026
 
 The current private test deployment is
 https://unimate-fwcn4d8vz-resumejuice-s-projects.vercel.app/
@@ -21,10 +21,33 @@ The existing Preview-only live-mode flag was verified `false` without replacing
 it. This supersedes historical notes that Preview had no Stripe billing keys;
 it does not change the results or scope of the dated local runs below.
 
-**Not yet certified:** the complete hosted purchase → website/Companion Pro unlock
-→ cancellation → access-revocation journey. A ready deployment and configured
-sandbox credentials do not establish those results. No live charge, public
-billing launch, custom-domain change or production deployment is authorized.
+### Verified hosted purchase and continuous Companion unlock
+
+- The marked synthetic account completed one sandbox purchase against the exact
+  Preview above. Signed `checkout.session.completed`, `invoice.paid` and
+  `customer.subscription.created` deliveries each returned 200 through the hosted
+  handler. Before any app return, direct database verification showed Pro at
+  revision 46, up from Free revision 43, with one active subscription and zero
+  open Checkouts.
+- The same continuously open installed Companion panel reused its existing
+  session and changed to its visible Pro composer at revision 46. The screenshot
+  was reviewed. Zero AI requests, captures or page extractions occurred; this
+  verifies entitlement/UI transition, not AI answers or draft preservation.
+- Only after the signed-webhook and persisted-entitlement proof, app return
+  showed Pro active and Manage billing. The actual button opened a Stripe portal
+  verified against the exact synthetic customer. A read-only configuration check
+  confirmed cancellation is enabled in `at_period_end` mode.
+
+**Still pending:** completing hosted cancellation and proving continuous
+Companion access revocation. The latest synthetic profile read remains Pro at
+revision 48; there is no completed cancellation result in this checkpoint. The
+whole purchase → cancellation → revocation flow is not certified. No live charge,
+public billing launch, custom-domain change or production deployment is authorized.
+
+The operator-tooling checkpoint `e68f55d` passed
+[GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38616618364).
+New operator scripts run locally; the application deployment remains on the exact
+`5694bdb` source above and was not redeployed for those tooling changes.
 
 ### Protected Preview operator notes
 

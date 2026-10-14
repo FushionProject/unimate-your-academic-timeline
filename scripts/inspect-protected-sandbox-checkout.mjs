@@ -206,6 +206,95 @@ export async function inspectCheckoutCardStructure(page) {
   }
 }
 
+// Fixed observed selectors only; no actionability bypass, scrolling, or clicks.
+export async function inspectCheckoutCardHitTarget(page) {
+  try {
+    const before = page.url(),
+      url = new URL(before);
+    if (url.origin !== CHECKOUT || url.username || url.password) throw new Error();
+    const result = await page.mainFrame().evaluate(() => {
+      const safe = (value) =>
+        /^[A-Za-z0-9_-]{1,80}$/.test(value || "") &&
+        !/secret|token|session|(?:cs|sk|rk|pk|pi|pm|seti|cus)_/i.test(value)
+          ? value
+          : "";
+      const describe = (element) => {
+        if (!element) return null;
+        const rect = element.getBoundingClientRect(),
+          style = getComputedStyle(element);
+        const attr = (key) => element.getAttribute(key) || "";
+        const styles =
+          "display visibility opacity pointerEvents position zIndex overflow clip clipPath transform";
+        const css = (key) =>
+          /^[A-Za-z0-9 .,%()_-]{0,150}$/.test(style[key] || "") ? style[key] || "" : "[redacted]";
+        return {
+          tag: element.tagName.toLowerCase(),
+          id: safe(attr("id")),
+          role: safe(attr("role")),
+          classes: attr("class").split(/\s+/).map(safe).filter(Boolean).slice(0, 10),
+          ariaHidden: /^(true|false)$/.test(attr("aria-hidden")) ? attr("aria-hidden") : "",
+          tabIndex: /^-?\d{1,5}$/.test(attr("tabindex")) ? Number(attr("tabindex")) : null,
+          rect: Object.fromEntries(["x", "y", "width", "height"].map((key) => [key, rect[key]])),
+          style: Object.fromEntries(styles.split(" ").map((key) => [key, css(key)])),
+        };
+      };
+      const chain = (element) => {
+        const ancestors = [];
+        while (element && ancestors.length < 20) {
+          ancestors.push(describe(element));
+          element = element.parentElement || element.getRootNode?.()?.host;
+        }
+        return ancestors;
+      };
+      const labels = [...document.querySelectorAll("#payment-method-label-card")];
+      const rect = labels[0]?.getBoundingClientRect();
+      const center = rect ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null;
+      const hit = center ? document.elementFromPoint(center.x, center.y) : null;
+      const name = (element) => {
+        const explicit = element.getAttribute("aria-label");
+        if (explicit) return explicit.trim();
+        const refs = (element.getAttribute("aria-labelledby") || "")
+          .split(/\s+/)
+          .filter(Boolean)
+          .slice(0, 4);
+        const text = (node) => {
+          if (
+            !node ||
+            node.matches("input,textarea,select") ||
+            node.querySelector("input,textarea,select")
+          )
+            return "";
+          return (node.textContent || "").trim();
+        };
+        return refs.length
+          ? refs.map((id) => text(document.getElementById(id))).join(" ")
+          : text(element);
+      };
+      const buttons = [...document.querySelectorAll('button,[role="button"]')].filter(
+        (element) => name(element) === "Pay with card",
+      );
+      return {
+        labelCount: labels.length,
+        labelCenter: center,
+        labelAncestors: chain(labels[0]),
+        centerHitsLabel: Boolean(
+          hit && labels[0] && (hit === labels[0] || labels[0].contains(hit)),
+        ),
+        hitAncestors: chain(hit),
+        payWithCardButtonCount: buttons.length,
+        payWithCardButtons: buttons.slice(0, 8).map((button) => ({
+          ...describe(button),
+          ancestors: chain(button.parentElement),
+        })),
+      };
+    });
+    if (page.url() !== before) throw new Error();
+    return { inspectionOnly: true, ...result };
+  } catch {
+    fail("PRIVATE_CARD_HIT_TEST_FAILED");
+  }
+}
+
 // Fixed DOM read, including inherited Stripe frames. Never read input.value,
 // textarea contents, cookies, storage, HTML, or URL-bearing attributes.
 export function readDiagnosticStripeFrame({ readText }) {
@@ -394,6 +483,7 @@ export async function inspectProtectedSandboxCheckout({ approved = false } = {})
     if (actualFrames.length > 64) fail("CHECKOUT_FRAME_LIMIT_EXCEEDED");
     const frames = [];
     const cardStructure = await inspectCheckoutCardStructure(page);
+    const cardHitTarget = await inspectCheckoutCardHitTarget(page);
     let textBudget = 10000;
     for (const [index, frame] of actualFrames.entries()) {
       const scope = diagnosticFrameScope(frame);
@@ -450,6 +540,7 @@ export async function inspectProtectedSandboxCheckout({ approved = false } = {})
       blockedMutation,
       frames,
       cardStructure,
+      cardHitTarget,
       screenshotPath,
     };
   } catch (error) {

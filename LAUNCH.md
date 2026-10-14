@@ -40,10 +40,19 @@ GitHub/Linux run for `90b6a15` completed successfully:
 This includes a clean dependency install and is separate from local verification.
 The subsequent billing checkpoint `291be77` also passed its complete
 [GitHub/Linux run](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38603810280).
-The current source `5694bdb4b2a668e2f42297fe37a4a27fd34e000e` passed all checks in
+The deployed source `5694bdb4b2a668e2f42297fe37a4a27fd34e000e` passed all checks in
 [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38612123785).
+The later operator-tooling checkpoint `e68f55d` also passed
+[GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38616618364);
+that tooling was not redeployed as application code.
 
-Latest billing evidence: real cross-account portal attempts returned 409, unsigned
+Latest hosted billing evidence: a sandbox purchase on the current private Preview
+delivered signed webhooks and persisted Pro before app return. The same open,
+installed Companion panel unlocked using its existing session; the website then
+showed Pro active and opened the correct customer's portal. Cancellation and
+continuous revocation are still pending; this is not full-flow certification.
+
+Previous local billing evidence: real cross-account portal attempts returned 409, unsigned
 requests returned 401, and the valid portal's Stripe event matched the exact
 synthetic customer. A real browser submission using the generic-decline fixture
 was rejected; the account remained Free and Companion returned 403. Its unpaid
@@ -53,6 +62,7 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 `STRIPE_SANDBOX_MANUAL_TESTS.md`. These checks do not authorize live billing.
 
 - [ ] Freeze and record the exact new release commit and rollback point
+- [x] Protected Preview purchase unlocks the same open Companion panel/session (October 14)
 - [ ] Re-verify the current protected Preview's Companion study and billing flow end to end
 - [ ] Complete the remaining real Stripe sandbox lifecycle matrix
 - [ ] Configure and verify signup/confirmation/password-recovery email delivery
@@ -208,7 +218,7 @@ recorded and was not silently retried away. Prefer the scoped verified runtime
 when reproducing this candidate's tests. The temporary local server was stopped
 and the synthetic browser session signed out after verification.
 
-### Current protected Preview infrastructure — October 14, 2026
+### Current protected Preview — October 14, 2026
 
 - URL: https://unimate-fwcn4d8vz-resumejuice-s-projects.vercel.app/
 - Deployment: `dpl_8FeZgD36ucSFKxW2CAMRrvrh7pjp`, `READY`, Preview (`target:null`),
@@ -222,10 +232,19 @@ and the synthetic browser session signed out after verification.
   Vercel project has no Git integration; no Git integration was added. The
   existing Preview-only `STRIPE_LIVE_MODE_ENABLED` was read back and verified
   `false`, without replacing it or adding any Production settings.
-- This is an infrastructure checkpoint, not a hosted billing or Companion
-  lifecycle pass. Full hosted purchase, Pro unlock, cancellation and access
-  revocation still require separate evidence. Earlier local results and the
-  previous Preview's study-flow result do not certify this deployment.
+- Hosted sandbox purchase: `checkout.session.completed`, `invoice.paid` and
+  `customer.subscription.created` deliveries each returned 200. Before app
+  return, direct database verification showed Pro at revision 46 (Free baseline
+  43), one active subscription and zero open Checkouts.
+- The same continuously open installed Companion panel reused its session and
+  showed the Pro composer at revision 46. Zero AI requests, captures or page
+  extractions occurred. After return, the website showed Pro active and Manage
+  billing; that button opened the exact synthetic customer's Stripe portal.
+- Cancellation and continuous Companion revocation are **pending**, not passed.
+  Read-only portal configuration confirms `at_period_end` cancellation is enabled;
+  no completed cancellation is recorded. The latest synthetic profile read is
+  still Pro at revision 48. No hosted draft-preservation test or new AI-answer
+  test was performed; this is not full lifecycle or public-launch sign-off.
 
 Operator notes: the setup uses the locally cached, version-validated Vercel CLI
 63.1.2 through Node and a private ignored journal that preserves the failed

@@ -8,6 +8,7 @@ import {
   readDiagnosticStripeFrame,
   readVisibleCardAncestors,
   inspectCheckoutCardStructure,
+  inspectCheckoutCardHitTarget,
 } from "../../scripts/inspect-protected-sandbox-checkout.mjs";
 
 const record = {
@@ -158,6 +159,48 @@ const radioResult = vm.runInContext(
 )({ readText: false });
 assert.equal(radioResult.radiosAndLabels[0].role, "radio");
 assert.equal(radioResult.radiosAndLabels[2].controlId, "card-native");
+const cardLabel = element("div", { id: "payment-method-label-card" });
+cardLabel.getBoundingClientRect = () => ({ x: 10, y: 20, width: 100, height: 20 });
+cardLabel.contains = () => false;
+const overlay = element("div", { class: "Overlay session_private", id: "overlay" });
+const payButton = element("button", {
+  "aria-label": "Pay with card",
+  "aria-hidden": "true",
+  tabindex: "-1",
+});
+const hitWorld = vm.createContext({
+  getComputedStyle: () => ({
+    ...style(),
+    clipPath: "url(https://secret.test/token)",
+    pointerEvents: "auto",
+  }),
+  document: {
+    querySelectorAll: (selector) =>
+      selector === "#payment-method-label-card" ? [cardLabel] : [payButton],
+    elementFromPoint: (x, y) => {
+      assert.equal(x, 60);
+      assert.equal(y, 30);
+      return overlay;
+    },
+  },
+});
+const hitPage = {
+  ...page,
+  mainFrame: () => ({ evaluate: async (fn) => vm.runInContext(`(${fn.toString()})`, hitWorld)() }),
+};
+const hit = await inspectCheckoutCardHitTarget(hitPage);
+assert.equal(hit.labelCount, 1);
+assert.equal(hit.centerHitsLabel, false);
+assert.equal(hit.hitAncestors[0].id, "overlay");
+assert.deepEqual([...hit.hitAncestors[0].classes], ["Overlay"]);
+assert.equal(hit.payWithCardButtonCount, 1);
+assert.equal(hit.payWithCardButtons[0].ariaHidden, "true");
+assert.equal(hit.payWithCardButtons[0].tabIndex, -1);
+assert.equal(hit.payWithCardButtons[0].style.clipPath, "[redacted]");
+await assert.rejects(
+  inspectCheckoutCardHitTarget({ ...hitPage, url: () => "https://other.test/" }),
+  /PRIVATE_CARD_HIT_TEST_FAILED/,
+);
 console.log(
-  "PASS offline Checkout diagnostic: exact unpaid scope, inherited frames, redaction, bounded Card ancestry/radios, no values or actions",
+  "PASS offline Checkout diagnostic: exact unpaid scope, inherited frames, redaction, bounded Card ancestry/radios/hit-test, no values or actions",
 );
