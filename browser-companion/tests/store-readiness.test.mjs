@@ -5,6 +5,42 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import { getCompanionAccessState, getCompanionStoreUrl } from "../../src/lib/companion-store.ts";
+import {
+  isChromeExtensionVersion,
+  isPublicCompanionOrigin,
+  isDevelopmentCompanionOrigin,
+} from "../../scripts/companion-config-policy.mjs";
+
+for (const version of ["1", "0.1", "1.0.0", "65535.65535.65535.65535"])
+  assert.equal(isChromeExtensionVersion(version), true);
+const invalidVersions = [0, 1, null, "", "0", "0.0.0.0", "01.2", "1.00", "65536", "1.2.3.4.5"];
+for (const version of invalidVersions) assert.equal(isChromeExtensionVersion(version), false);
+const invalidOrigins = [
+  "https://192.168.1.20",
+  "https://127.0.0.2",
+  "https://10.0.0.1",
+  "https://[fd00::1]",
+  "https://[::ffff:127.0.0.1]",
+  "https://2130706433",
+  "https://preview.invalid",
+  "https://app.local",
+  "https://app.internal",
+  "https://example.com",
+  "https://app.example.org",
+  "https://singlelabel",
+  "https://unimate.site:8443",
+  "https://unimate.site.",
+  "https://not-an-origin/private?token=secret-fixture",
+  "not-a-url-secret-fixture",
+];
+for (const origin of invalidOrigins) {
+  assert.equal(isPublicCompanionOrigin(origin), false);
+  assert.equal(isDevelopmentCompanionOrigin(origin), false);
+}
+assert.equal(isPublicCompanionOrigin("https://unimate.site"), true);
+assert.equal(isPublicCompanionOrigin("https://unimate.vercel.app"), true);
+assert.equal(isDevelopmentCompanionOrigin("http://localhost:8080"), true);
+assert.equal(isDevelopmentCompanionOrigin("http://127.0.0.1:8080"), true);
 
 const manifestUrl = new URL("../manifest.json", import.meta.url);
 const manifest = JSON.parse(fs.readFileSync(manifestUrl, "utf8"));
@@ -201,6 +237,10 @@ try {
     { VITE_SUPABASE_URL: "https://project.supabase.co/rest/v1" },
     { VITE_UNIMATE_API_URL: "https://user:password@unimate.site" },
     { VITE_UNIMATE_API_URL: "https://unimate.site/api?token=fixture" },
+    ...invalidOrigins.flatMap((origin) => [
+      { VITE_UNIMATE_API_URL: origin },
+      { VITE_SUPABASE_URL: origin },
+    ]),
   ]) {
     fs.writeFileSync(
       path.join(fixture, ".env.local"),
@@ -237,6 +277,17 @@ try {
     `unimate-browser-companion-${manifest.version}.zip`,
   );
   const originalArchive = fs.readFileSync(zip);
+  for (const version of invalidVersions) {
+    fs.writeFileSync(
+      path.join(extension, "manifest.json"),
+      JSON.stringify({ ...manifest, version }),
+    );
+    const rejected = spawnSync(process.execPath, [script], { cwd: fixture, encoding: "utf8" });
+    assert.notEqual(rejected.status, 0, "Chrome-invalid versions must fail before packaging");
+    assert.match(rejected.stderr, /valid numeric Chrome extension version/);
+    assert.deepEqual(fs.readFileSync(zip), originalArchive);
+  }
+  fs.writeFileSync(path.join(extension, "manifest.json"), JSON.stringify(manifest));
   const entries = execFileSync("unzip", ["-Z1", zip], { encoding: "utf8" }).trim().split("\n");
   assert.ok(
     entries.includes("manifest.json"),
@@ -267,6 +318,53 @@ try {
     )};\n`,
     "Archive contains canonical validated values, not raw configuration source",
   );
+  // Approved filenames must not smuggle unrelated bytes through symlinks.
+  const sentinel = path.join(fixture, "outside-sentinel.txt");
+  fs.writeFileSync(sentinel, "EXTERNAL_SYNTHETIC_SENTINEL");
+  for (const relative of ["content.js", "assets/mascot.png", "config.local.js", "manifest.json"]) {
+    const input = path.join(extension, relative);
+    const original = fs.readFileSync(input);
+    fs.unlinkSync(input);
+    fs.symlinkSync(sentinel, input);
+    const rejected = spawnSync(process.execPath, [script], { cwd: fixture, encoding: "utf8" });
+    assert.notEqual(rejected.status, 0, "Symlinked allowlisted files must fail packaging");
+    assert.deepEqual(fs.readFileSync(zip), originalArchive);
+    assert.ok(!`${rejected.stdout}${rejected.stderr}`.includes("EXTERNAL_SYNTHETIC_SENTINEL"));
+    fs.unlinkSync(input);
+    fs.writeFileSync(input, original);
+  }
+  const icons = path.join(extension, "assets", "icons");
+  const movedIcons = path.join(fixture, "outside-icons");
+  fs.renameSync(icons, movedIcons);
+  fs.symlinkSync(movedIcons, icons);
+  assert.notEqual(spawnSync(process.execPath, [script], { cwd: fixture }).status, 0);
+  assert.deepEqual(fs.readFileSync(zip), originalArchive);
+  fs.unlinkSync(icons);
+  fs.renameSync(movedIcons, icons);
+  const runtimeFile = path.join(extension, "content.js");
+  const runtimeBytes = fs.readFileSync(runtimeFile);
+  fs.unlinkSync(runtimeFile);
+  fs.mkdirSync(runtimeFile);
+  assert.notEqual(spawnSync(process.execPath, [script], { cwd: fixture }).status, 0);
+  assert.deepEqual(fs.readFileSync(zip), originalArchive);
+  fs.rmdirSync(runtimeFile);
+  execFileSync("mkfifo", [runtimeFile]);
+  const rejectedFifo = spawnSync(process.execPath, [script], {
+    cwd: fixture,
+    encoding: "utf8",
+    timeout: 5000,
+  });
+  assert.equal(rejectedFifo.error, undefined, "Non-regular inputs must reject without hanging");
+  assert.notEqual(rejectedFifo.status, 0);
+  assert.match(rejectedFifo.stderr, /must be regular files/);
+  assert.deepEqual(fs.readFileSync(zip), originalArchive);
+  fs.unlinkSync(runtimeFile);
+  fs.writeFileSync(runtimeFile, runtimeBytes);
+  fs.symlinkSync(sentinel, `${zip}.pending`);
+  assert.notEqual(spawnSync(process.execPath, [script], { cwd: fixture }).status, 0);
+  assert.equal(fs.readFileSync(sentinel, "utf8"), "EXTERNAL_SYNTHETIC_SENTINEL");
+  assert.deepEqual(fs.readFileSync(zip), originalArchive);
+  fs.unlinkSync(`${zip}.pending`);
   const privilegedJwt = `header.${Buffer.from(JSON.stringify({ role: "service_role" })).toString("base64url")}.signature`;
   for (const overrides of [
     { UNIMATE_API_URL: "http://localhost:8080" },
@@ -279,13 +377,18 @@ try {
     { SUPABASE_ANON_KEY: "." + anonFixture.split(".").slice(1).join(".") },
     { SUPABASE_ANON_KEY: "sb_secret_fixture_only" },
     { SUPABASE_ANON_KEY: privilegedJwt },
+    ...invalidOrigins.flatMap((origin) => [{ UNIMATE_API_URL: origin }, { SUPABASE_URL: origin }]),
   ]) {
     configure(overrides);
-    assert.notEqual(
-      spawnSync(process.execPath, [script], { cwd: fixture }).status,
-      0,
-      "Unsafe config must fail packaging",
-    );
+    const rejected = spawnSync(process.execPath, [script], { cwd: fixture, encoding: "utf8" });
+    assert.notEqual(rejected.status, 0, "Unsafe config must fail packaging");
+    for (const value of Object.values(overrides)) {
+      if (typeof value === "string")
+        assert.ok(
+          !`${rejected.stdout}${rejected.stderr}`.includes(value),
+          "Do not echo rejected config",
+        );
+    }
     assert.deepEqual(
       fs.readFileSync(zip),
       originalArchive,

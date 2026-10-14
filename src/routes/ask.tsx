@@ -19,6 +19,7 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { askUniMate, UniMateApiError } from "../functions/ask-unimate";
+import { AuthSessionChangedError } from "../lib/auth-fetch";
 import ReactMarkdown from "react-markdown";
 import { LogoMark } from "../components/logo-mark";
 import { useCourses, useAssignments } from "../lib/courses";
@@ -391,10 +392,22 @@ function Ask({
   const selectedConversationIdRef = useRef<string | null>(null);
   const localMessageIdsRef = useRef(new Set<string>());
   const sendingRef = useRef(false);
+  const activeRequestRef = useRef<AbortController | null>(null);
   const { user } = useAuth();
   const { data: courses = [], isError: coursesError, isLoading: coursesLoading } = useCourses();
   const { data: assignments = [] } = useAssignments();
   const userId = user?.id ?? null;
+  useEffect(() => {
+    activeUserIdRef.current = userId;
+    return () => {
+      activeUserIdRef.current = null;
+      activeRequestRef.current?.abort();
+      activeRequestRef.current = null;
+      sendingRef.current = false;
+      historyRequestRef.current += 1;
+      selectedConversationIdRef.current = null;
+    };
+  }, [userId]);
   const selectedCourse = courses.find((course) => course.id === selectedCourseId);
   const upcomingCount = assignments.filter(
     (assignment) =>
@@ -621,6 +634,7 @@ function Ask({
     const questionToSend = (overrideQuestion || question).trim();
     if (
       !questionToSend ||
+      !userId ||
       sendingRef.current ||
       historyLoading ||
       !selectedConversationId ||
@@ -631,6 +645,13 @@ function Ask({
 
     const requestUserId = userId;
     const requestConversationId = selectedConversationId;
+    const requestController = new AbortController();
+    activeRequestRef.current = requestController;
+    const isCurrentRequest = () =>
+      activeRequestRef.current === requestController &&
+      !requestController.signal.aborted &&
+      activeUserIdRef.current === requestUserId &&
+      selectedConversationIdRef.current === requestConversationId;
 
     const userMessage: Message = {
       id: `local-user-${crypto.randomUUID()}`,
@@ -645,18 +666,17 @@ function Ask({
     setSendError(null);
 
     try {
-      const result = await askUniMate({
-        question: questionToSend,
-        conversationHistory: getConversationHistory(),
-        mode,
-        selectedCourseId: selectedCourse?.id,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      });
-      if (
-        activeUserIdRef.current !== requestUserId ||
-        selectedConversationIdRef.current !== requestConversationId
-      )
-        return;
+      const result = await askUniMate(
+        {
+          question: questionToSend,
+          conversationHistory: getConversationHistory(),
+          mode,
+          selectedCourseId: selectedCourse?.id,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+        { expectedUserId: requestUserId, signal: requestController.signal },
+      );
+      if (!isCurrentRequest()) return;
       if (result.usage) setUsage(result.usage);
       const aiMessage: Message = {
         id: `local-ai-${crypto.randomUUID()}`,
@@ -678,11 +698,7 @@ function Ask({
             questionToSend,
             result.answer,
           );
-          if (
-            activeUserIdRef.current !== requestUserId ||
-            selectedConversationIdRef.current !== requestConversationId
-          )
-            return;
+          if (!isCurrentRequest()) return;
           const savedUser = savedRows.find((row) => row.role === "user");
           const savedAssistant = savedRows.find((row) => row.role === "assistant");
           if (savedUser) localMessageIdsRef.current.delete(userMessage.id);
@@ -700,7 +716,7 @@ function Ask({
           );
           setHistoryNotice("");
         } catch {
-          if (activeUserIdRef.current === requestUserId) {
+          if (isCurrentRequest()) {
             setHistoryNotice(
               "Your answer is ready, but this exchange could not be added to shared history.",
             );
@@ -708,26 +724,27 @@ function Ask({
         }
       }
     } catch (error) {
-      if (
-        activeUserIdRef.current !== requestUserId ||
-        selectedConversationIdRef.current !== requestConversationId
-      )
-        return;
+      if (!isCurrentRequest()) return;
       localMessageIdsRef.current.delete(userMessage.id);
       setMessages((current) => current.filter((message) => message.id !== userMessage.id));
       setQuestion((current) => current || questionToSend);
       setSendError({
         question: questionToSend,
         mode,
-        retryable: !(error instanceof UniMateApiError) || error.retryable,
+        retryable:
+          !(error instanceof AuthSessionChangedError) &&
+          (!(error instanceof UniMateApiError) || error.retryable),
         message:
           error instanceof Error
             ? error.message
             : "I couldn't finish that response. Your question is saved below — let's try again.",
       });
     } finally {
-      sendingRef.current = false;
-      if (activeUserIdRef.current === requestUserId) setLoading(false);
+      if (activeRequestRef.current === requestController) {
+        activeRequestRef.current = null;
+        sendingRef.current = false;
+        if (activeUserIdRef.current === requestUserId) setLoading(false);
+      }
     }
   };
 

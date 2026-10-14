@@ -1,5 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import {
+  isPublicCompanionOrigin,
+  isDevelopmentCompanionOrigin,
+} from "./companion-config-policy.mjs";
 
 const root = process.cwd();
 const envPath = path.join(root, ".env.local");
@@ -51,25 +55,6 @@ const validPublicKey = (() => {
     return false;
   }
 })();
-const validOrigin = (value, allowLocalHttp = false) => {
-  try {
-    const url = new URL(value);
-    return (
-      !url.username &&
-      !url.password &&
-      url.pathname === "/" &&
-      !url.search &&
-      !url.hash &&
-      !/YOUR_|PLACEHOLDER/i.test(url.hostname) &&
-      (url.protocol === "https:" ||
-        (allowLocalHttp &&
-          url.protocol === "http:" &&
-          ["localhost", "127.0.0.1"].includes(url.hostname)))
-    );
-  } catch {
-    return false;
-  }
-};
 if (missing.length) {
   console.error(`Missing ${missing.join(", ")} in .env.local.`);
   process.exitCode = 1;
@@ -78,9 +63,12 @@ if (missing.length) {
     "Companion requires a public Supabase publishable key or legacy anon key. Server-only keys must never be written to browser configuration.",
   );
   process.exitCode = 1;
-} else if (!validOrigin(config.SUPABASE_URL) || !validOrigin(config.UNIMATE_API_URL, true)) {
+} else if (
+  !isPublicCompanionOrigin(config.SUPABASE_URL) ||
+  !isDevelopmentCompanionOrigin(config.UNIMATE_API_URL)
+) {
   console.error(
-    "Companion URLs must be HTTPS origins without credentials, paths, queries, or fragments; localhost HTTP is allowed only for development.",
+    "Companion URLs must be public HTTPS origins without credentials, ports, paths, queries, or fragments; localhost HTTP is allowed only for development.",
   );
   process.exitCode = 1;
 } else {

@@ -356,12 +356,106 @@ for (const options of [{ consent: false }, { pro: false }]) {
   const { state, events, api } = harness();
   state.pendingSave = "request-unsaved";
   await api.refreshMessagesOnOpen();
+  assert.ok(events.some(([name]) => name === "AUTH_STATE"));
   await api.submitChat("Another question");
   assert.equal(
     events.some(([name]) => name === "LOAD_CHAT_STATE" || name === "SEND_CHAT"),
     false,
     "An unsaved answer must not disappear during refresh or be overwritten by another request",
   );
+}
+
+// Unresolved work prevents history replacement, never an access check. Exercise
+// both recovery slots against real production refresh/apply/reset declarations.
+for (const slot of ["pendingSave", "failedQuestion"]) {
+  for (const outcome of [
+    "pro",
+    "revoked",
+    "pro-error",
+    "signed-out",
+    "auth-error",
+    "other-user",
+    "offline",
+  ]) {
+    let currentOutcome = outcome;
+    const { state, events, api } = harness({
+      onSend: (request) => {
+        if (request.type !== "AUTH_STATE") return undefined;
+        if (["pro-error", "auth-error", "offline"].includes(currentOutcome))
+          return Promise.reject(
+            Object.assign(new Error("Synthetic access check"), {
+              code:
+                currentOutcome === "pro-error"
+                  ? "PRO_REQUIRED"
+                  : currentOutcome === "auth-error"
+                    ? "AUTH_REQUIRED"
+                    : "NETWORK_ERROR",
+            }),
+          );
+        return {
+          authenticated: currentOutcome !== "signed-out",
+          isPro: currentOutcome === "pro" || currentOutcome === "other-user",
+          userId:
+            currentOutcome === "signed-out"
+              ? undefined
+              : currentOutcome === "other-user"
+                ? "student-b"
+                : "student",
+        };
+      },
+    });
+    state[slot] = "Private unresolved work";
+    state.messages = [{ role: "assistant", message: "Private unsaved answer" }];
+    state.pageHistory = [{ role: "assistant", message: "Private page evidence" }];
+    state.unresolvedRequest = { requestId: "private-request" };
+    state.draft = "Private next question";
+    await api.refreshMessagesOnOpen();
+    assert.ok(events.some(([name]) => name === "AUTH_STATE"));
+    assert.equal(
+      events.some(([name]) => name === "extract" || name === "SEND_CHAT"),
+      false,
+    );
+    const identityChanged = ["signed-out", "auth-error", "other-user"].includes(outcome);
+    if (identityChanged) {
+      assert.equal(state[slot], null, `${slot}/${outcome} clears private recovery work`);
+      assert.equal(state.draft, "");
+      assert.equal(state.unresolvedRequest, null);
+      assert.equal(state.pageHistory.length, 0);
+      assert.ok(!state.messages.some((item) => item.message === "Private unsaved answer"));
+      if (outcome === "other-user") assert.equal(state.auth.userId, "student-b");
+      else {
+        assert.equal(state.auth.authenticated, false);
+        assert.ok(events.some(([name]) => name === "auth"));
+      }
+    } else {
+      assert.equal(state[slot], "Private unresolved work");
+      assert.equal(state.draft, "Private next question");
+      assert.equal(state.messages[0].message, "Private unsaved answer");
+      assert.equal(state.activeConversationId, "chat-1");
+      assert.equal(
+        events.some(([name]) => name === "LOAD_CHAT_STATE"),
+        false,
+      );
+      if (["revoked", "pro-error"].includes(outcome)) {
+        assert.equal(state.auth.isPro, false);
+        assert.ok(events.some(([name]) => name === "upgrade"));
+        currentOutcome = "pro";
+        await api.initialize();
+        assert.equal(state.auth.isPro, true);
+        assert.equal(state[slot], "Private unresolved work");
+        assert.equal(state.draft, "Private next question");
+        assert.equal(state.messages[0].message, "Private unsaved answer");
+        assert.equal(
+          events.some(([name]) => name === "LOAD_CHAT_STATE"),
+          false,
+        );
+      } else
+        assert.equal(
+          events.some(([name]) => name === "upgrade" || name === "auth"),
+          false,
+        );
+    }
+  }
 }
 
 function deferred() {
@@ -372,6 +466,29 @@ function deferred() {
     reject = no;
   });
   return { promise, resolve, reject };
+}
+
+// A late access response cannot undo a newer identity/disclosure/history load.
+for (const slot of ["pendingSave", "failedQuestion"]) {
+  for (const change of ["sign-out", "new-load", "privacy", "busy", "closed"]) {
+    const late = deferred();
+    const { state, events, api } = harness({
+      onSend: (request) => (request.type === "AUTH_STATE" ? late.promise : undefined),
+    });
+    state[slot] = "Unresolved work";
+    const pending = api.refreshMessagesOnOpen();
+    if (change === "sign-out") await api.handleWebsiteSignOut();
+    if (change === "new-load" || change === "privacy") state.historyLoadVersion += 1;
+    if (change === "privacy") state.view = "privacy";
+    if (change === "busy") state.busy = true;
+    if (change === "closed") state.open = false;
+    const before = JSON.stringify(state);
+    const eventCount = events.length;
+    late.resolve({ authenticated: true, isPro: true, userId: "late-other-user" });
+    await pending;
+    assert.equal(JSON.stringify(state), before, `${slot}/${change} ignores stale access`);
+    assert.equal(events.length, eventCount);
+  }
 }
 
 for (const persistenceWarning of ["", "Answer ready; save still pending."]) {

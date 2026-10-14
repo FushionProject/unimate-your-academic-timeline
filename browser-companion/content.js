@@ -378,7 +378,24 @@
     const sessionVersion = state.sessionVersion;
     const loadVersion = ++state.historyLoadVersion;
     try {
-      if (state.pendingSave || state.failedQuestion) return; // Keep unresolved work in its conversation.
+      if (state.pendingSave || state.failedQuestion) {
+        // Keep unresolved work in its conversation, but still revalidate access.
+        // Skipping history replacement must not also skip a revocation/sign-out.
+        const auth = await send({ type: "AUTH_STATE" });
+        if (
+          !state.open ||
+          state.busy ||
+          sessionVersion !== state.sessionVersion ||
+          loadVersion !== state.historyLoadVersion
+        )
+          return;
+        const accountChanged = applyAuthState(auth);
+        if (state.view === "privacy") return;
+        if (!auth.authenticated) return renderAuth();
+        if (!auth.isPro) return renderNotPro();
+        if (accountChanged) return initialize();
+        return;
+      }
       const chatState = await send({ type: "LOAD_CHAT_STATE" });
       if (
         !state.open ||

@@ -2,17 +2,43 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { isChromeExtensionVersion, isPublicCompanionOrigin } from "./companion-config-policy.mjs";
 
 const root = process.cwd();
 const source = path.join(root, "browser-companion");
 const configPath = path.join(source, "config.local.js");
-const manifest = JSON.parse(fs.readFileSync(path.join(source, "manifest.json"), "utf8"));
-if (
-  !/^\d+(?:\.\d+){0,3}$/.test(String(manifest.version)) ||
-  String(manifest.version)
-    .split(".")
-    .some((part) => Number(part) > 65535)
-) {
+function readPackageFile(relative) {
+  let directory = source;
+  for (const part of [
+    "",
+    ...path
+      .dirname(relative)
+      .split(path.sep)
+      .filter((part) => part !== "."),
+  ]) {
+    directory = path.join(directory, part);
+    const stat = fs.lstatSync(directory);
+    if (stat.isSymbolicLink() || !stat.isDirectory())
+      throw new Error("Store package inputs must remain inside regular extension directories.");
+  }
+  const file = path.join(source, relative);
+  const input = fs.lstatSync(file);
+  if (input.isSymbolicLink() || !input.isFile())
+    throw new Error("Store package inputs must be regular files, never symbolic links.");
+  const descriptor = fs.openSync(
+    file,
+    fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK,
+  );
+  try {
+    if (!fs.fstatSync(descriptor).isFile())
+      throw new Error("Store package inputs must be regular files.");
+    return fs.readFileSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+const manifest = JSON.parse(readPackageFile("manifest.json").toString("utf8"));
+if (!isChromeExtensionVersion(manifest.version)) {
   throw new Error("Companion manifest must declare a valid numeric Chrome extension version.");
 }
 
@@ -20,7 +46,7 @@ if (!fs.existsSync(configPath)) {
   throw new Error("Run npm run companion:configure with production settings before packaging.");
 }
 
-const configText = fs.readFileSync(configPath, "utf8");
+const configText = readPackageFile("config.local.js").toString("utf8");
 // Accept only the generator's four literal fields, never executable JavaScript.
 // Anchoring the complete file rejects duplicate fields, overrides, and trailing code.
 const jsonString = String.raw`"(?:[^"\\\u0000-\u001f]|\\(?:["\\/bfnrt]|u[\da-fA-F]{4}))*"`;
@@ -45,17 +71,7 @@ for (const [label, value] of [
   ["Supabase", config.SUPABASE_URL],
 ]) {
   if (!value) throw new Error(`${label} URL is missing from generated Companion configuration.`);
-  const url = new URL(value);
-  if (
-    url.protocol !== "https:" ||
-    ["localhost", "127.0.0.1", "[::1]", "0.0.0.0"].includes(url.hostname) ||
-    url.hostname.endsWith(".localhost") ||
-    url.username ||
-    url.password ||
-    url.pathname !== "/" ||
-    url.search ||
-    url.hash
-  ) {
+  if (!isPublicCompanionOrigin(value)) {
     throw new Error(`${label} must use a non-local HTTPS origin for Store packaging.`);
   }
 }
@@ -114,7 +130,7 @@ try {
         `self.UNIMATE_COMPANION_CONFIG = ${JSON.stringify(config, null, 2)};\n`,
       );
     } else {
-      fs.copyFileSync(path.join(source, file), path.join(packageRoot, file));
+      fs.writeFileSync(path.join(packageRoot, file), readPackageFile(file));
     }
   }
   const stagedArchive = path.join(stage, "companion.zip");
@@ -141,9 +157,11 @@ try {
     throw new Error("Packaged manifest does not match the release version.");
   const releaseDir = path.join(root, "release-artifacts");
   fs.mkdirSync(releaseDir, { recursive: true });
+  if (fs.lstatSync(releaseDir).isSymbolicLink() || !fs.lstatSync(releaseDir).isDirectory())
+    throw new Error("Store archives require a regular release-artifacts directory.");
   const output = path.join(releaseDir, `unimate-browser-companion-${manifest.version}.zip`);
   // Keep the previous release intact until the replacement has been validated.
-  fs.copyFileSync(stagedArchive, `${output}.pending`);
+  fs.copyFileSync(stagedArchive, `${output}.pending`, fs.constants.COPYFILE_EXCL);
   fs.renameSync(`${output}.pending`, output);
   console.log(
     `Created ${path.relative(root, output)} with ${entries.length} entries and manifest.json at the root.`,

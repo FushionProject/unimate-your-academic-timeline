@@ -1,14 +1,20 @@
 # UniMate Browser Companion
 
-Implementation notes updated October 13, 2026. The current candidate passes local
-regressions, 23 synthetic browser scenarios, protected deployment smoke checks,
-and an owner-authenticated screenshot/AI/save/reload flow on the same Preview.
-No public-production or Store release has occurred. See the evidence and
-remaining gates below.
+Implementation notes updated October 14, 2026 against evidence checkpoint
+`2e16b0e`. The current protected Preview runs application commit `5694bdb`.
+Real sandbox purchase unlocked the same open Companion panel, and period-end
+cancellation revoked it using the same session. The hosted screenshot/AI/save
+proof is historical and has not been repeated on that deployment. No public
+production or Store release has occurred; see the scoped evidence below.
+
+Source-only follow-up (not redeployed): the installed-browser harness now passes
+28 synthetic scenarios, including Pro revocation/recovery while an answer is
+unsaved or a question needs retry. Current local evidence and the Ask account-
+switch fix are recorded in [LAUNCH.md](../LAUNCH.md#source-safety-follow-up--october-14-not-yet-deployed).
 
 Contact update October 13, 2026: local Privacy, Terms, and Support pages now use
-the owner-created `unimatesupport@gmail.com` inbox. The hosted evidence below
-predates this contact-only edit; deployment and mailbox delivery verification
+the owner-created `unimatesupport@gmail.com` inbox. Those links are included in
+the current Preview's source. Public-domain and mailbox delivery verification
 remain outstanding.
 
 A Chrome 106+ Manifest V3 extension that adds a persistent UniMate mascot and Pro-only
@@ -22,7 +28,9 @@ screenshot-aware tutor to ordinary web pages.
    `VITE_COMPANION_DEBUG=true` can also explicitly enable development
    diagnostics; diagnostics default to off.
 2. Run `npm run companion:configure:dev` for unpacked development. Production
-   packaging should run `npm run companion:configure`, which omits diagnostics.
+   configuration uses `npm run companion:configure`; also unset
+   `VITE_COMPANION_DEBUG` or set it to `false`, since the environment can enable
+   diagnostics even without `--debug`. The packager rejects debug mode.
 3. Confirm the reviewed Companion database changes have been applied to the
    target Supabase project before testing chat persistence. Do not assume this
    from the repository state. See `SUPABASE_RELEASE_MIGRATION_REVIEW.md` and
@@ -200,21 +208,24 @@ and operational blockers that must be closed before submission.
 
 ## Release gates
 
-### Current candidate evidence — October 13, 2026
+### Current candidate evidence — October 14, 2026
 
 | Requirement                                                 | Evidence                                                                                                                                                                                                                                                              | Remaining boundary                                                                                                                      |
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Warm, useful academic help without invented source evidence | Executable regressions cover hints, worked math, ordinary academic facts, labeled practice, detailed explanations, missing targets, fabricated statistics/quotes/keys, and source-attribution bypasses.                                                               | Heuristic provenance checks do not prove general answer correctness or independently read screenshot pixels.                            |
 | Safe failure and recovery                                   | Actual text/vision provider helpers reject truncation without partial success or hidden retries; auth outages fail closed without treating them as an invalid password/session. Installed transport recovery and deterministic ambiguous-request classification pass. | Real provider failures remain environment-dependent; no live outage was induced.                                                        |
 | Prompt and privacy fidelity                                 | Full 4,000-character question reaches analysis; transformed/zoomed iframe text is omitted conservatively; generator rejects privileged keys before writing public config.                                                                                             | Screenshots still contain intentionally shared visible pixels; this is not screenshot redaction. Existing credentials were not changed. |
-| Installed interaction and accessibility                     | Final run: 23 synthetic Chromium scenarios and nine fake AI calls. Covers consent, secure sign-in, Free/Pro, capture, save/transport recovery, same-URL document guards, focus/keyboard, worker termination, reinjection, privacy, and accessibility-tree checks.     | Manual spoken screen-reader verification remains outstanding.                                                                           |
-| Hosted auth, AI, persistence, and quotas                    | Current protected Preview passed owner screenshot → real answer → save/readback → reload; aggregate usage advanced once, with zero provider errors. SQL/runtime/concurrency tests are recorded in `../AI_ENTITLEMENT_ROLLOUT.md`.                                     | Public production, live quota exhaustion, and billing lifecycle verification remain separate.                                           |
+| Installed interaction and accessibility                     | Latest recorded synthetic run: 28 Chromium scenarios and ten fake AI calls; consent, secure sign-in, Free/Pro, pending-work revocation/recovery, capture, save/transport recovery, focus/keyboard, worker termination, reinjection and accessibility-tree checks. Same-URL mutation guards also have deterministic tests. | Manual spoken screen-reader verification remains outstanding. |
+| Hosted study flow and quotas                                | Historical protected screenshot → real answer → save/readback → reload proof; SQL/runtime/concurrency evidence is in `../AI_ENTITLEMENT_ROLLOUT.md`. | Repeat the study flow on the current `5694bdb` deployment; production and live quota exhaustion remain separate. |
+| Hosted billing and same-panel entitlement                    | October 14 protected Preview: genuine sandbox purchase → Pro composer → period-end cancellation → Free upgrade gate in the same open panel/session, with signed webhooks and persisted-state proof before app return. | Uses the existing focus handler, not passive push; zero AI requests/captures/extractions. Direct production webhooks and broader lifecycle tests remain open. |
+| Store packaging safety                                      | Isolated fixture tests reject private/placeholder origins, invalid Chrome versions, secret-like config, symbolic-link inputs and unexpected archive entries; root manifest and public config are verified. | Offline validation cannot prove public endpoint availability, privacy-policy publication, asset rights or Store acceptance. No production ZIP was generated in this audit. |
 
-Final browser artifacts:
-`/var/folders/g_/w0fds03j2zs7m1y__2z7j6h40000gn/T/unimate-companion-browser-3nX7cR`.
-The full application tests, protected-preview suite, typecheck, build, Vercel
-build verification, secret scan, and lint pass; lint retains eight preexisting
-warnings. Synthetic browser requests do not contact the paid provider.
+Latest recorded synthetic browser artifact: `unimate-companion-browser-VmhfWZ`
+in the host temporary directory. The evidence checkpoint records passing full
+offline tests, typecheck, secret scan and lint (eight existing warnings); dual
+build and Linux checks are recorded in [LAUNCH.md](../LAUNCH.md). These are dated
+results, not a new installed-browser or provider run. Synthetic requests do not
+contact the paid provider.
 
 Capture preserves the composer cursor unless the user has moved focus to the host
 page; async answers/history do not steal that focus. The non-modal panel supports
@@ -225,6 +236,34 @@ listening with a screen reader.
 
 ### Current protected Preview proof
 
+- `https://unimate-fwcn4d8vz-resumejuice-s-projects.vercel.app/`
+  (`dpl_8FeZgD36ucSFKxW2CAMRrvrh7pjp`) is `READY`, Preview, no aliases, with
+  application source `5694bdb`. Protection remains enabled, zero persistent
+  bypass credentials, and zero Production environment variables. Billing keys
+  and the test Price are Preview-only; live billing remains disabled.
+- Real sandbox purchase delivered signed events to the hosted handler. Persisted
+  Pro revision 46 and the same open Companion's composer were verified before
+  app return. The website then showed Pro active and opened the exact synthetic
+  customer's Portal through Manage billing.
+- Portal cancellation kept Pro until period end. Advancing only that synthetic
+  customer's clock produced the terminal signed event and persisted Free
+  revision 51 before app return. The same panel/session showed its upgrade gate
+  with no composer, using the existing return-to-page focus handler. Final
+  post-return state was Free revision 52, zero active subscriptions/open Checkouts;
+  all four historical synthetic subscriptions were canceled.
+- Zero AI requests, captures or page extractions occurred. This proves the core
+  entitlement transition, not a new answer, draft preservation, passive push,
+  direct production webhook or public-launch readiness. Test browsers and relay
+  were closed. See [the complete sandbox record](../STRIPE_SANDBOX_MANUAL_TESTS.md).
+
+### Historical protected screenshot proof — not the current Preview
+
+- The later historical screenshot/save/reload snapshot is
+  `https://unimate-fh8w9fay6-resumejuice-s-projects.vercel.app/`
+  (`dpl_4crMFUU1bWRky7zx63cTUdG5azrZ`), with dirty source above `9011f8c`.
+  Its source upload audit and owner-flow results are preserved in
+  [Store readiness](./CHROME_WEB_STORE_READINESS.md). It had no Stripe secret at
+  that checkpoint; the current Preview billing configuration supersedes that note.
 - `https://unimate-lxccy367v-resumejuice-s-projects.vercel.app`
   (`dpl_8Q2ZiuJJSGP21wywWFsoZH7zL1cP`) is `READY`, target `null` (Preview),
   protected by `vercel_authentication`. Source audit:
@@ -244,8 +283,8 @@ listening with a screen reader.
   (GET 200), and restored history after reload. The isolated browser was closed.
 - That one paid question increased the successful `browser_companion` ledger,
   screenshot monthly/daily counts, and global request count from three to four;
-  provider errors remained zero. There are now four synthetic question/answer
-  pairs (eight messages) since the backup, including this latest pair. No public
+  provider errors remained zero. There were then four synthetic question/answer
+  pairs (eight messages) since the backup. No public
   launch, domain connection, or Stripe change occurred.
 
 ### Historical hosted and live-model evidence
@@ -270,7 +309,7 @@ listening with a screen reader.
   discount answer blocked by the former numeric guard. The current policy
   replaces that arithmetic whitelist with provenance-vs-teaching checks; the
   exact captured answer passes offline. The historical run was not altered or
-  rerun and is not evidence of 11/11 live success on this candidate. The current
+  rerun and is not evidence of 11/11 live success on this candidate. The historical
   single biology screenshot check above is not an eleven-case rerun. Earlier
   six-case live success is likewise bounded historical evidence, not a quality
   guarantee. The completion-token ceiling is separate from the 4,000-character
@@ -312,16 +351,20 @@ listening with a screen reader.
    environment. The dedicated OpenAI project's $25/month limit is verified;
    database migrations and protected-Preview quota enforcement are verified;
    carrying and verifying this configuration in public production remains a gate.
-   Verify the production billing lifecycle separately; using an existing Pro
-   account does not test purchase, renewal, cancellation, or entitlement removal.
+   The core protected-hosted sandbox purchase/cancellation path now passes;
+   production billing and the remaining lifecycle matrix are still separate.
 2. Confirm the canonical domain, published privacy/terms/support pages, monitored
    support mailbox, asset rights, and publisher-account/listing details.
 3. Configure a production HTTPS origin with debug disabled. Run
    `npm run companion:package`; the ZIP includes only approved runtime files,
    has `manifest.json` at its root, and rejects unsafe client configuration.
    This command creates a local archive only; it does not upload or publish.
-   Current generated configuration uses `http://localhost:8080` and is correctly
-   rejected for production packaging. Increment the manifest version before release.
+   The example's `http://localhost:8080` is rejected for production packaging.
+   No private config was inspected or production ZIP built in this audit. Reject
+   protected Preview origins for public distribution even when syntax checks
+   pass; DNS/TLS and public access require separate verification. The consent
+   link still uses `https://unimate.site/privacy`; a domain change needs a reviewed
+   update. Increment the manifest version for every public release.
 4. Test that exact release in real Chrome with synthetic coursework and isolated
    Free/Pro accounts. Cover consent decline/pause, paid unlock, active-tab
    capture, reload recovery, chat sync, sign-out, restricted pages, and a manual

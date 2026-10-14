@@ -52,15 +52,18 @@ type ConversationMessage = {
   content: string;
 };
 
-export async function askUniMate(data: {
-  question: string;
-  conversationHistory?: ConversationMessage[];
-  classContext?: string[];
-  mode?: "normal" | "simpler" | "deeper";
-  canvasContext?: string;
-  selectedCourseId?: string;
-  timezone?: string;
-}) {
+export async function askUniMate(
+  data: {
+    question: string;
+    conversationHistory?: ConversationMessage[];
+    classContext?: string[];
+    mode?: "normal" | "simpler" | "deeper";
+    canvasContext?: string;
+    selectedCourseId?: string;
+    timezone?: string;
+  },
+  access: { expectedUserId: string; signal?: AbortSignal },
+) {
   const {
     question,
     conversationHistory,
@@ -71,12 +74,19 @@ export async function askUniMate(data: {
     timezone,
   } = data;
 
+  // Missing runtime options must fail closed too (not only at the TS boundary).
+  const authHeaders = await getAuthHeaders({
+    expectedUserId: access?.expectedUserId,
+    signal: access?.signal,
+  });
+  access.signal?.throwIfAborted();
   const response = await fetch("/api/ask-unimate", {
     method: "POST",
+    signal: access.signal,
     headers: {
       "Content-Type": "application/json",
       "X-UniMate-Request-Id": crypto.randomUUID(),
-      ...(await getAuthHeaders()),
+      ...authHeaders,
     },
     body: JSON.stringify({
       question,

@@ -1,11 +1,18 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-Readiness updated: October 14, 2026. The protected hosted screenshot/AI/save/reload
-snapshot below predates the latest pushed billing checks on
-`codex/unimate-premium-revival`; the newer branch has not been deployed there.
-Historical snapshot evidence remains scoped to those specific uploads.
+Readiness updated: October 14, 2026, against evidence checkpoint `2e16b0e` on
+`codex/unimate-premium-revival`. The current protected Preview runs application
+commit `5694bdb`; the later commits contain local verification tooling and evidence.
+Its sandbox purchase → same-panel Pro unlock → period-end revocation passed.
+Screenshot/AI/save/reload evidence belongs to the historical deployments below,
+not automatically to the current Preview. Full evidence: [LAUNCH.md](../LAUNCH.md)
+and [Stripe sandbox manual tests](../STRIPE_SANDBOX_MANUAL_TESTS.md).
 No custom domain was assigned and nothing was submitted to or published in the
 Chrome Web Store.
+
+Source-only follow-up (not redeployed): 28 installed Chromium scenarios now pass,
+including access checks while unsaved answers/failed questions are retained. See
+[the current local evidence](../LAUNCH.md#source-safety-follow-up--october-14-not-yet-deployed).
 
 ## Release decision
 
@@ -19,8 +26,11 @@ tests passed; these public-release gates remain:
    subprocessors, deletion process, and the AI provider's launch-environment data
    terms with the product owner or counsel.
 3. Configure and verify a production HTTPS `UNIMATE_API_URL`. The example config
-   defaults to `http://localhost:8080`; the current generated local configuration
-   was verified to use that local origin and is correctly blocked from packaging.
+   defaults to `http://localhost:8080`, which is blocked from Store packaging.
+   No private configuration was read or production ZIP generated in this audit.
+   URL syntax validation cannot establish public reachability or remove Preview
+   protection. The consent screen still links to `https://unimate.site/privacy`;
+   an alternative public domain requires a reviewed link update too.
 4. Create current 1280x800 store screenshots from the production-configured
    extension and provide a 440x280 promotional tile.
 5. Supply the approved listing URL as `VITE_COMPANION_STORE_URL`. The implemented
@@ -40,10 +50,32 @@ tests passed; these public-release gates remain:
    alone is not enforcement, and the provider spending cap was not exhausted in testing.
 9. Verify the production billing lifecycle, including purchase, renewal,
    cancellation, and entitlement removal. An existing Pro account's successful
-   study request does not establish these behaviors. The October 14 local-server
-   sandbox checks below are separate, not hosted or production billing approval.
+   study request does not establish these behaviors. The October 14 core hosted
+   sandbox flow now passes, but uses a signed local relay, not a direct production
+   webhook. Local renewal/refund/dispute evidence remains separate.
 
 ## Protected hosted-test progress
+
+- **Current protected Preview — October 14:**
+  `https://unimate-fwcn4d8vz-resumejuice-s-projects.vercel.app/`, deployment
+  `dpl_8FeZgD36ucSFKxW2CAMRrvrh7pjp`, application source `5694bdb`, `READY`,
+  Preview (`target:null`) with no aliases. Protection remains enabled, bypass
+  credentials and Production environment variables remain zero; unauthenticated
+  root access redirects to Vercel. Sandbox billing configuration is Preview-only
+  and live mode is false.
+- **Same continuously open panel/session:** genuine sandbox purchase and signed
+  hosted-handler events produced persisted Pro revision 46 before app return;
+  the installed Companion displayed its composer. Real Portal cancellation
+  preserved Pro until the exact synthetic clock reached period end. The deletion
+  event returned 200, persisted Free revision 51 before return, and the same panel
+  displayed the upgrade gate with no composer. The existing return-to-page focus
+  handler was exercised; this is not passive push. Final post-return state was
+  Free revision 52, no active subscriptions or open Checkouts, all four synthetic
+  subscriptions canceled. Test browsers and relay exited cleanly.
+- The hosted billing test made **zero AI requests, captures or page extractions**.
+  It does not certify study-answer quality, draft preservation, public signup,
+  direct production webhook delivery, or the broader lifecycle matrix. The
+  deployment was not changed by the subsequent verification-tooling commits.
 
 - **October 14 local sandbox billing follow-up:** actual test Checkout, successful
   and failed renewals, recovery, native duplicate/stale event redelivery,
@@ -68,7 +100,7 @@ tests passed; these public-release gates remain:
   had no database or AI credentials, with signup, AI, and billing disabled. Any
   credentialed follow-up must target **Preview only**, with deployment protection
   retained; do not promote or alias it to the live domain.
-- **Current owner-flow-verified protected snapshot:**
+- **Historical owner-flow-verified screenshot snapshot (not the current Preview):**
   https://unimate-fh8w9fay6-resumejuice-s-projects.vercel.app
   (`dpl_4crMFUU1bWRky7zx63cTUdG5azrZ`, `READY`, target `null`). Exact upload audit:
   `.vercel/upload-audits/source-zauKij/manifest.json` (137 files, 9,113,923 bytes),
@@ -80,7 +112,7 @@ tests passed; these public-release gates remain:
   and restored history after reload. The browser was closed cleanly. Post-deploy
   metadata confirms no aliases, zero bypass credentials, zero Production variables,
   11 Preview variables, no Stripe secret, and automatic custom-domain assignment
-  disabled. Current installed synthetic coverage is 26 scenarios/10 simulated AI
+  disabled. Recorded installed synthetic coverage is 26 scenarios/10 simulated AI
   requests, including refresh failure and account revocation during a pending
   answer (`unimate-companion-browser-PpqmuG`). The screenshot-restore timeout fix
   separately passed its deterministic regression and 20 consecutive runtime runs.
@@ -126,8 +158,8 @@ tests passed; these public-release gates remain:
   biology answer, save/readback, and history reload, with aggregate usage then
   three and zero provider errors. Neither historical deployment contains the
   current working tree; the later historical snapshot's separate proof is recorded above.
-- Current-source installed-browser evidence: 26 synthetic scenarios and ten fake AI
-  calls, artifact `unimate-companion-browser-PpqmuG` in the host temporary directory.
+- Latest recorded synthetic installed-browser evidence: 28 scenarios and ten fake AI
+  calls, artifact `unimate-companion-browser-VmhfWZ` in the host temporary directory.
   Coverage includes transport recovery, private
   sign-in, Free/Pro gates, capture/save recovery, clipped/shadow/frame privacy,
   accessibility-tree and reduced-motion checks, scroll/disclosure preservation,
@@ -164,12 +196,12 @@ tests passed; these public-release gates remain:
   manifest version for each public release.
 - The isolated test browser was closed after verification. Its short-lived
   preview token was injected only into browser memory, never its profile. The
-  separate ignored mode-0600 CLI token file was removed after the current check.
+  separate ignored mode-0600 CLI token file was removed after that historical check.
   The persistent automation-bypass
   secret generated by `vercel curl` was revoked; zero bypass credentials remain,
   and login protection is unchanged. Future automation should use the verified
   project-scoped OIDC helper instead of regenerating a persistent bypass.
-- Historical dependency exposure assessment, rechecked October 13, 2026: `npm audit
+- Historical dependency exposure assessment, superseded by the verified cleanup below: `npm audit
 --omit=dev` reports zero advisories; the full audit reports seven high findings
   from one [braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm).
   The installed chain is `@lovable.dev/vite-tanstack-config@1.7.0` →
@@ -183,22 +215,25 @@ tests passed; these public-release gates remain:
   in its function/static artifacts. No app request path to the affected parser
   was identified. This is a scoped exposure assessment, not proof the development
   dependency is safe: do not expose the development server or process untrusted
-  source/glob configuration with this toolchain. Keep the finding open for a
-  separately verified wrapper migration, or explicit release-risk acceptance;
-  do not use an untested forced audit fix to clear the warning.
-  October 14 recheck: the same development-only findings remain. Published
+  source/glob configuration with that historical toolchain. At that point the
+  finding required a separately verified migration; it is no longer an open
+  source-candidate blocker after the cleanup below. Published
   wrapper `2.7.2` is the earliest identified stable version dropping the tagger,
-  but it also changes the default hosting adapter to Nitro. This is a candidate
-  for an isolated two-target build migration, not a verified drop-in fix.
+  but it also changes the default hosting adapter to Nitro. That wrapper upgrade
+  was not used; the completed cleanup composes the plugins explicitly.
 - October 14 cleanup completed in candidate commit `5a6f3a4`: removed the
   wrapper/tagger/braces chain and obsolete Bun lockfile, preserving all retained
   dependency versions, the Cloudflare default and opt-in Vercel adapter. Fresh
   npm install, full/production audits (both zero vulnerabilities), offline tests,
   typecheck, lint and both built-artifact checks passed. The local browser also
   hydrated and navigated successfully. The earlier open advisory above is cleared
-  for this source candidate, not retroactively for the older hosted Preview.
+  for this source candidate and the current `5694bdb` application deployment,
+  not retroactively for the older hosted screenshot snapshots.
   Tests now exercise actual sandbox configuration hooks to prevent unallowlisted
   environment-file loading. No public deployment or Store publication occurred.
+- The subsequent lockfile repair `fbd059f` preserved exact bundled dependency
+  metadata and passed fresh npm 10.9.2 / npm 11 installs and Linux CI; see
+  [the current dependency evidence](../LAUNCH.md). No runtime upgrade was needed.
 
 Minimal reproducible checks from the repository root:
 
@@ -270,9 +305,10 @@ Privacy Policy exactly.
 | Web browsing activity                            | Yes, narrowly               | The current page title and URL/domain are sent only as context for the user-facing answer after Send. They must not be used for ads or unrelated analytics.                                                                                    |
 | User-generated content / personal communications | Yes                         | Prompts and chat responses are stored in the user's UniMate chat history.                                                                                                                                                                      |
 | Form data                                        | Potentially visible         | Visible form labels, options, or entered content may appear in the screenshot or compact page context. Password, email, and telephone input values are excluded from DOM extraction, but screenshots can still show visible sensitive content. |
-| Financial information                            | No extension collection     | The extension contains no checkout or billing flow.                                                                                                                                                                                            |
+| Financial information                            | No dedicated billing inputs | The extension contains no checkout/card form. Financial information could still appear in an intentionally submitted screenshot or selection; do not claim those pixels are filtered.                                                                                 |
 | Health information                               | Not intentionally collected | It could be visible on a submitted page; the public disclosure should tell users not to submit sensitive pages they do not want analyzed.                                                                                                      |
-| Location, history, contacts, files               | No dedicated access         | No corresponding Chrome permissions are requested.                                                                                                                                                                                             |
+| Location, history, contacts                      | No dedicated access         | No corresponding Chrome permissions are requested.                                                                                                                                                                                             |
+| Local file content                              | Optional page context       | File-page matching is declared, but Chrome requires the user to allow file access. An eligible local page can then be intentionally submitted; no directory enumeration or arbitrary file-reading API is used.                                                                 |
 
 ## In-product disclosure and consent
 
@@ -322,7 +358,12 @@ Key features:
 - Sign in with your existing UniMate account; no separate extension account.
 - Capture only after you press Send—never continuous screen recording.
 
-An active UniMate Pro profile is required. Chrome restricts extensions on
+An active paid UniMate Pro subscription is required; usage limits apply. Billing
+is managed on the UniMate website. AI answers can be wrong: check important
+details and follow your institution's academic-integrity rules. This is not an
+LMS integration and does not complete or submit coursework on your behalf.
+
+Chrome restricts extensions on
 internal pages, the Chrome Web Store, and some browser-owned documents.
 
 ### Screenshot plan
@@ -384,9 +425,9 @@ page should include installation, sign-in, Pro verification, restricted-page,
 capture, rate-limit, privacy, chat-deletion, and uninstall guidance. Do not use a
 personal inbox or an unmonitored placeholder.
 
-The owner supplied the dedicated `unimatesupport@gmail.com` inbox on October 13, 2026. Local Privacy, Terms, and Support contact links have been updated; the
-recorded hosted Preview predates this contact-only change. Incoming mail and
-reply delivery still need confirmation before release.
+The owner supplied the dedicated `unimatesupport@gmail.com` inbox on October 13,
+2026. The contact-link update is included in the current Preview's source, but
+public-domain availability and incoming/reply mail delivery still need confirmation.
 
 ## Asset and audio review
 
@@ -400,6 +441,26 @@ The extension icon files are mechanically derived from UniMate's current logo an
 are declared at 16, 32, 48, and 128 pixels. Confirm brand ownership before store
 submission.
 
+| Packaged asset | Repository evidence | Owner approval still required |
+| --- | --- | --- |
+| `assets/mascot.png` | Tracked with the Companion; the other mascot variants are excluded from the ZIP. | Original creator/source, license or ownership, and permission to redistribute commercially. |
+| `assets/icons/icon16.png`, `icon32.png`, `icon48.png`, `icon128.png` | PNG dimensions are checked; the current logo source is `public/assets/unimate-logo-head.png`. | Rights to the source logo and derived icons; record any required attribution. |
+
+Git history and successful PNG checks establish which files ship, not licensing
+rights. No rights were inferred or new assets generated in this audit. Store
+screenshots/tile are still pending and must use synthetic, authorized coursework.
+
+### Owner privacy sign-off before upload
+
+- [ ] Approve the publisher/operator identity and the listing's paid-Pro wording.
+- [ ] Check the published policy against the data map above, including incidental
+      sensitive screenshots, optional file pages, account data and saved chats.
+- [ ] Record actual production subprocessors, retention/logging settings and the
+      account/data-deletion response process; test the support inbox end to end.
+- [ ] Complete the Store privacy disclosures and reviewer access instructions
+      without including credentials in this repository or in public listing copy.
+- [ ] Reconcile the listing, public policy and in-product consent before approval.
+
 ## Packaging checklist
 
 - [ ] Run `npm run companion:configure` with the production HTTPS UniMate origin.
@@ -412,9 +473,13 @@ submission.
       `config.local.js`, `assets/mascot.png`, and `assets/icons/*.png`.
 - [ ] Run `npm run companion:package`. It runs the V2 verification suite and
       secret scan before creating the archive, rejects local/non-HTTPS origins,
-      debug mode, secret-like configuration, and forbidden archive entries.
-- [ ] Load the exact unpacked staging directory that will be zipped and complete
-      the manual launch tests.
+      IP/internal/placeholder hosts, invalid Chrome versions, debug mode,
+      secret-like configuration, symbolic-link inputs and forbidden archive entries.
+      These are offline checks, not proof of DNS/TLS, public access, asset rights
+      or live service readiness. Do not package the protected Preview for students.
+- [ ] Extract the validated ZIP into a fresh local directory, load that exact
+      directory unpacked and complete the manual launch tests. The packager's
+      temporary staging directory is removed automatically.
 - [ ] Verify the manifest version is higher than any package already uploaded.
 - [ ] Inspect the final archive file list and scan it for secrets before upload.
 - [ ] Confirm `manifest.json` is at the ZIP root, without a containing directory.
@@ -426,6 +491,10 @@ submission.
 
 ## Current official references
 
+Version, listing and disclosure guidance rechecked October 14, 2026. These links
+support the requirements; a passing local test is not Store approval.
+
+- [Chrome manifest version rules](https://developer.chrome.com/docs/extensions/reference/manifest/version)
 - [Chrome Web Store Program Policies](https://developer.chrome.com/docs/webstore/program-policies/policies)
 - [Disclosure Requirements](https://developer.chrome.com/docs/webstore/program-policies/disclosure-requirements)
 - [User Data FAQ and Limited Use](https://developer.chrome.com/docs/webstore/program-policies/user-data-faq)

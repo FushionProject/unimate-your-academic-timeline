@@ -303,6 +303,38 @@ try {
       "refreshed chat DOM",
     );
   }
+  async function verifyPendingAccess(recoverySelector, label) {
+    const draft = await shadowCall(".um-input", "value");
+    const visibleMessages = await shadowCall(".um-messages");
+    const requests = aiRequests.length;
+    const historyReads = calls.filter(
+      (call) => call.path === "/rest/v1/companion_chats" && call.method === "GET",
+    ).length;
+    for (const trigger of ["focus", "reopen"]) {
+      if (trigger === "reopen") await shadowCall(".um-close", "click");
+      isPro = false;
+      if (trigger === "reopen") await shadowCall(".um-mascot", "click");
+      else await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await waitFor(".um-upgrade");
+      assert.equal(await shadowCall(".um-input"), null);
+      await page.screenshot({
+        path: path.join(artifacts, `pending-${label}-${trigger}-locked.png`),
+      });
+      isPro = true;
+      await shadowCall(".um-check-plan", "click");
+      await waitFor(recoverySelector);
+      assert.equal(await shadowCall(".um-input", "value"), draft);
+      assert.equal(await shadowCall(".um-messages"), visibleMessages);
+      assert.equal(aiRequests.length, requests, "Access refresh must not repeat the AI question");
+    }
+    assert.equal(
+      calls.filter((call) => call.path === "/rest/v1/companion_chats" && call.method === "GET")
+        .length,
+      historyReads,
+      "Access refresh must not replace unsaved work with server history",
+    );
+    pass(`${label}: focus and reopen enforce Pro while preserving same-account recovery and draft`);
+  }
 
   await page.goto(`${origin}/lesson?token=PRIVATE_FIXTURE#PRIVATE_HASH`);
   await waitFor(".um-mascot");
@@ -683,6 +715,8 @@ try {
   failSave = true;
   await ask("Explain ATP simply.");
   await waitFor(".um-retry-save");
+  await shadowCall(".um-input", "fill", "Keep this draft beside my unsaved answer");
+  await verifyPendingAccess(".um-retry-save", "unsaved-answer");
   await page.setViewportSize({ width: 420, height: 460 });
   await shadowCall(
     ".um-input",
@@ -767,6 +801,7 @@ try {
   );
   await page.keyboard.press("Enter");
   assert.equal(aiRequests.length, beforeFailedOverlap + 1, "B must not replace unresolved A");
+  await verifyPendingAccess(".um-retry-question", "failed-question");
   await worker.evaluate(async (url) => {
     const tab = (await chrome.tabs.query({})).find((item) => item.url === url);
     await chrome.tabs.setZoom(tab.id, 2);

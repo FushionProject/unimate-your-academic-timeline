@@ -74,6 +74,37 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [x] Remove the vulnerable development dependency chain and verify both build targets (October 14)
 - [ ] Complete production-origin, legal, support, and Chrome Web Store gates
 
+### Source safety follow-up — October 14 (not yet deployed)
+
+Ask UniMate binds each outbound question and history to its originating account
+before fetching. A deferred session lookup that resolves as another account or
+sign-out is rejected without sending private content. Same-account token refresh
+remains supported. Unmount/account changes abort requests, and late responses or
+cleanup cannot overwrite a newer request. Executed production-declaration tests
+cover these boundaries and the nonretryable identity-change message.
+
+The Companion now rechecks account/Pro access on focus and reopen even when an
+unsaved answer or failed question prevents history replacement. Same-account
+revocation hides the composer without discarding that work; reactivation restores
+it. Sign-out/account changes clear private recovery state. Deterministic tests
+also cover stale access replies, network errors, and newer disclosure/history loads.
+
+The updated installed Chromium harness passed **28 synthetic scenarios and ten
+fake AI requests**, with no real credentials, paid API traffic or Stripe calls.
+Both pending-work slots were verified through focus and close/reopen revocation
+and reactivation, without extra AI requests or replacement history reads. Earlier
+consent, capture, cross-tab sign-out, persistence, keyboard/zoom and worker-recovery
+checks also pass. Artifact directory: `unimate-companion-browser-VmhfWZ` in the
+host temporary directory; the lock and answer screenshots were visually reviewed.
+This does not update or certify the hosted Preview or the production Store ZIP.
+The full offline application suite, typecheck and secret scan pass locally;
+lint reports no errors and the same eight existing Fast Refresh warnings.
+
+Packaging fixture checks now reject private/internal/placeholder origins,
+Chrome-invalid versions, symlink/nonregular input files and unsafe archive
+replacement. The previous valid archive is preserved when validation fails.
+These checks do not establish DNS/TLS, public reachability or Store approval.
+
 Current email evidence: the restored project's SMTP Settings shows custom SMTP
 disabled. Supabase's default sender is restricted to project-team addresses, so
 ordinary-student email delivery cannot be signed off. The owner approved Resend's
@@ -91,9 +122,19 @@ The separate
 AgentMail verification inbox is ready; it does not replace the sending service or
 `unimatesupport@gmail.com`. No account ownership or authentication protection was changed.
 
-### Pending Resend DNS records
+Domain decision update — October 14: the owner cannot recover the Namecheap
+account and prefers considering a replacement domain through Vercel. Read-only
+availability/pricing checks were completed; no exact domain purchase, term or
+automatic-renewal preference has been approved. Leave `unimate.site`, its DNS,
+and the existing Resend domain untouched. Once a replacement is approved,
+request records for that exact sending domain; do not reuse the old DKIM records.
+The private Preview and test-only billing remain the approved environment.
 
-Add only these provider-issued records in the `unimate.site` Namecheap zone;
+### Historical pending Resend DNS records — domain decision required
+
+These records apply only if the owner chooses to retain `unimate.site` and
+regains its DNS access. Do not apply them to a replacement domain.
+Add only these provider-issued records in that Namecheap zone;
 TTL Automatic for each. Preserve root Google MX/SPF/verification records,
 nameservers, and website records. Public DNS checks found no existing records at
 the planned DKIM and return-path names; inspect the actual zone before saving.

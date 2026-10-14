@@ -495,7 +495,7 @@ assert.equal(
       { status },
     );
     await assert.rejects(
-      context.exports.askUniMate({ question: "Explain inertia" }),
+      context.exports.askUniMate({ question: "Explain inertia" }, { expectedUserId: "student" }),
       (error) =>
         error instanceof context.exports.UniMateApiError &&
         error.retryable === retryable &&
