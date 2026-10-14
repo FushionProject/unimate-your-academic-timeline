@@ -14,8 +14,9 @@ This is the single operating checklist for UniMate's public launch. A box is che
 
 The active candidate is on `codex/unimate-premium-revival`. The product work was
 committed and pushed as `da82c64`, followed by tested billing checkpoints
-`40057cb` (concurrent Checkout recovery and renewal checks) and `794ed35`
-(installed Companion entitlement and native event redelivery checks). GitHub
+`40057cb` (concurrent Checkout recovery and renewal checks), `794ed35`
+(installed Companion entitlement and native event redelivery checks), and
+`90b6a15` (refund/dispute/race verification and tests-only GitHub checks). GitHub
 `main` was not changed. This branch is still under verification, not frozen or
 approved for public release. The August record below is historical. The protected
 Preview uploaded October 13 local / October 14 UTC remains on its recorded source;
@@ -27,8 +28,10 @@ requests targeting `main`, and manual runs. It uses pinned official actions,
 read-only repository permissions, no persisted checkout credentials, and the
 verified Node 22.16 application runtime. It runs the full offline tests, typecheck,
 lint, secret scan, and local Vercel build/artifact verification; it does not deploy
-or receive service credentials. Local workflow-policy checks pass. A successful
-GitHub runner execution must be recorded separately from these local results.
+or receive service credentials. Local workflow-policy checks pass. The first
+GitHub/Linux run for `90b6a15` completed successfully:
+[Verify UniMate #1](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38519205802).
+This includes a clean dependency install and is separate from local verification.
 
 - [ ] Freeze and record the exact new release commit and rollback point
 - [x] Re-verify the exact uploaded candidate's Companion study flow in its protected hosted environment
@@ -220,6 +223,11 @@ Pro while the subscription remained active. Final explicit cancellation delivere
 200, made the persisted profile Free at revision 42, and returned Companion
 403 `PRO_REQUIRED` before browser reconciliation. All three test subscriptions
 are canceled. The original successful test payment method was restored.
+Post-fix parallel Checkout returned one success plus safe `CHECKOUT_IN_PROGRESS`,
+with exactly one open session and no new subscription. Requests at 180 and 309
+seconds reused that same session. The helper then expired that exact unpaid
+session and verified zero open Checkouts, zero active subscriptions and Free
+entitlement. No extra test purchase was made for this concurrency check.
 The actual installed Companion displayed Pro in the isolated synthetic profile
 during the lifecycle, then reused that session after cancellation and displayed
 the upgrade gate at revision 42 with zero AI requests/captures/extractions. These
@@ -237,7 +245,7 @@ Real Portal period-end cancellation preserved Pro and exposed the flexible-billi
 - [x] Stripe test Price confirmed as active, monthly, USD, and exactly $5.99 (dedicated sandbox, October 13 local / October 14 UTC)
 - [ ] Restricted test API key configured server-side where practical
 - [x] Successful Checkout completed (real local-server sandbox test, October 13 local / October 14 UTC)
-- [ ] Parallel Checkout requests produce one customer and no duplicate subscription
+- [x] Parallel Checkout requests produce one customer and no duplicate subscription (real post-fix pair plus same-session reuse before/after five minutes, October 14)
 - [ ] Webhook signature and test/live-mode validation confirmed
 - [x] Duplicate webhook delivery confirmed safe (native paid-event redelivery twice, October 14)
 - [ ] Customer Portal verified
