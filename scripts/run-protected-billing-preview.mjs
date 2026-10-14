@@ -610,6 +610,14 @@ export async function runProtectedBillingPreview({ origin, approved = false } = 
       if (!stopped) void stop();
     });
     const page = await website.newPage();
+    const websiteEvidence = { authResponses: [], pageErrors: 0, failedRequests: 0 };
+    page.on("pageerror", () => websiteEvidence.pageErrors++);
+    page.on("requestfailed", () => websiteEvidence.failedRequests++);
+    page.on("response", (response) => {
+      const url = new URL(response.url());
+      if (url.origin === TARGET.supabase && url.pathname === "/auth/v1/token")
+        websiteEvidence.authResponses.push(response.status());
+    });
     let holdUpgrade = false;
     // Registered after the OIDC transport, so this hold runs first. Do not load
     // application JS on a Stripe return until direct DB + hosted webhook proof
@@ -642,31 +650,63 @@ export async function runProtectedBillingPreview({ origin, approved = false } = 
     stage("WEBSITE_NAVIGATION");
     await page.goto(`${origin}/signin?next=upgrade`, { waitUntil: "domcontentloaded" });
     stage("WEBSITE_SIGNIN");
-    await page.locator("#signin-email").fill(record.email);
-    await page.locator("#signin-password").fill(record.password);
-    const authResponse = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return (
-        url.origin === TARGET.supabase &&
-        url.pathname === "/auth/v1/token" &&
-        url.searchParams.get("grant_type") === "password"
-      );
+    report({
+      kind: "signin-form",
+      emailField: await page.locator("#signin-email").count(),
+      passwordField: await page.locator("#signin-password").count(),
     });
-    const [response] = await Promise.all([
-      authResponse,
-      page.getByRole("button", { name: "Sign in", exact: true }).click(),
-    ]);
-    if (response.status() !== 200) fail("SYNTHETIC_WEBSITE_SIGNIN_FAILED");
-    const signedIn = await response.json();
-    const user = signedIn.user;
-    if (
-      user?.id !== record.userId ||
-      user.email !== record.email ||
-      user.app_metadata?.unimate_test_marker !== record.marker ||
-      user.app_metadata?.unimate_test_nonce !== record.nonce
-    )
-      fail("SYNTHETIC_WEBSITE_IDENTITY_MISMATCH");
-    await page.waitForURL((url) => url.origin === origin && url.pathname === "/upgrade");
+    try {
+      await page.locator("#signin-email").fill(record.email);
+      await page.locator("#signin-password").fill(record.password);
+      const authResponse = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          url.origin === TARGET.supabase &&
+          url.pathname === "/auth/v1/token" &&
+          url.searchParams.get("grant_type") === "password"
+        );
+      });
+      const [response] = await Promise.all([
+        authResponse,
+        page.getByRole("button", { name: "Sign in", exact: true }).click(),
+      ]);
+      if (response.status() !== 200) fail("SYNTHETIC_WEBSITE_SIGNIN_FAILED");
+      const signedIn = await response.json();
+      const user = signedIn.user;
+      if (
+        user?.id !== record.userId ||
+        user.email !== record.email ||
+        user.app_metadata?.unimate_test_marker !== record.marker ||
+        user.app_metadata?.unimate_test_nonce !== record.nonce
+      )
+        fail("SYNTHETIC_WEBSITE_IDENTITY_MISMATCH");
+      await page.waitForURL((url) => url.origin === origin && url.pathname === "/upgrade");
+    } catch (error) {
+      let currentPath = "closed";
+      let messages = [];
+      if (!page.isClosed()) {
+        const url = new URL(page.url());
+        currentPath =
+          url.origin === origin && ["/signin", "/upgrade", "/dashboard"].includes(url.pathname)
+            ? url.pathname
+            : "other";
+        const body = await page
+          .locator("body")
+          .innerText()
+          .catch(() => "");
+        messages = [
+          "Welcome back",
+          "Auth isn't configured yet",
+          "That email or password did not match",
+          "Check your email confirmation link",
+          "We couldn't reach UniMate",
+          "We couldn't sign you in",
+          "Something went wrong",
+        ].filter((text) => body.includes(text));
+      }
+      report({ kind: "signin-diagnostic", currentPath, messages, ...websiteEvidence });
+      throw error;
+    }
     // The separate extension keeps one fixture/panel throughout Free→Pro→Free.
     stage("COMPANION_START");
     const { startProtectedCompanionBillingHarness } =

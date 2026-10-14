@@ -2,6 +2,49 @@
 
 Status: **test mode only**. Do not use live keys, enable `STRIPE_LIVE_MODE_ENABLED`, or make live charges while following this checklist.
 
+## Protected Preview infrastructure checkpoint — October 14, 2026
+
+The current private test deployment is
+https://unimate-fwcn4d8vz-resumejuice-s-projects.vercel.app/
+(`dpl_8FeZgD36ucSFKxW2CAMRrvrh7pjp`), `READY`, Preview (`target:null`) with no aliases.
+Its source is `5694bdb4b2a668e2f42297fe37a4a27fd34e000e`, including the guarded
+immutable Preview billing-return origin fix `3d5943e`. All checks passed in its
+[GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38612123785).
+The exact UniMate project/team and unchanged deployment protection were verified;
+there are zero bypass credentials and zero Production environment variables.
+An unauthenticated root request returned 302 to `vercel.com`.
+
+The dedicated UniMate sandbox API key, Price and webhook signing secret are now
+configured at project-wide **Preview-only** scope. Vercel rejected branch-scoped
+variables because the project is not Git-connected; no Git integration was added.
+The existing Preview-only live-mode flag was verified `false` without replacing
+it. This supersedes historical notes that Preview had no Stripe billing keys;
+it does not change the results or scope of the dated local runs below.
+
+**Not yet certified:** the complete hosted purchase → website/Companion Pro unlock
+→ cancellation → access-revocation journey. A ready deployment and configured
+sandbox credentials do not establish those results. No live charge, public
+billing launch, custom-domain change or production deployment is authorized.
+
+### Protected Preview operator notes
+
+`prepare-protected-billing-preview.mjs` uses the cached, version-validated Vercel
+CLI 63.1.2 through Node, selected by `UNIMATE_VERCEL_CLI_PATH`. Its private ignored
+`.stripe-sandbox.local/protected-preview-setup-v1.json` retains the original
+branch-scope failure, reconciled retry and approved project-Preview scope change.
+Setup is complete; do not rerun it, replace the journal or print its contents.
+Uncertain mutations require read-only reconciliation, not blind retries.
+
+`run-protected-billing-preview.mjs` is the controlled hosted-test path. It forwards
+scoped Stripe sandbox events through a local relay to the exact protected Preview
+using short-lived, origin-scoped OIDC authentication. Stripe signature checks
+remain required; OIDC supplies Vercel access, not billing authorization. This
+temporary test relay is not a public Stripe webhook or evidence of production
+webhook readiness, and it does not require disabling protection or creating a
+persistent bypass. Keep tokens, signing secrets and private redirect URLs out of
+logs and Git. Record actual hosted webhook, persisted-entitlement and browser
+results separately before signing off the lifecycle.
+
 ## Verified local sandbox evidence — October 13, 2026 local / October 14 UTC
 
 These are real Stripe sandbox → local UniMate server → Supabase results, not mock-handler results or a production billing launch. The dedicated UniMate sandbox is `acct_1UQHj2IxB8W4eFUh`; its verified active test Price is USD 599 cents monthly. A separately marked synthetic user was used; the existing owner account was not used for purchases.

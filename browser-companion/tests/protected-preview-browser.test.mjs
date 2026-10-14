@@ -158,6 +158,13 @@ for (const debug of ["DEBUG", "PWDEBUG"]) {
     "https://synthetic.supabase.co/auth/v1/token",
     "https://other.vercel.app/",
   ]) {
+    const clean = fixture(url, { headers: { "x-other": "preserved" } });
+    await context.handler(clean.route);
+    assert.deepEqual(
+      clean.calls,
+      [{ kind: "continue", options: undefined }],
+      "Token-free external requests must preserve native handling without header overrides",
+    );
     const f = fixture(url, { headers: { [HEADER.toUpperCase()]: token, "x-other": "preserved" } });
     await context.handler(f.route);
     assert.deepEqual(

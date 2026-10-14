@@ -97,13 +97,17 @@ export async function attachProtectedPreviewBrowser(context, access) {
         await close();
         return;
       }
-      const headers = withoutToken(await request.allHeaders());
+      const originalHeaders = await request.allHeaders();
       if (url.origin !== origin) {
         // Stripe, Supabase and other ordinary website requests retain their
-        // original method/body/authentication, never the Preview credential.
-        await route.continue({ headers });
+        // native browser handling. Header overrides persist across redirects,
+        // so only supply overrides if an unexpected Preview token needs removal.
+        const hasToken = Object.keys(originalHeaders).some((name) => name.toLowerCase() === HEADER);
+        if (hasToken) await route.continue({ headers: withoutToken(originalHeaders) });
+        else await route.continue();
         return;
       }
+      const headers = withoutToken(originalHeaders);
       headers[HEADER] = token;
       // Playwright header overrides can follow redirects. Fetch exactly once,
       // with no redirect or retry, and never inject this header into the browser

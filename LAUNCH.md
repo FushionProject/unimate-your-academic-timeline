@@ -19,11 +19,13 @@ committed and pushed as `da82c64`, followed by tested billing checkpoints
 `90b6a15` (refund/dispute/race verification and tests-only GitHub checks), and
 `291be77` (real portal isolation/initial decline plus billing UI regressions),
 `5a6f3a4` (dependency cleanup and both hosting adapters), and `fbd059f`
-(cross-version bundled-lock repair and regression). GitHub
+(cross-version bundled-lock repair and regression), `3d5943e` (guarded immutable
+Preview billing-return origin), and `5694bdb` (protected sandbox setup and test
+tooling). GitHub
 `main` was not changed. This branch is still under verification, not frozen or
-approved for public release. The August record below is historical. The protected
-Preview uploaded October 13 local / October 14 UTC remains on its recorded source;
-later billing changes have not been deployed there. No domain change, Store
+approved for public release. The current protected Preview is the October 14
+deployment recorded below; it includes the newer billing changes. The August and
+earlier protected-Preview records are historical. No domain change, Store
 submission, live payment, or public launch was performed.
 
 The tests-only GitHub workflow covers pushes to this candidate and `main`, pull
@@ -38,6 +40,8 @@ GitHub/Linux run for `90b6a15` completed successfully:
 This includes a clean dependency install and is separate from local verification.
 The subsequent billing checkpoint `291be77` also passed its complete
 [GitHub/Linux run](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38603810280).
+The current source `5694bdb4b2a668e2f42297fe37a4a27fd34e000e` passed all checks in
+[GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38612123785).
 
 Latest billing evidence: real cross-account portal attempts returned 409, unsigned
 requests returned 401, and the valid portal's Stripe event matched the exact
@@ -49,7 +53,7 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 `STRIPE_SANDBOX_MANUAL_TESTS.md`. These checks do not authorize live billing.
 
 - [ ] Freeze and record the exact new release commit and rollback point
-- [x] Re-verify the exact uploaded candidate's Companion study flow in its protected hosted environment
+- [ ] Re-verify the current protected Preview's Companion study and billing flow end to end
 - [ ] Complete the remaining real Stripe sandbox lifecycle matrix
 - [ ] Configure and verify signup/confirmation/password-recovery email delivery
 - [x] Remove the vulnerable development dependency chain and verify both build targets (October 14)
@@ -181,8 +185,10 @@ marked synthetic customer, two completed Checkout Sessions, two canceled
 subscriptions, no open/unknown Checkout or nonterminal subscription, and no
 unbound customer. Its test profile is Free at billing revision 16. This clears
 the observable old-attempt hazard for that sandbox, not a hypothetical live
-account. Vercel Preview has no Stripe secret/price/webhook keys; billing remains
-unconfigured there.
+account. At that historical checkpoint Vercel Preview had no Stripe
+secret/price/webhook keys and billing remained unconfigured. That configuration
+finding is superseded by the October 14 protected-Preview checkpoint below; the
+new hosted purchase/cancellation flow is not yet certified.
 
 Final source checks: the full test matrix passed on an already-installed Node
 22.16 runtime, including five consecutive Companion runtime runs. That command
@@ -202,7 +208,38 @@ recorded and was not silently retried away. Prefer the scoped verified runtime
 when reproducing this candidate's tests. The temporary local server was stopped
 and the synthetic browser session signed out after verification.
 
-### Current protected Preview — October 13 local / October 14 UTC, 2026
+### Current protected Preview infrastructure — October 14, 2026
+
+- URL: https://unimate-fwcn4d8vz-resumejuice-s-projects.vercel.app/
+- Deployment: `dpl_8FeZgD36ucSFKxW2CAMRrvrh7pjp`, `READY`, Preview (`target:null`),
+  with no aliases. Exact source: `5694bdb4b2a668e2f42297fe37a4a27fd34e000e`,
+  including the `3d5943e` billing-return fix; its complete GitHub checks passed.
+- Exact UniMate project/team verified; deployment protection is unchanged,
+  bypass credentials remain zero, and Production environment variables remain
+  zero. An unauthenticated root request returned 302 to `vercel.com`.
+- The sandbox API key, Price and webhook signing secret are now configured for
+  project-wide **Preview only**. Branch-scoped setup was rejected because this
+  Vercel project has no Git integration; no Git integration was added. The
+  existing Preview-only `STRIPE_LIVE_MODE_ENABLED` was read back and verified
+  `false`, without replacing it or adding any Production settings.
+- This is an infrastructure checkpoint, not a hosted billing or Companion
+  lifecycle pass. Full hosted purchase, Pro unlock, cancellation and access
+  revocation still require separate evidence. Earlier local results and the
+  previous Preview's study-flow result do not certify this deployment.
+
+Operator notes: the setup uses the locally cached, version-validated Vercel CLI
+63.1.2 through Node and a private ignored journal that preserves the failed
+branch attempt and approved Preview scope change. Do not repeat completed setup
+or discard that audit. The hosted test runner uses a local signed-event relay
+and short-lived, exact-origin OIDC access to the protected Preview, not a public
+Stripe webhook or a persistent protection bypass. See
+[Stripe sandbox manual tests](./STRIPE_SANDBOX_MANUAL_TESTS.md) for the boundaries.
+
+### Historical protected Preview — October 13 local / October 14 UTC, 2026
+
+Superseded as the current deployment by the October 14 checkpoint above. The
+following evidence, including the absence of Stripe keys, describes only this
+earlier deployment and its configuration at that time.
 
 - URL: https://unimate-fh8w9fay6-resumejuice-s-projects.vercel.app
 - Deployment: `dpl_4crMFUU1bWRky7zx63cTUdG5azrZ`, `READY`, Preview (`target:null`).
@@ -279,8 +316,10 @@ The actual installed Companion displayed Pro in the isolated synthetic profile
 during the lifecycle, then reused that session after cancellation and displayed
 the upgrade gate at revision 42 with zero AI requests/captures/extractions. These
 are reopen/snapshot checks, not a continuously open panel transition test.
-These are local-server sandbox results. Hosted Preview still has no Stripe keys,
-and no public billing, live charge, email-domain change or Store release occurred.
+These are local-server sandbox results. Hosted Preview had no Stripe keys at that
+checkpoint; the October 14 infrastructure section supersedes that configuration
+note, not the outstanding hosted lifecycle tests. No public billing, live charge,
+email-domain change or Store release occurred.
 
 Earlier evidence — **October 13, 2026 local / October 14 UTC**: the dedicated UniMate sandbox `acct_1UQHj2IxB8W4eFUh` and its active USD $5.99 monthly test Price were verified. A separate synthetic Free user completed real browser Checkout through the local test server; Checkout, invoice and subscription-created webhook deliveries returned 200 and the profile became Pro. The Companion API changed from Free 403 to passing its Pro gate (`SCREENSHOT_UNAVAILABLE` because this harness deliberately has no AI provider credentials). This earlier run did not claim a paid AI answer, production billing, or installed-extension billing validation.
 
