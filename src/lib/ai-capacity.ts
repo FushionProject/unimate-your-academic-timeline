@@ -1,3 +1,5 @@
+import { supabaseServiceHeaders } from "./supabase-service.ts";
+
 export type AiFeature = "ask_unimate" | "browser_companion";
 export type AiEntitlement = "free" | "pro";
 export type AiCompletionStatus = "succeeded" | "provider_error" | "cancelled";
@@ -105,8 +107,7 @@ async function serviceRpc<T>(
   const response = await fetch(`${config.url}/rest/v1/rpc/${name}`, {
     method: "POST",
     headers: {
-      apikey: config.key,
-      Authorization: `Bearer ${config.key}`,
+      ...supabaseServiceHeaders(config.key),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),

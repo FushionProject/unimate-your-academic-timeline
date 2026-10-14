@@ -50,8 +50,53 @@ export const Route = createFileRoute("/ask")({
 });
 
 function AskAccessGate() {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   const billing = useBillingStatus();
   const access = getCompanionAccessState(billing);
+  const draftCache = useRef<{
+    ownerId: string | null;
+    access: typeof access;
+    active: boolean;
+    value?: string;
+  }>({ ownerId: userId, access, active: true });
+  if (draftCache.current.ownerId !== userId || draftCache.current.access !== access) {
+    const previous = draftCache.current;
+    const value =
+      userId && previous.ownerId === userId && access !== "free" ? previous.value : undefined;
+    previous.value = undefined;
+    previous.active = false;
+    // Replacing the snapshot also invalidates callbacks from an unmounted chat.
+    draftCache.current = { ownerId: userId, access, value, active: true };
+  }
+  const snapshot = draftCache.current;
+  const rememberDraft = useCallback(
+    (value: string) => {
+      if (
+        draftCache.current === snapshot &&
+        snapshot.active &&
+        snapshot.ownerId &&
+        snapshot.access === "pro"
+      )
+        snapshot.value = value.slice(0, 4000);
+    },
+    [snapshot],
+  );
+  useEffect(() => {
+    draftCache.current.active = true;
+    return () => {
+      draftCache.current.value = undefined;
+      draftCache.current.active = false;
+    };
+  }, []);
+  const [accessChecked, setAccessChecked] = useState(false);
+  const checkAccess = () => {
+    if (billing.isFetching) return;
+    setAccessChecked(true);
+    void billing.refetch();
+  };
+
+  if (!userId) return null;
 
   if (access === "checking") {
     return (
@@ -74,27 +119,57 @@ function AskAccessGate() {
             We couldn't check your UniMate plan
           </h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground" role="alert">
-            Your account and plan are unchanged — this is a temporary connection problem. Try again
-            in a moment.
+            We can’t confirm your plan right now. This doesn’t mean you need another subscription.
+            Try again, or keep organizing your semester in Today.
           </p>
+          {snapshot.value && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Your unsent question is kept in this tab while we recheck. It will return when this
+              account’s Pro access is confirmed.
+            </p>
+          )}
           <button
             type="button"
             disabled={billing.isFetching}
-            onClick={() => void billing.refetch()}
+            onClick={checkAccess}
             className="mt-6 inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:brightness-95"
           >
             {billing.isFetching ? "Checking your plan…" : "Try again"}
           </button>
+          <p role="status" aria-live="polite" className="mt-3 text-sm text-muted-foreground">
+            {billing.isFetching ? "Checking your plan…" : ""}
+          </p>
+          <Link
+            to="/dashboard"
+            className="mt-4 inline-flex min-h-11 items-center px-3 text-sm font-semibold underline underline-offset-4"
+          >
+            Back to Today
+          </Link>
         </div>
       </main>
     );
   }
 
-  if (access === "free") return <AskProIntroduction />;
-  return <Ask />;
+  if (access === "free")
+    return (
+      <AskProIntroduction
+        checking={billing.isFetching}
+        accessChecked={accessChecked}
+        onCheckAccess={checkAccess}
+      />
+    );
+  return <Ask key={userId} initialDraft={snapshot.value} onDraftChange={rememberDraft} />;
 }
 
-function AskProIntroduction() {
+function AskProIntroduction({
+  checking,
+  accessChecked,
+  onCheckAccess,
+}: {
+  checking: boolean;
+  accessChecked: boolean;
+  onCheckAccess: () => void;
+}) {
   return (
     <main className="min-h-[calc(100vh-73px)] bg-background px-4 py-10 sm:px-6 sm:py-14">
       <div className="mx-auto max-w-4xl">
@@ -154,6 +229,32 @@ function AskProIntroduction() {
                 className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background px-4 text-sm font-semibold"
               >
                 Compare plans and allowances
+              </Link>
+              <button
+                type="button"
+                onClick={onCheckAccess}
+                disabled={checking}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background px-4 text-sm font-semibold disabled:opacity-50"
+              >
+                {checking ? "Checking access…" : "Already upgraded? Check access"}
+              </button>
+              <p
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className="text-sm leading-6 text-muted-foreground"
+              >
+                {checking
+                  ? "Checking your UniMate plan…"
+                  : accessChecked
+                    ? "This account is still on Free. If you just upgraded, wait a moment and check again using the same account."
+                    : ""}
+              </p>
+              <Link
+                to="/dashboard"
+                className="inline-flex min-h-11 items-center justify-center px-4 text-sm font-semibold underline underline-offset-4"
+              >
+                Back to Today
               </Link>
             </div>
             <p className="mt-4 text-xs leading-5 text-muted-foreground">
@@ -240,9 +341,30 @@ const starterPrompts = [
   },
 ];
 
-function Ask() {
+function Ask({
+  initialDraft,
+  onDraftChange,
+}: {
+  initialDraft?: string;
+  onDraftChange: (value: string) => void;
+}) {
   const search = Route.useSearch();
-  const [question, setQuestion] = useState(search.prompt || "");
+  const [question, setQuestionState] = useState(initialDraft ?? search.prompt ?? "");
+  const questionValueRef = useRef(question);
+  const setQuestion = useCallback(
+    (value: string | ((current: string) => string)) => {
+      const next = typeof value === "function" ? value(questionValueRef.current) : value;
+      questionValueRef.current = next;
+      setQuestionState(next);
+      onDraftChange(next);
+    },
+    [onDraftChange],
+  );
+  const lastHandoff = useRef({ prompt: search.prompt, course: search.course });
+  useEffect(() => {
+    // Include an untouched URL handoff or restored draft, not only later typing.
+    onDraftChange(questionValueRef.current);
+  }, [onDraftChange]);
   const [selectedCourseId, setSelectedCourseId] = useState(search.course || "");
   const [sendError, setSendError] = useState<{
     message: string;
@@ -280,10 +402,13 @@ function Ask() {
   ).length;
 
   useEffect(() => {
-    if (search.prompt) setQuestion(search.prompt);
+    const changed =
+      lastHandoff.current.prompt !== search.prompt || lastHandoff.current.course !== search.course;
+    if (changed && search.prompt) setQuestion(search.prompt);
+    lastHandoff.current = { prompt: search.prompt, course: search.course };
     setSelectedCourseId(search.course || "");
     setSendError(null);
-  }, [search.prompt, search.course]);
+  }, [search.prompt, search.course, setQuestion]);
 
   activeUserIdRef.current = userId;
   selectedConversationIdRef.current = selectedConversationId;

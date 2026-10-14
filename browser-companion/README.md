@@ -1,10 +1,17 @@
 # UniMate Browser Companion
 
-Implementation notes updated October 12, 2026. Automated checks do not establish
-that a production deployment, Store listing, or real installed-Chrome test has
-passed. See the release gates below.
+Implementation notes updated October 13, 2026. The current candidate passes local
+regressions, 23 synthetic browser scenarios, protected deployment smoke checks,
+and an owner-authenticated screenshot/AI/save/reload flow on the same Preview.
+No public-production or Store release has occurred. See the evidence and
+remaining gates below.
 
-A Chrome Manifest V3 extension that adds a persistent UniMate mascot and Pro-only
+Contact update October 13, 2026: local Privacy, Terms, and Support pages now use
+the owner-created `unimatesupport@gmail.com` inbox. The hosted evidence below
+predates this contact-only edit; deployment and mailbox delivery verification
+remain outstanding.
+
+A Chrome 106+ Manifest V3 extension that adds a persistent UniMate mascot and Pro-only
 screenshot-aware tutor to ordinary web pages.
 
 ## Run in development
@@ -25,8 +32,10 @@ screenshot-aware tutor to ordinary web pages.
 5. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**,
    and select the `browser-companion` directory.
 6. Open any regular `http`, `https`, or permitted `file` page and click the
-   yellow mascot. Review the consent notice, then sign in with an existing
-   UniMate account. Free accounts can open the Pro upgrade page, but cannot
+   yellow mascot. Review the consent notice, then choose **Sign in securely**.
+   Enter your existing UniMate credentials only in the private extension-owned
+   window, never in an overlay on the coursework website. Return to your page;
+   open companion panels reconnect automatically. Free accounts can open the Pro upgrade page, but cannot
    collect page context or send Companion AI requests. Validate paid access
    through the approved billing flow; do not edit profile flags to unlock users.
 
@@ -38,6 +47,11 @@ the consent version in `background.js` so students are asked again.
 After changing extension files, click **Reload** on the extension card and
 refresh open pages. Chrome blocks extensions on internal pages such as
 `chrome://`, the Chrome Web Store, and some browser-owned viewers.
+The owner-preview runner always reloads/reopens a resumed isolated profile before
+supplying its short-lived preview token, then checks required worker capabilities
+and fails closed if they are missing. Capability checks alone cannot detect every
+same-version edit. A cached MV3 worker was observed despite updated files; increment
+the extension version for every public release.
 
 ## V2 experience
 
@@ -49,18 +63,32 @@ refresh open pages. Chrome blocks extensions on internal pages such as
   flashcard, quiz-me, or general help, then responds as a concise tutor.
 - Answers lead with the result and brief work. UniMate does not inventory the
   page or produce browser-analysis reports.
+- All 4,000 characters accepted by the composer reach the backend, including
+  trailing instructions; compact page-context limits are separate.
 
 ## Architecture
 
 - `content.js` owns the isolated Shadow DOM panel, fresh on-demand context
   collection, runtime diagnostics, and message display.
-- `context-extractor.js` is deliberately small. It samples only rendered
-  viewport content, selection context, form labels/states, title, and URL. It
-  does not perform question ranking or academic reasoning.
+- `context-extractor.js` samples bounded rendered text, explicit selection
+  context, title, and a query/fragment-free URL. It excludes editable controls
+  and follows composed-tree, overflow, and frame geometry. Partially clipped
+  text nodes and supplemental iframe text with transformed/zoomed frame ancestry
+  are conservatively omitted. This is geometric clipping, not
+  arbitrary visual-occlusion detection or screenshot redaction; visible pixels
+  and deliberately selected text remain explicitly submitted context. It does
+  not perform question ranking or academic reasoning.
 - `background.js` validates auth/Pro access, captures the sender's active tab,
   calls the existing screenshot-analysis backend, stores messages, and recovers
   content-script messaging after extension reloads. When Chrome genuinely
   blocks capture, compact text context is used if available.
+- Capture preparation/restoration is bound to the initiating document and a
+  unique lease. An eight-second total deadline rejects late pixels; an independent
+  content watchdog restores the interface if the worker dies while it is hidden.
+  Compatible duplicate injection preserves the existing panel and draft.
+- `signin.html` owns credential entry in a private extension-origin window.
+  Host websites never receive its password events. The background rejects
+  password sign-in messages from content scripts and other origins.
 - `background.js` owns credentials and network traffic. It signs into the same
   Supabase Auth project, refreshes tokens, validates each session through
   `/auth/v1/user`, requests the server-owned `/api/billing-status` decision, and
@@ -68,7 +96,16 @@ refresh open pages. Chrome blocks extensions on internal pages such as
   overrides consistent between the website and extension.
 - AI reasoning and intent handling live on the UniMate backend. The server uses
   OpenAI; no AI provider key belongs in the extension. Only the public Supabase
-  client configuration and HTTPS UniMate origin are packaged.
+  client configuration and HTTPS UniMate origin are packaged. The config generator
+  rejects privileged/secret keys before writing configuration; it accepts only
+  a public publishable key or legacy `anon` key. This hardening did not change or
+  rotate the existing project key.
+- The tutor distinguishes authored academic teaching from claims about submitted
+  sources. Worked calculations, hints, explanations, and labeled practice may
+  introduce numbers without pretending they appeared on the page. Page/course
+  facts, empirical statistics, exact quotations, unseen sources, and claimed
+  answer keys still require evidence. This provenance guard is not a general
+  factual or mathematical correctness checker, nor independent screenshot OCR.
 - Each user and assistant message is stored in `companion_chats`. RLS restricts
   SELECT and INSERT to rows where `auth.uid() = user_id`.
 - The web app's **Ask UniMate** page reads and writes the same authenticated
@@ -80,12 +117,19 @@ refresh open pages. Chrome blocks extensions on internal pages such as
   writes messages belonging to the selected conversation.
 - Extension auth is stored in `chrome.storage.local`, isolated from websites.
   It uses the existing UniMate account and does not create a second account.
+- Sign-in and sign-out send token-free notifications to open panels. A sign-out
+  clears cached chat data immediately and invalidates in-flight replies.
+- Save retries reuse stable message IDs. A bounded, browser-session-only journal
+  recovers generated answers after service-worker restarts without retaining
+  screenshots, page samples, or tokens. It is cleared on sign-out.
 - Same-page follow-ups survive panel reopening. A navigation or conversation
   switch resets the model's local page history; older saved messages remain
   visible but are not evidence about the new page.
 - Failed questions remain in the composer. An answer that could not sync has a
   save-only retry, with no second model call. Provider billing/configuration
   outages retain the question without asking the student to upgrade or retry.
+- Provider-truncated text and vision answers return a retryable error, not partial
+  success. The question remains available; there is no hidden provider retry.
 - Page sharing can be paused from the panel. Consent is checked again immediately
   before capture and before the context is sent to the backend.
 
@@ -104,8 +148,8 @@ context and never triggers a request.
 - Streaming responses, in-panel conversation management/export, and retention
   settings. Named conversation selection and deletion already exist in Ask UniMate.
 - Optional per-site permissions instead of broad host access.
-- Store screenshots and promotional artwork, automated Playwright extension
-  tests, opt-in telemetry, and Chrome Web Store submission.
+- Store screenshots and promotional artwork, opt-in telemetry, and Chrome Web
+  Store submission.
 - Streaming responses and a dedicated backend companion endpoint if the
   screenshot tutor contract eventually diverges from existing endpoints.
 
@@ -117,8 +161,8 @@ context and never triggers a request.
   gap but Chrome cannot preserve DOM across navigation.
 - Broad `<all_urls>` access is necessary for the persistent companion and will receive
   scrutiny during store review. Persistent injection on every ordinary site is
-  incompatible with `activeTab`-only access. The extractor skips password,
-  email, and telephone values but visible page text can still be sensitive.
+  incompatible with `activeTab`-only access. The extractor excludes editable
+  controls, but explicitly shared screenshots and selected text can still be sensitive.
 - The extension checks `/api/billing-status` before every chat call, and the
   Companion backend entry points independently enforce server-side entitlement.
   The existing profile boolean remains a fast cache while Stripe reconciliation
@@ -137,8 +181,10 @@ limits. The other reports below document the V1 history retained for reference.
 See `V1_BLOCKERS_REPORT.md` for numbered-question relevance, host event
 isolation, development diagnostics, and their dedicated verification fixtures.
 
-See `HALLUCINATION_GROUNDING_REPORT.md` for the strict provenance contract,
-regeneration guard, adversarial tests, and remaining grounding limitations.
+See `HALLUCINATION_GROUNDING_REPORT.md` for historical grounding investigations.
+Its regeneration/arithmetic-guard descriptions are not the current contract:
+the current provenance guard uses one model call and a safe fallback, not a hidden
+regeneration request or an arithmetic exception whitelist.
 
 See `RUNTIME_STABILITY_REPORT.md` for content-script recovery, screenshot error
 classification, connection diagnostics, repeated multi-tab tests, and the final
@@ -154,21 +200,137 @@ and operational blockers that must be closed before submission.
 
 ## Release gates
 
+### Current candidate evidence — October 13, 2026
+
+| Requirement                                                 | Evidence                                                                                                                                                                                                                                                              | Remaining boundary                                                                                                                      |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Warm, useful academic help without invented source evidence | Executable regressions cover hints, worked math, ordinary academic facts, labeled practice, detailed explanations, missing targets, fabricated statistics/quotes/keys, and source-attribution bypasses.                                                               | Heuristic provenance checks do not prove general answer correctness or independently read screenshot pixels.                            |
+| Safe failure and recovery                                   | Actual text/vision provider helpers reject truncation without partial success or hidden retries; auth outages fail closed without treating them as an invalid password/session. Installed transport recovery and deterministic ambiguous-request classification pass. | Real provider failures remain environment-dependent; no live outage was induced.                                                        |
+| Prompt and privacy fidelity                                 | Full 4,000-character question reaches analysis; transformed/zoomed iframe text is omitted conservatively; generator rejects privileged keys before writing public config.                                                                                             | Screenshots still contain intentionally shared visible pixels; this is not screenshot redaction. Existing credentials were not changed. |
+| Installed interaction and accessibility                     | Final run: 23 synthetic Chromium scenarios and nine fake AI calls. Covers consent, secure sign-in, Free/Pro, capture, save/transport recovery, same-URL document guards, focus/keyboard, worker termination, reinjection, privacy, and accessibility-tree checks.     | Manual spoken screen-reader verification remains outstanding.                                                                           |
+| Hosted auth, AI, persistence, and quotas                    | Current protected Preview passed owner screenshot → real answer → save/readback → reload; aggregate usage advanced once, with zero provider errors. SQL/runtime/concurrency tests are recorded in `../AI_ENTITLEMENT_ROLLOUT.md`.                                     | Public production, live quota exhaustion, and billing lifecycle verification remain separate.                                           |
+
+Final browser artifacts:
+`/var/folders/g_/w0fds03j2zs7m1y__2z7j6h40000gn/T/unimate-companion-browser-3nX7cR`.
+The full application tests, protected-preview suite, typecheck, build, Vercel
+build verification, secret scan, and lint pass; lint retains eight preexisting
+warnings. Synthetic browser requests do not contact the paid provider.
+
+Capture preserves the composer cursor unless the user has moved focus to the host
+page; async answers/history do not steal that focus. The non-modal panel supports
+native Tab exit and IME-safe Escape, speaker labels, reduced motion, and tested
+small-text contrast. Trusted mouse-wheel tests cover small-window recovery without
+scrolling the coursework. These automated checks are not a substitute for a person
+listening with a screen reader.
+
+### Current protected Preview proof
+
+- `https://unimate-lxccy367v-resumejuice-s-projects.vercel.app`
+  (`dpl_8Q2ZiuJJSGP21wywWFsoZH7zL1cP`) is `READY`, target `null` (Preview),
+  protected by `vercel_authentication`. Source audit:
+  `.vercel/upload-audits/source-Wja4Tr/manifest.json` (137 files, 9,091,915 bytes).
+  The upload manifest was asserted unchanged before deployment. This was the
+  local dirty source atop `9011f8c`, not a committed release.
+- Smoke checks passed: health 200 (`status:ready`, `ai:ready`), signup status
+  200 (`enabled:false`), unsigned valid Companion request 401 (`AUTH_REQUIRED`),
+  and anonymous root request 302 to Vercel SSO.
+  Post-deploy metadata confirmed `ssoProtection:all_except_custom_domains`,
+  `autoAssignCustomDomains:false`, zero bypass credentials, zero Production
+  variables, and 11 Preview variables. Protected-access checks and secret scan pass.
+- After the mandatory isolated-profile reload, current worker capabilities,
+  authenticated Pro access, and consent were verified. The installed extension
+  sent one fictional biology screenshot and received a correct mitochondria
+  answer (POST 200), saved two synthetic messages (POST 201), read them back
+  (GET 200), and restored history after reload. The isolated browser was closed.
+- That one paid question increased the successful `browser_companion` ledger,
+  screenshot monthly/daily counts, and global request count from three to four;
+  provider errors remained zero. There are now four synthetic question/answer
+  pairs (eight messages) since the backup, including this latest pair. No public
+  launch, domain connection, or Stripe change occurred.
+
+### Historical hosted and live-model evidence
+
+- `https://unimate-clbphi1j3-resumejuice-s-projects.vercel.app`
+  (`dpl_8ZUtaDTxBK2K6jqkokV3Di8Jn2MG`) is an earlier protected smoke-tested
+  Preview, **not the current candidate**. It contains the older discount-only
+  correction. Source audit: `.vercel/upload-audits/source-yE9qcB/manifest.json`
+  (137 files, 9,093,866 bytes). Identity/READY checks, health 200, signup disabled,
+  unsigned request 401, and unauthenticated visitor SSO redirect passed without
+  AI calls or database writes.
+- The earlier owner-authenticated full-flow proof is
+  `https://unimate-7blad7yjh-resumejuice-s-projects.vercel.app`
+  (`dpl_BRyCm6MqEEwpP3oToz6XmmSXFLwi`). Fictional biology screenshot → real
+  mitochondria answer 200 → save 201 → readback 200 → reload history passed.
+  Source audit: `.vercel/upload-audits/source-TI3kgK/manifest.json`
+  (137 files, 9,091,919 bytes). No Pro entitlement was changed. These historical
+  local/hosted checks saved three synthetic question/answer pairs in total;
+  accounting and backup boundaries are recorded in `../AI_ENTITLEMENT_ROLLOUT.md`.
+- The original eleven-case live evaluation met **10/11** objective checks under
+  an aggregate 4,000-completion-token ceiling. Its sole failure was a correct
+  discount answer blocked by the former numeric guard. The current policy
+  replaces that arithmetic whitelist with provenance-vs-teaching checks; the
+  exact captured answer passes offline. The historical run was not altered or
+  rerun and is not evidence of 11/11 live success on this candidate. The current
+  single biology screenshot check above is not an eleven-case rerun. Earlier
+  six-case live success is likewise bounded historical evidence, not a quality
+  guarantee. The completion-token ceiling is separate from the 4,000-character
+  composer limit.
+- At the recorded hosted checks, protection was enabled, persistent bypasses
+  were absent, Production had no environment variables, and 11 Preview variables
+  were scoped to Preview with automatic custom-domain assignment disabled.
+  Owner passwords were entered only in the extension-origin window; short-lived
+  test access stayed in memory. The existing $25 provider ceiling was checked
+  before paid tests, not exhausted to prove its behavior.
+
+### Repeatable verification
+
+- `npm run companion:test` runs offline behavior and packaging checks.
+- `npm run companion:test:browser` loads the unchanged runtime into a disposable
+  Chromium profile and drives the consent, secure sign-in, Free/Pro, screenshot,
+  follow-up, save-retry, error, navigation, keyboard focus, worker restart,
+  reinjection, restricted pages, and small-window flows. It requires
+  Playwright and its Chromium browser. If supplied by an external runtime, set
+  `PLAYWRIGHT_MODULE_PATH` to its `playwright/index.mjs` and
+  `PLAYWRIGHT_BROWSERS_PATH` to the installed browser directory.
+  Test services and accounts are synthetic; this is not a production billing,
+  Supabase, or AI integration test. Screenshots stay in a printed temporary directory.
+- `node scripts/preview-companion.mjs` opens an isolated, owner-operated Chrome
+  preview using the generated public extension config. After private owner
+  sign-in, its terminal accepts `status`, `verify`, and `close`. `verify` sends
+  one fictional coursework question to the configured live backend/provider and
+  saves two messages to the owner's selected conversation; use only with the
+  owner's approval and configured budget. It never grants Pro or reads a password.
+- `npm run companion:eval:live` is deliberately separate from the normal suite.
+  It runs bounded real-provider cases with synthetic coursework only and
+  requires explicit owner approval, a configured provider budget, and
+  `UNIMATE_LIVE_AI_EVAL=approved`. Never run it automatically in CI.
+
+### Production gates
+
 1. Verify the production backend, paid-Pro entitlement, required migrations,
-   durable quota flags, and an approved provider spending ceiling. The owner's
-   current $25/month AI budget is an authorization, not evidence that a provider
-   or application-side cap has been applied.
+   durable quota flags, and provider spending ceiling in the actual release
+   environment. The dedicated OpenAI project's $25/month limit is verified;
+   database migrations and protected-Preview quota enforcement are verified;
+   carrying and verifying this configuration in public production remains a gate.
+   Verify the production billing lifecycle separately; using an existing Pro
+   account does not test purchase, renewal, cancellation, or entitlement removal.
 2. Confirm the canonical domain, published privacy/terms/support pages, monitored
    support mailbox, asset rights, and publisher-account/listing details.
 3. Configure a production HTTPS origin with debug disabled. Run
    `npm run companion:package`; the ZIP includes only approved runtime files,
    has `manifest.json` at its root, and rejects unsafe client configuration.
    This command creates a local archive only; it does not upload or publish.
+   Current generated configuration uses `http://localhost:8080` and is correctly
+   rejected for production packaging. Increment the manifest version before release.
 4. Test that exact release in real Chrome with synthetic coursework and isolated
    Free/Pro accounts. Cover consent decline/pause, paid unlock, active-tab
-   capture, reload recovery, chat sync, sign-out, and restricted pages. Live AI
-   tests require the approved budget to be configured first.
+   capture, reload recovery, chat sync, sign-out, restricted pages, and a manual
+   spoken screen-reader pass. Live AI tests require the approved budget first.
 5. Prepare current listing screenshots and promotional artwork, submit through
    the approved publisher account, and obtain the listing URL. Set
    `VITE_COMPANION_STORE_URL` to the verified Chrome Web Store detail URL and
    redeploy the website so Pro users see the install action.
+
+No public-domain, Stripe, or Chrome Web Store launch was performed. The current
+protected Preview proof does not clear the public-release gates above; the
+historical live evaluation remains 10/11 until a separately approved rerun.

@@ -1,5 +1,6 @@
 {
   "manifest_version": 3,
+  "minimum_chrome_version": "106",
   "name": "UniMate Browser Companion",
   "description": "Ask questions about the page in front of you with UniMate's screenshot-aware AI study companion.",
   "version": "1.0.0",

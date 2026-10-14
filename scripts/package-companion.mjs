@@ -74,6 +74,8 @@ if (!anonKey || /YOUR_|PLACEHOLDER/i.test(validatedValues)) {
   throw new Error("Replace placeholder Companion configuration before Store packaging.");
 }
 if (anonKey.split(".").length === 3) {
+  if (anonKey.split(".").some((part) => !/^[A-Za-z0-9_-]+$/.test(part)))
+    throw new Error("The Companion public client key is malformed.");
   let role;
   try {
     role = JSON.parse(Buffer.from(anonKey.split(".")[1], "base64url").toString("utf8")).role;
@@ -84,7 +86,7 @@ if (anonKey.split(".").length === 3) {
     throw new Error(
       "Secret-like content detected in Companion configuration: only an anon JWT or public publishable key is permitted.",
     );
-} else if (!anonKey.startsWith("sb_publishable_")) {
+} else if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(anonKey)) {
   throw new Error("The Companion requires a public Supabase publishable key or anon JWT.");
 }
 
@@ -95,6 +97,9 @@ const packageFiles = [
   "background.js",
   "content.js",
   "context-extractor.js",
+  "signin.html",
+  "signin.js",
+  "signin.css",
   "config.local.js",
   "assets/mascot.png",
   ...[16, 32, 48, 128].map((size) => `assets/icons/icon${size}.png`),

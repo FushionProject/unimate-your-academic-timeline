@@ -24,7 +24,7 @@ function friendlyAuthError(message: string, code?: string) {
     return "We couldn't reach UniMate. Check your connection and try again.";
   }
   if (code === "weak_password" || lower.includes("weak") || lower.includes("password")) {
-    return "Use a stronger password with at least 6 characters.";
+    return "Use a stronger password with at least 8 characters.";
   }
   if (code === "user_already_exists" || lower.includes("already") || lower.includes("registered")) {
     return "An account already exists for this email. Try signing in instead.";
@@ -33,10 +33,10 @@ function friendlyAuthError(message: string, code?: string) {
     return "Too many signup attempts. Wait a moment, then try again.";
   }
   if (code === "signup_disabled") return "New account creation is temporarily unavailable.";
-  if (code === "network_error") {
-    return "We couldn't reach UniMate. Check your connection and try again.";
+  if (code === "email_address_not_authorized" || lower.includes("error sending confirmation")) {
+    return "We couldn't send your confirmation email right now. Please try again later or contact support.";
   }
-  return message || "We could not create your account. Please try again.";
+  return "We couldn't create your account right now. Please try again later or contact support.";
 }
 
 function SignUp() {
@@ -142,7 +142,7 @@ function SignUp() {
                 id="signup-password"
                 type={showPassword ? "text" : "password"}
                 required
-                minLength={6}
+                minLength={8}
                 autoComplete="new-password"
                 aria-invalid={Boolean(error)}
                 aria-describedby={
@@ -169,7 +169,7 @@ function SignUp() {
               </button>
             </div>
             <p id="signup-password-hint" className="text-xs text-muted-foreground">
-              Use at least 6 characters.
+              Use at least 8 characters.
             </p>
           </div>
           {error && (

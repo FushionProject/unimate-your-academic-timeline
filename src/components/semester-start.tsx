@@ -57,7 +57,7 @@ export function SemesterStart({
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             {deadlineCount === 0
-              ? "Upload a syllabus, check the dates, and let UniMate bring the next deadline into focus."
+              ? "Upload a syllabus and check the dates, or add your class and deadlines yourself. Either way, your plan starts here."
               : "Pick the assignment below. If you’re unsure where to begin, UniMate can help you break it into manageable steps."}
           </p>
         </div>
@@ -83,12 +83,12 @@ export function SemesterStart({
             {courseCount ? "Add my syllabus" : "Bring in my first class"}{" "}
             <ArrowRight className="h-4 w-4" />
           </Link>
-          <Link
-            to="/ask"
+          <a
+            href={courseCount ? "#deadline-setup" : "#course-setup"}
             className="text-sm font-medium text-muted-foreground hover:text-foreground"
           >
-            No syllabus yet? Ask a study question
-          </Link>
+            {courseCount ? "Add a deadline myself" : "No syllabus yet? Add a class myself"}
+          </a>
         </div>
       )}
     </section>

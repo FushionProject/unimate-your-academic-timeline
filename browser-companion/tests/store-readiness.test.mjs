@@ -35,10 +35,25 @@ assert.match(content, /It does not record continuously/);
 assert.match(content, /Allow and continue/);
 assert.match(content, /Not now/);
 assert.match(content, /https:\/\/unimate\.site\/privacy/);
+for (const route of ["privacy", "terms", "support"]) {
+  const source = fs.readFileSync(new URL(`../../src/routes/${route}.tsx`, import.meta.url), "utf8");
+  assert.match(
+    source,
+    /<a\b[^>]*href="mailto:unimatesupport@gmail\.com"[^>]*>\s*unimatesupport@gmail\.com\s*<\/a>/,
+    `${route} must link to and display the owner-provided support inbox`,
+  );
+  assert.doesNotMatch(source, /support@unimate\.site/i, `${route} must not use the canceled inbox`);
+}
 assert.match(background, /PRIVACY_CONSENT_VERSION = 1/);
-assert.match(
-  background,
-  /async function sendChat\(payload, sender\) \{\s*await requirePrivacyConsent\(\);/,
+const sendChatBody =
+  background.match(
+    /async function sendChat\(payload, sender\) \{([\s\S]*?)\nchrome\.runtime\.onMessage/,
+  )?.[1] || "";
+assert.ok(
+  sendChatBody.includes("await requirePrivacyConsent();") &&
+    sendChatBody.indexOf("await requirePrivacyConsent();") <
+      sendChatBody.indexOf("await requireProSession();") &&
+    sendChatBody.indexOf("await requirePrivacyConsent();") < sendChatBody.indexOf("executeChat("),
   "privacy consent must be checked before any chat capture or transmission",
 );
 assert.match(packageScript, /must use a non-local HTTPS origin/);
@@ -87,7 +102,14 @@ try {
   const extension = path.join(fixture, "browser-companion");
   fs.mkdirSync(path.join(extension, "assets", "icons"), { recursive: true });
   fs.writeFileSync(path.join(extension, "manifest.json"), JSON.stringify(manifest));
-  for (const file of ["background.js", "content.js", "context-extractor.js"]) {
+  for (const file of [
+    "background.js",
+    "content.js",
+    "context-extractor.js",
+    "signin.html",
+    "signin.js",
+    "signin.css",
+  ]) {
     fs.writeFileSync(path.join(extension, file), "// isolated package fixture\n");
   }
   fs.copyFileSync(
@@ -128,6 +150,81 @@ try {
     { cwd: fixture, stdio: "pipe" },
   );
   const generatedConfig = fs.readFileSync(configFile, "utf8");
+  const generator = fileURLToPath(
+    new URL("../../scripts/configure-companion.mjs", import.meta.url),
+  );
+  const serviceFixture = `header.${Buffer.from(JSON.stringify({ role: "service_role" })).toString("base64url")}.signature`;
+  const generatorEnv = {
+    VITE_SUPABASE_URL: "https://project.supabase.co",
+    VITE_SUPABASE_ANON_KEY: "sb_publishable_fixture_only",
+    VITE_UNIMATE_API_URL: "https://unimate.site",
+  };
+  const anonFixture = `header.${Buffer.from(JSON.stringify({ role: "anon" })).toString("base64url")}.signature`;
+  for (const overrides of [
+    { VITE_SUPABASE_ANON_KEY: anonFixture },
+    { VITE_UNIMATE_API_URL: "http://127.0.0.1:8080/" },
+    {
+      VITE_SUPABASE_URL: "https://project.supabase.co/",
+      VITE_UNIMATE_API_URL: "https://unimate.site/",
+    },
+  ]) {
+    fs.writeFileSync(
+      path.join(fixture, ".env.local"),
+      Object.entries({ ...generatorEnv, ...overrides })
+        .map(([key, value]) => `${key}=${value}`)
+        .join("\n"),
+    );
+    execFileSync(process.execPath, [generator], { cwd: fixture, stdio: "pipe" });
+    const accepted = fs.readFileSync(configFile, "utf8");
+    assert.ok(
+      accepted.includes(
+        JSON.stringify(overrides.VITE_SUPABASE_ANON_KEY || generatorEnv.VITE_SUPABASE_ANON_KEY),
+      ),
+    );
+    assert.ok(
+      accepted.includes(
+        JSON.stringify(
+          new URL(overrides.VITE_UNIMATE_API_URL || generatorEnv.VITE_UNIMATE_API_URL).origin,
+        ),
+      ),
+      "Normalize origins so runtime requests cannot acquire double slashes",
+    );
+  }
+  fs.writeFileSync(configFile, generatedConfig);
+  for (const overrides of [
+    { VITE_SUPABASE_ANON_KEY: "sb_secret_fixture_only" },
+    { VITE_SUPABASE_ANON_KEY: serviceFixture },
+    { VITE_SUPABASE_ANON_KEY: "sb_publishable_" },
+    { VITE_SUPABASE_ANON_KEY: "YOUR_SUPABASE_ANON_KEY" },
+    { VITE_SUPABASE_ANON_KEY: "not-a-public-client-key" },
+    { VITE_SUPABASE_URL: "https://user:password@project.supabase.co" },
+    { VITE_SUPABASE_URL: "https://project.supabase.co/rest/v1" },
+    { VITE_UNIMATE_API_URL: "https://user:password@unimate.site" },
+    { VITE_UNIMATE_API_URL: "https://unimate.site/api?token=fixture" },
+  ]) {
+    fs.writeFileSync(
+      path.join(fixture, ".env.local"),
+      Object.entries({ ...generatorEnv, ...overrides })
+        .map(([key, value]) => `${key}=${value}`)
+        .join("\n"),
+    );
+    const rejected = spawnSync(process.execPath, [generator], { cwd: fixture, encoding: "utf8" });
+    assert.notEqual(
+      rejected.status,
+      0,
+      "Unsafe settings must be rejected before configuration is written",
+    );
+    assert.equal(
+      fs.readFileSync(configFile, "utf8"),
+      generatedConfig,
+      "Keep the previous usable configuration on failure",
+    );
+    for (const value of Object.values(overrides))
+      assert.ok(
+        !`${rejected.stdout}${rejected.stderr}`.includes(value),
+        "Never echo rejected configuration values",
+      );
+  }
   // Equivalent escaped literals must be decoded before checks and canonical output.
   fs.writeFileSync(
     configFile,
@@ -145,7 +242,10 @@ try {
     entries.includes("manifest.json"),
     "Store archive must contain manifest.json at its root",
   );
-  assert.equal(entries.length, 10, "Only approved runtime files and assets are packaged");
+  assert.equal(entries.length, 13, "Only approved runtime files and assets are packaged");
+  for (const file of ["signin.html", "signin.js", "signin.css"]) {
+    assert.ok(entries.includes(file), "Secure extension-owned sign-in must ship with the runtime");
+  }
   assert.ok(
     !entries.some((entry) => entry.includes("unimate-browser-companion/") || entry.endsWith(".md")),
   );
@@ -175,6 +275,8 @@ try {
     { UNIMATE_API_URL: "https://unimate.site/api?token=fixture" },
     { COMPANION_DEBUG: true },
     { SUPABASE_ANON_KEY: "YOUR_SUPABASE_ANON_KEY" },
+    { SUPABASE_ANON_KEY: "sb_publishable_" },
+    { SUPABASE_ANON_KEY: "." + anonFixture.split(".").slice(1).join(".") },
     { SUPABASE_ANON_KEY: "sb_secret_fixture_only" },
     { SUPABASE_ANON_KEY: privilegedJwt },
   ]) {

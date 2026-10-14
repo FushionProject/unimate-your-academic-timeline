@@ -2,6 +2,13 @@
 
 Use isolated test accounts and test-mode services. Never paste keys into screenshots or issue reports. Record the date, tester, browser/device, deployment identifier, and pass/fail result for every case.
 
+For the current private Vercel test phase, use only an ownership-verified,
+protected Preview URL and keep signup/payment/provider controls scoped to the
+approved test. The public-domain checks below remain pending; do not disable
+deployment protection or assign the live domain to make a private check pass.
+Use Vercel deployment/function logs for that hosting path; Cloudflare/Worker
+diagnostics apply only if the Cloudflare build is selected for release.
+
 ## 1. Production and health
 
 1. Open `https://unimate.site/` in a private window.
@@ -43,7 +50,9 @@ Use isolated test accounts and test-mode services. Never paste keys into screens
 5. Add and delete a safe Bulletin Board link.
    - Expected: URL is validated/normalized; another signed-in test user cannot see the first user’s local board on the same browser profile after account switch.
 6. Open Ask UniMate without submitting a paid request.
-   - Expected: conversation selection, empty state, input, and history controls render; provider-unavailable test environment shows a typed, human-readable error.
+   - Expected: a Free user sees the Pro access gate. With a Pro test account,
+     conversation selection, empty state, input, and history controls render;
+     provider-unavailable requests show a typed, human-readable error.
 
 ## 4. Data isolation
 
@@ -57,7 +66,9 @@ Use isolated test accounts and test-mode services. Never paste keys into screens
 ## 5. AI failure behavior and usage controls
 
 1. In a non-production test environment, omit each provider key in turn.
-   - Expected: typed 503 configuration error; never a believable mock academic answer.
+   - Expected: study-AI requests return a typed 503 configuration error, never
+     a believable mock academic answer. Syllabus parsing may use its explicit
+     local extraction fallback; review/correction remains required before saving.
 2. Use a stub/provider sandbox to return 429 with `Retry-After`, timeout, empty answer, 500, and malformed JSON.
    - Expected: accurate error class, bounded retry only where designed, concise user recovery copy, no prompt/page/screenshot in logs.
 3. Verify approved per-user daily, minute-burst, and concurrency limits with two users.
@@ -94,6 +105,8 @@ Use isolated test accounts and test-mode services. Never paste keys into screens
 1. At 390 × 844, inspect landing, auth/recovery, dashboard, timeline, upload, results, Notes, Ask, Bulletin, and Upgrade.
    - Expected: no horizontal overflow, obscured input, or clipped action.
 2. Keyboard-only: use skip link, tab through every form/dialog, submit, close with Escape, and return focus.
-   - Expected: visible focus, logical order, no keyboard leakage from Companion into host page.
+   - Expected: visible focus and logical order. Companion is non-modal: Tab can
+     intentionally leave it for the host page, while typing/composer shortcuts
+     must not accidentally trigger host-page actions.
 3. Run VoiceOver on auth, syllabus upload, Dashboard, and Companion disclosure/chat.
    - Expected: names, roles, errors, progress, and conversation updates are understandable without sight.

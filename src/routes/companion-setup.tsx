@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { CheckCircle2, ExternalLink, LockKeyhole, MonitorCheck } from "lucide-react";
 import { ProtectedRoute } from "../components/protected-route";
 import { useBillingStatus } from "../lib/profile";
@@ -23,6 +23,7 @@ function CompanionSetup() {
   const billing = useBillingStatus();
   const access = getCompanionAccessState(billing);
   const isPro = access === "pro";
+  const [accessChecked, setAccessChecked] = useState(false);
 
   return (
     <main className="min-h-screen bg-background">
@@ -50,13 +51,17 @@ function CompanionSetup() {
             </h2>
             <ol className="mt-6 space-y-5">
               <SetupStep number="1" title="Confirm Companion access">
-                {access === "checking"
-                  ? "Checking your UniMate plan…"
-                  : access === "unknown"
-                    ? "We couldn’t check your plan right now. Try checking again below."
-                    : isPro
-                      ? "Your account has UniMate Pro. Companion access is ready."
-                      : "Start with your Free account, then upgrade to Pro. Companion unlocks only after your purchase is confirmed."}
+                <p role="status" aria-live="polite" aria-atomic="true">
+                  {billing.isFetching || access === "checking"
+                    ? "Checking your UniMate plan…"
+                    : access === "unknown"
+                      ? "We couldn’t confirm your plan right now. This doesn’t mean you need another subscription. Try checking again below."
+                      : isPro
+                        ? "Your account has UniMate Pro. Companion access is ready."
+                        : accessChecked
+                          ? "This account is still on Free. If you just upgraded, wait a moment and check again using the same account."
+                          : "Start with your Free account, then upgrade to Pro. Companion unlocks only after your purchase is confirmed."}
+                </p>
                 {access === "free" && (
                   <Link
                     to="/upgrade"
@@ -68,7 +73,11 @@ function CompanionSetup() {
                 <button
                   type="button"
                   disabled={billing.isFetching}
-                  onClick={() => void billing.refetch()}
+                  onClick={() => {
+                    if (billing.isFetching) return;
+                    setAccessChecked(true);
+                    void billing.refetch();
+                  }}
                   className="mt-3 block text-sm font-semibold text-foreground underline underline-offset-4 disabled:opacity-50"
                 >
                   {billing.isFetching
@@ -141,7 +150,7 @@ function CompanionSetup() {
                     : !isPro
                       ? "Installation locked until Pro is active"
                       : url
-                        ? "Public install link ready"
+                        ? "Store link configured · opens in Chrome Web Store"
                         : "Chrome Web Store link pending"
                 }
               />
@@ -161,7 +170,7 @@ function CompanionSetup() {
                 to="/ask"
                 className="inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"
               >
-                Continue to Ask UniMate
+                {isPro ? "Continue to Ask UniMate" : "Explore Ask UniMate · Pro"}
               </Link>
               <Link
                 to="/dashboard"

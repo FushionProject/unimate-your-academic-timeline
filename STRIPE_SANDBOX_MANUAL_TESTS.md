@@ -2,12 +2,45 @@
 
 Status: **test mode only**. Do not use live keys, enable `STRIPE_LIVE_MODE_ENABLED`, or make live charges while following this checklist.
 
+## Verified local sandbox evidence — October 13, 2026 local / October 14 UTC
+
+These are real Stripe sandbox → local UniMate server → Supabase results, not mock-handler results or a production billing launch. The dedicated UniMate sandbox is `acct_1UQHj2IxB8W4eFUh`; its verified active test Price is USD 599 cents monthly. A separately marked synthetic user was used; the existing owner account was not used for purchases.
+
+The billing prerequisite migration `20261014022343` was applied only after a fresh database backup and verified restore. The pre-existing 18 profiles had no billing fields changed; the 14 courses and 46 assignments were preserved. The new synthetic account started Free.
+
+| Check                         | Observed result                                                                                                                                                                                                                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Free baseline                 | Companion request rejected with 403 before purchase.                                                                                                                                                                                                                                                               |
+| Real browser Checkout         | Successful test payment; Checkout, invoice and subscription-created webhook deliveries returned 200; the synthetic profile became Pro.                                                                                                                                                                             |
+| Pro authorization             | Companion passed the Pro gate and returned `SCREENSHOT_UNAVAILABLE` in the intentionally provider-disabled harness. This is authorization evidence, **not** a paid AI answer or full installed-extension proof.                                                                                                    |
+| Portal scheduled cancellation | Real flexible-billing response used `cancel_at` with `cancel_at_period_end:false`. The resulting application status fix displayed the correct access-end date while keeping Pro active.                                                                                                                            |
+| End-of-period revocation      | Advancing the synthetic customer's test clock to period end + 1 produced a subscription-deleted delivery with 200; the database was Free and Companion returned 403 **before** the browser returned to UniMate.                                                                                                    |
+| Repurchase after clock expiry | Real browser Checkout created a new subscription while the old one remained canceled; exactly one subscription was active. Checkout, invoice and subscription-created deliveries returned 200; the synthetic profile became Pro at billing revision 14 and passed the provider-disabled Companion Pro gate.        |
+| Immediate cancellation        | The synthetic-only API cancellation returned `canceled` and subscription-deleted delivery returned 200. Before any app return, the database was Free at revision 15, billing status was non-Pro, and Companion returned 403 `PRO_REQUIRED`. Both sandbox subscriptions were canceled and the test clock was ready. |
+
+Renewal success/failure and recovery, refunds/disputes, duplicate/out-of-order real deliveries, parallel real purchases, and the remaining checklist scenarios are not certified by this run. Deterministic handler tests cover additional cases separately; they do not substitute for the unchecked manual matrix. No live credentials, live charges, public billing deployment, domain change, or Chrome Web Store release is approved by these results.
+
+### Controlled local helpers
+
+Private configuration belongs only in ignored `.env.local` (Supabase) and `.env.stripe.local` (test billing), never in shell arguments, documentation, browser bundles or logs. After operator review and authorization:
+
+```sh
+UNIMATE_STRIPE_TEST_SETUP=approved node scripts/prepare-stripe-sandbox.mjs --prepare
+UNIMATE_STRIPE_TEST_LISTEN=approved node scripts/run-stripe-sandbox.mjs --listen
+```
+
+Preparation validates the exact account, project and Price before creating one marked synthetic user, saves credentials in a private ignored journal, and stops on uncertain creation outcomes rather than blindly retrying. It does not reset an account that has already entered the billing lifecycle.
+
+The supervisor validates the same targets, requires port 8080 to be free, and starts its own strict localhost server plus the `unimate-sandbox` CLI listener with `--events-from @self` and an explicit handled-event list. The webhook secret remains in memory; only allowlisted event names and delivery status codes are reported. AI credentials are absent, paid calls are disabled, screenshot/web AI are disabled, and public signup/developer Pro overrides stay disabled. This uses `AI_SYSTEM_MODE=degraded` so authorization can be tested; it is not an AI functionality test.
+
+Before sending authenticated lifecycle-helper requests, independently verify that port 8080 belongs to the expected supervisor child and repository working directory (PID/parent ancestry, not just a successful health response). Stop only that owned supervisor; it shuts down its own children. Private environment, sandbox-journal, backup and generated-server paths are blocked by the local server. The separate lifecycle and test-clock helpers remain operator-controlled: review their action and target before each mutation; never advance an unrelated clock or mutate an existing owner account.
+
 ## Test setup
 
 1. Use a dedicated Supabase test user and a Stripe test-mode recurring Price.
 2. Configure server-only test values: `STRIPE_SECRET_KEY=sk_test_...` (or a least-privilege `rk_test_...` key), `STRIPE_PRICE_ID=price_...`, `STRIPE_WEBHOOK_SECRET=whsec_...`, `STRIPE_LIVE_MODE_ENABLED=false`, `STRIPE_PRO_MONTHLY_AMOUNT_CENTS=599`, `STRIPE_PRO_CURRENCY=usd`, `UNIMATE_CANONICAL_ORIGIN=http://localhost:8080`, and `SUPABASE_SERVICE_ROLE_KEY=...`.
-3. Point the Stripe CLI at the local server: `stripe listen --forward-to http://localhost:8080/api/stripe-webhook`, then copy its test webhook secret into the local server environment.
-4. Keep the browser DevTools Network panel, local server output, Stripe test-event log, and the test user's `profiles.is_pro` and `profiles.stripe_customer_id` values available for inspection. Never paste credentials into tickets or logs.
+3. Use the controlled supervisor above instead of a raw listener command or copying a webhook secret. The current Stripe CLI requires an explicit `--events`, `--all-snapshot`, or `--all-thin` selection when forwarding; the supervisor supplies the scoped handled-event list.
+4. Keep browser Network responses, the supervisor's sanitized event/delivery summaries, Stripe test-event log, and the synthetic user's `profiles.is_pro` and `profiles.stripe_customer_id` values available for inspection. Never paste credentials into tickets or logs; raw child diagnostics are intentionally withheld.
 5. Run `npm run billing:test` before and after the manual sequence.
 
 ## 1. Successful checkout
@@ -38,7 +71,7 @@ Inspect failures in: Stripe webhook delivery response codes, local server output
 3. Return to UniMate and refresh billing status.
 4. Advance the related Stripe test clock beyond the period end, or complete the terminal cancellation in Stripe test mode.
 
-Expected: before period end, state is `canceling` and Pro remains available. After the terminal event, state becomes canceled and Pro is revoked on the website and Browser Companion.
+Expected: before period end, state is `canceling` and Pro remains available. Recognize both `cancel_at_period_end:true` and a scheduled `cancel_at`; `canceled_at` can be the request time, not the end of access. Use the Stripe test clock, not the machine's wall clock, for clock advancement. After the terminal event, state becomes canceled and Pro is revoked on the website and Browser Companion.
 
 Inspect failures in: `/api/create-portal-session`, `/api/billing-status`, Stripe subscription status and event deliveries, the test profile, and Companion entitlement response.
 
@@ -134,6 +167,8 @@ Expected: each event re-fetches and reconciles the current subscription. A refun
 Inspect failures in: charge, dispute, invoice, and subscription event timelines; webhook responses; `/api/billing-status`; and the profile.
 
 ## 13. Database uniqueness safeguard
+
+Historical procedure below is for disposable validation only. The approved additive prerequisite migration `20261014022343` (customer binding, uniqueness and billing revision protection) has now been applied and verified as recorded above; do not reapply older hardening scripts as part of this manual sequence.
 
 1. Before applying any SQL, query the test database for duplicate non-null `stripe_customer_id` values.
 2. Review `supabase/stripe_billing_hardening.sql` and `supabase/stripe_billing_hardening_rollback.sql`.

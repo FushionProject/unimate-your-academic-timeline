@@ -11,6 +11,7 @@ if (import.meta.env.DEV) {
 }
 
 import "./lib/error-capture";
+import { supabaseServiceHeaders } from "./lib/supabase-service";
 import {
   AI_COMPLETIONS_URL,
   aiCompletionBody,
@@ -72,6 +73,7 @@ type ChatMessage = {
 
 type AiChatResponse = {
   choices?: Array<{
+    finish_reason?: string;
     message?: {
       content?: string;
     };
@@ -88,6 +90,9 @@ const MAX_SYLLABUS_CHARS = 80_000;
 const MAX_STUDY_ITEMS = 120;
 const MAX_CHAT_HISTORY = 10;
 const MAX_IMAGE_DATA_URL_CHARS = 2_500_000;
+// Leave room for bounded history/provenance, including JSON escaping, while
+// keeping the complete screenshot request below Vercel's 4.5 MB body limit.
+const MAX_SCREENSHOT_BODY_BYTES = 3_000_000;
 const STRIPE_WEBHOOK_TOLERANCE_SECONDS = 300;
 const MAX_STRIPE_WEBHOOK_BYTES = 512_000;
 const MAX_STRIPE_SIGNATURE_CHARS = 8_000;
@@ -108,6 +113,7 @@ const requestRateLimits = new Map<string, RateLimitRecord>();
 type BillingProfile = {
   is_pro: boolean;
   stripe_customer_id?: string | null;
+  billing_revision?: number;
 };
 
 type StripeSubscription = {
@@ -115,9 +121,18 @@ type StripeSubscription = {
   customer: string | { id?: string };
   status: string;
   cancel_at_period_end?: boolean;
+  cancel_at?: number | null;
   current_period_end?: number;
+  latest_invoice?: string | StripeInvoice | null;
   metadata?: Record<string, string>;
-  items?: { data?: Array<{ price?: { id?: string } }> };
+  items?: { data?: Array<{ price?: { id?: string }; current_period_end?: number }> };
+};
+
+type StripeInvoice = {
+  id?: string;
+  status?: string;
+  subscription?: unknown;
+  parent?: { type?: string; subscription_details?: { subscription?: unknown } } | null;
 };
 
 type BillingState =
@@ -178,32 +193,83 @@ async function fetchWithTimeout(
   timeoutMs: number,
   timeoutError: CompanionUpstreamError,
   clientSignal?: AbortSignal,
+  maxResponseBytes = 4_000_000,
 ): Promise<Response> {
   const controller = new AbortController();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let rejectInterrupted: (error: CompanionUpstreamError) => void = () => undefined;
+  const interrupted = new Promise<never>((_resolve, reject) => {
+    rejectInterrupted = reject;
+  });
+  const interrupt = (error: CompanionUpstreamError) => {
+    // Reject before cancellation: a synthetic/custom stream may close normally
+    // on cancel, or its cancellation promise may never settle.
+    rejectInterrupted(error);
     controller.abort();
-  }, timeoutMs);
-  const abortFromClient = () => controller.abort();
+    void reader?.cancel().catch(() => undefined);
+  };
+  const timer = setTimeout(() => interrupt(timeoutError), timeoutMs);
+  const abortFromClient = () =>
+    interrupt(
+      new CompanionUpstreamError(
+        "REQUEST_CANCELLED",
+        timeoutError.phase,
+        499,
+        "Request was cancelled.",
+      ),
+    );
   if (clientSignal?.aborted) {
-    controller.abort();
+    abortFromClient();
   } else {
     clientSignal?.addEventListener("abort", abortFromClient, { once: true });
   }
 
   try {
-    return await fetch(input, { ...init, signal: controller.signal });
+    return await Promise.race([
+      interrupted,
+      (async () => {
+        if (controller.signal.aborted) return await interrupted;
+        const response = await fetch(input, { ...init, signal: controller.signal });
+        if (!response.body) return response;
+        reader = response.body.getReader();
+        if (controller.signal.aborted) {
+          void reader.cancel().catch(() => undefined);
+          return await interrupted;
+        }
+        const chunks: Uint8Array[] = [];
+        let size = 0;
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          size += chunk.value.byteLength;
+          if (size > maxResponseBytes) {
+            throw new CompanionUpstreamError(
+              "UPSTREAM_RESPONSE_TOO_LARGE",
+              timeoutError.phase,
+              502,
+              "The upstream service returned an oversized response.",
+            );
+          }
+          chunks.push(chunk.value);
+        }
+        const bytes = new Uint8Array(size);
+        let offset = 0;
+        for (const chunk of chunks) {
+          bytes.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        // These endpoints are non-streaming. Keep the timeout, client abort,
+        // and caller's concurrency slot alive until the entire body is read.
+        return new Response(bytes, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+      })(),
+    ]);
   } catch (error) {
-    if (timedOut) throw timeoutError;
-    if (clientSignal?.aborted) {
-      throw new CompanionUpstreamError(
-        "REQUEST_CANCELLED",
-        timeoutError.phase,
-        499,
-        "Request was cancelled.",
-      );
-    }
+    controller.abort();
+    void reader?.cancel().catch(() => undefined);
     throw error;
   } finally {
     clearTimeout(timer);
@@ -239,7 +305,12 @@ function aiErrorResponse(error: unknown): Response {
   }
   if (error instanceof CompanionUpstreamError) {
     return jsonResponse(
-      { error: error.message, code: error.code, phase: error.phase },
+      {
+        error: error.message,
+        code: error.code,
+        phase: error.phase,
+        ...(error.code === "AI_RESPONSE_TRUNCATED" ? { retryable: true } : {}),
+      },
       error.status,
     );
   }
@@ -410,12 +481,13 @@ async function readBillingProfile(
   userId: string,
   accessToken: string,
   clientSignal?: AbortSignal,
+  includeStripeCustomer = true,
 ): Promise<BillingProfile | null> {
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseAnonKey) return null;
   const response = await fetchWithTimeout(
-    `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=is_pro,stripe_customer_id&limit=1`,
+    `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=${includeStripeCustomer ? "is_pro,stripe_customer_id,billing_revision" : "is_pro"}&limit=1`,
     {
       headers: {
         apikey: supabaseAnonKey,
@@ -440,7 +512,7 @@ async function readBillingProfile(
     );
   }
   const rows = (await response.json()) as BillingProfile[];
-  return rows[0] || null;
+  return Array.isArray(rows) && typeof rows[0]?.is_pro === "boolean" ? rows[0] : null;
 }
 function enforceUserRateLimit(
   userId: string,
@@ -700,7 +772,15 @@ async function getUserFromAccessToken(
       ),
       clientSignal,
     );
-    if (!res.ok) return null;
+    if (res.status === 401 || res.status === 403) return null;
+    if (!res.ok) {
+      throw new CompanionUpstreamError(
+        "AUTH_UNAVAILABLE",
+        "authentication",
+        503,
+        "Authentication is temporarily unavailable. Please try again.",
+      );
+    }
     const user = (await res.json()) as AuthenticatedUser;
     return user.id ? user : null;
   } catch (error) {
@@ -1214,6 +1294,15 @@ async function aiTextCompletion(
     throw failure;
   }
   const data = (await res.json()) as AiChatResponse;
+  if (data.choices?.[0]?.finish_reason === "length") {
+    await recordProviderSignal({ provider: "openai", success: false }).catch(() => undefined);
+    throw new CompanionUpstreamError(
+      "AI_RESPONSE_TRUNCATED",
+      "ai",
+      502,
+      "UniMate’s answer was cut off before it finished. Please try again, or ask for a shorter response.",
+    );
+  }
   const answer = stripThinkBlock(data.choices?.[0]?.message?.content || "");
   if (!answer) {
     await recordProviderSignal({ provider: "openai", success: false }).catch(() => undefined);
@@ -1825,7 +1914,7 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
       return jsonResponse({ error: "Method not allowed" }, 405);
     }
 
-    const largeRequest = rejectLargeRequest(request, MAX_IMAGE_DATA_URL_CHARS + 10_000);
+    const largeRequest = rejectLargeRequest(request, MAX_SCREENSHOT_BODY_BYTES);
     if (largeRequest) return largeRequest;
 
     const entitlement = await requireCompanionEntitlement(request);
@@ -1844,7 +1933,7 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
       );
     }
 
-    const body = await parseJsonBody(request, MAX_IMAGE_DATA_URL_CHARS + 10_000);
+    const body = await parseJsonBody(request, MAX_SCREENSHOT_BODY_BYTES);
     if (body instanceof Response) return body;
     const { imageBase64, question, pageContext, chatHistory } = body;
 
@@ -1953,6 +2042,15 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
       }
 
       const providerData = (await providerResponse.json()) as AiChatResponse;
+      if (providerData.choices?.[0]?.finish_reason === "length") {
+        await recordProviderSignal({ provider: "openai", success: false }).catch(() => undefined);
+        throw new CompanionUpstreamError(
+          "AI_RESPONSE_TRUNCATED",
+          "ai",
+          502,
+          "UniMate’s answer was cut off before it finished. Please try again, or ask for a shorter response.",
+        );
+      }
       const answer = stripThinkBlock(providerData.choices?.[0]?.message?.content || "");
       if (!answer)
         throw new CompanionUpstreamError(
@@ -2054,10 +2152,9 @@ async function stripeRequest(
   init: RequestInit = {},
   idempotencyKey?: string,
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), STRIPE_API_TIMEOUT_MS);
-  try {
-    return await fetch(`https://api.stripe.com/v1${path}`, {
+  return fetchWithTimeout(
+    `https://api.stripe.com/v1${path}`,
+    {
       ...init,
       headers: {
         Authorization: `Bearer ${config.secretKey}`,
@@ -2066,31 +2163,49 @@ async function stripeRequest(
         ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
         ...init.headers,
       },
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
+    },
+    STRIPE_API_TIMEOUT_MS,
+    new CompanionUpstreamError(
+      "BILLING_TIMEOUT",
+      "entitlement",
+      503,
+      "Billing is temporarily unavailable.",
+    ),
+  );
 }
 
 async function patchBillingProfile(
   userId: string,
   values: Partial<BillingProfile>,
-): Promise<boolean> {
+  expected: BillingProfile,
+): Promise<"updated" | "conflict" | "failed"> {
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceRoleKey) return false;
+  if (
+    !supabaseUrl ||
+    !serviceRoleKey ||
+    !Number.isInteger(expected.billing_revision) ||
+    expected.billing_revision! < 0 ||
+    expected.billing_revision! >= 2147483647
+  )
+    return "failed";
+  const query = new URLSearchParams({
+    id: `eq.${userId}`,
+    billing_revision: `eq.${expected.billing_revision}`,
+    stripe_customer_id: expected.stripe_customer_id
+      ? `eq.${expected.stripe_customer_id}`
+      : "is.null",
+  });
   const response = await fetchWithTimeout(
-    `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`,
+    `${supabaseUrl}/rest/v1/profiles?${query}`,
     {
       method: "PATCH",
       headers: {
-        apikey: serviceRoleKey,
-        Authorization: `Bearer ${serviceRoleKey}`,
+        ...supabaseServiceHeaders(serviceRoleKey),
         "Content-Type": "application/json",
         Prefer: "return=representation",
       },
-      body: JSON.stringify(values),
+      body: JSON.stringify({ ...values, billing_revision: expected.billing_revision! + 1 }),
     },
     SUPABASE_ENTITLEMENT_TIMEOUT_MS,
     new CompanionUpstreamError(
@@ -2100,9 +2215,10 @@ async function patchBillingProfile(
       "Billing profile update timed out.",
     ),
   );
-  if (!response.ok) return false;
+  if (!response.ok) return "failed";
   const rows = (await response.json()) as unknown[];
-  return Array.isArray(rows) && rows.length === 1;
+  if (!Array.isArray(rows) || rows.length > 1) return "failed";
+  return rows.length === 1 ? "updated" : "conflict";
 }
 
 async function readBillingProfileAsServiceRole(userId: string): Promise<BillingProfile | null> {
@@ -2110,8 +2226,8 @@ async function readBillingProfileAsServiceRole(userId: string): Promise<BillingP
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceRoleKey) return null;
   const response = await fetchWithTimeout(
-    `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=is_pro,stripe_customer_id&limit=1`,
-    { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } },
+    `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=is_pro,stripe_customer_id,billing_revision&limit=1`,
+    { headers: supabaseServiceHeaders(serviceRoleKey) },
     SUPABASE_ENTITLEMENT_TIMEOUT_MS,
     new CompanionUpstreamError(
       "ENTITLEMENT_TIMEOUT",
@@ -2122,16 +2238,21 @@ async function readBillingProfileAsServiceRole(userId: string): Promise<BillingP
   );
   if (!response.ok) return null;
   const rows = (await response.json()) as BillingProfile[];
-  return rows[0] || null;
+  return Array.isArray(rows) &&
+    typeof rows[0]?.is_pro === "boolean" &&
+    Number.isInteger(rows[0]?.billing_revision) &&
+    rows[0].billing_revision! >= 0
+    ? rows[0]
+    : null;
 }
 
 async function findUserIdsByStripeCustomer(customerId: string): Promise<string[]> {
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceRoleKey) return [];
+  if (!supabaseUrl || !serviceRoleKey) throw new Error("Billing ownership lookup unavailable");
   const response = await fetchWithTimeout(
     `${supabaseUrl}/rest/v1/profiles?stripe_customer_id=eq.${encodeURIComponent(customerId)}&select=id&limit=2`,
-    { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } },
+    { headers: supabaseServiceHeaders(serviceRoleKey) },
     SUPABASE_ENTITLEMENT_TIMEOUT_MS,
     new CompanionUpstreamError(
       "ENTITLEMENT_TIMEOUT",
@@ -2140,8 +2261,11 @@ async function findUserIdsByStripeCustomer(customerId: string): Promise<string[]
       "Stripe customer ownership lookup timed out.",
     ),
   );
-  if (!response.ok) return [];
+  if (!response.ok) throw new Error("Billing ownership lookup failed");
   const rows = (await response.json()) as Array<{ id?: string }>;
+  if (!Array.isArray(rows) || rows.some((row) => typeof row?.id !== "string")) {
+    throw new Error("Invalid billing ownership response");
+  }
   return rows.flatMap((row) => (row.id ? [row.id] : []));
 }
 
@@ -2160,8 +2284,22 @@ function subscriptionEntitled(status: string): boolean {
   return stripeStateEntitled(status, process.env.STRIPE_PAST_DUE_GRACE_ENABLED !== "false");
 }
 
+function subscriptionScheduledCancellation(subscription: StripeSubscription): boolean {
+  // Stripe's current status, not our wall clock, determines whether cancellation
+  // has completed (test clocks can differ). canceled_at is only the request time.
+  return (
+    ["active", "trialing", "past_due"].includes(subscription.status) &&
+    (subscription.cancel_at_period_end === true ||
+      (Number.isSafeInteger(subscription.cancel_at) && Number(subscription.cancel_at) > 0))
+  );
+}
+
 function billingStateForSubscription(subscription: StripeSubscription): BillingState {
-  if (subscription.status === "active" && subscription.cancel_at_period_end) return "canceling";
+  if (
+    ["active", "trialing"].includes(subscription.status) &&
+    subscriptionScheduledCancellation(subscription)
+  )
+    return "canceling";
   if (
     ["active", "trialing", "past_due", "canceled", "unpaid", "paused", "incomplete"].includes(
       subscription.status,
@@ -2176,13 +2314,107 @@ async function listCustomerSubscriptions(
   customerId: string,
   config: { secretKey: string; priceId: string },
 ): Promise<StripeSubscription[]> {
-  const query = new URLSearchParams({ customer: customerId, status: "all", limit: "20" });
-  const response = await stripeRequest(`/subscriptions?${query}`, config);
-  if (!response.ok) throw new Error(`Stripe subscription lookup failed (${response.status})`);
-  const payload = (await response.json()) as { data?: StripeSubscription[] };
-  return (payload.data || []).filter((subscription) =>
+  const subscriptions = await stripeList<StripeSubscription>(
+    "/subscriptions",
+    new URLSearchParams({ customer: customerId, status: "all", "expand[]": "data.latest_invoice" }),
+    config,
+  );
+  if (
+    subscriptions.some(
+      (subscription) =>
+        stripeCustomerId(subscription.customer) !== customerId ||
+        typeof subscription.status !== "string" ||
+        !Array.isArray(subscription.items?.data),
+    )
+  ) {
+    throw new Error("Invalid Stripe subscription response");
+  }
+  return subscriptions.filter((subscription) =>
     subscriptionHasConfiguredPrice(subscription, config.priceId),
   );
+}
+
+// A partial list must never be mistaken for proof that the paid plan is absent.
+async function stripeList<T extends { id: string }>(
+  path: string,
+  query: URLSearchParams,
+  config: { secretKey: string },
+): Promise<T[]> {
+  const result: T[] = [];
+  const seen = new Set<string>();
+  query.set("limit", "100");
+  for (let page = 0; page < 10; page++) {
+    const response = await stripeRequest(`${path}?${query}`, config);
+    if (!response.ok) throw new Error(`Stripe list lookup failed (${response.status})`);
+    const payload = (await response.json()) as { data?: T[]; has_more?: boolean };
+    if (
+      !Array.isArray(payload.data) ||
+      typeof payload.has_more !== "boolean" ||
+      new Set(payload.data.map((item) => item?.id)).size !== payload.data.length ||
+      payload.data.some((item) => typeof item?.id !== "string" || !item.id || seen.has(item.id))
+    ) {
+      throw new Error("Invalid Stripe list response");
+    }
+    for (const item of payload.data) {
+      seen.add(item.id);
+      result.push(item);
+    }
+    if (!payload.has_more) return result;
+    if (!payload.data.length) throw new Error("Invalid Stripe pagination");
+    query.set("starting_after", payload.data[payload.data.length - 1].id);
+  }
+  throw new Error("Stripe pagination limit exceeded");
+}
+
+function subscriptionPeriodEnd(subscription: StripeSubscription, priceId: string): number | null {
+  // Basil moved billing periods to items. Only the configured Pro price counts.
+  const ends = (subscription.items?.data || [])
+    .filter((item) => item.price?.id === priceId)
+    .map((item) => item.current_period_end)
+    .filter((value): value is number => Number.isFinite(value) && Number(value) > 0);
+  return ends.length ? Math.max(...ends) : subscription.current_period_end || null;
+}
+
+async function confirmedSubscriptionEntitled(
+  subscription: StripeSubscription,
+  config: { secretKey: string },
+): Promise<boolean> {
+  if (!subscriptionEntitled(subscription.status)) return false;
+  if (subscription.status === "trialing") return true;
+  // Delayed-payment subscriptions can be active before payment, and remain
+  // active after their initial invoice is voided. Never unlock solely on status.
+  let invoice = subscription.latest_invoice;
+  if (typeof invoice === "string") {
+    const response = await stripeRequest(`/invoices/${encodeURIComponent(invoice)}`, config);
+    if (!response.ok) throw new Error("Stripe invoice lookup failed");
+    invoice = (await response.json()) as StripeInvoice;
+  }
+  if (invoice?.status === "paid") return true;
+  // Preserve the existing renewal grace policy, but only for a subscription
+  // with a settled invoice. A never-paid initial subscription gets no grace.
+  const query = new URLSearchParams({ subscription: subscription.id, status: "paid", limit: "1" });
+  const response = await stripeRequest(`/invoices?${query}`, config);
+  if (!response.ok) throw new Error("Stripe paid invoice lookup failed");
+  const payload = (await response.json()) as { data?: StripeInvoice[] };
+  if (!Array.isArray(payload.data)) throw new Error("Invalid Stripe invoice response");
+  return payload.data.some(
+    (paid) => paid.status === "paid" && invoiceSubscriptionId(paid) === subscription.id,
+  );
+}
+
+async function currentCustomerBilling(
+  customerId: string,
+  config: { secretKey: string; priceId: string },
+): Promise<{ subscription: StripeSubscription | null; isPro: boolean }> {
+  const subscriptions = await listCustomerSubscriptions(customerId, config);
+  const entitled: StripeSubscription[] = [];
+  for (const subscription of subscriptions) {
+    if (await confirmedSubscriptionEntitled(subscription, config)) entitled.push(subscription);
+  }
+  return {
+    subscription: preferredSubscription(entitled.length ? entitled : subscriptions),
+    isPro: entitled.length > 0,
+  };
 }
 
 function preferredSubscription(subscriptions: StripeSubscription[]): StripeSubscription | null {
@@ -2214,8 +2446,13 @@ async function createOrBindStripeCustomer(
   user: AuthenticatedUser,
   config: { secretKey: string },
 ): Promise<string | null> {
+  let snapshot = await readBillingProfileAsServiceRole(user.id);
+  if (!snapshot) return null;
+  if (snapshot.stripe_customer_id) return snapshot.stripe_customer_id;
+  // Only immutable identity belongs in this idempotent payload. Auth email can
+  // change after Stripe succeeds but before the customer binding is saved;
+  // Checkout collects the billing email without poisoning a recovery retry.
   const params = new URLSearchParams({ "metadata[user_id]": user.id });
-  if (user.email) params.set("email", user.email);
   const response = await stripeRequest(
     "/customers",
     config,
@@ -2225,46 +2462,89 @@ async function createOrBindStripeCustomer(
   if (!response.ok) return null;
   const customer = (await response.json()) as { id?: string };
   if (!customer.id) return null;
-  const owners = await findUserIdsByStripeCustomer(customer.id);
-  if (owners.some((owner) => owner !== user.id)) return null;
-  return (await patchBillingProfile(user.id, { stripe_customer_id: customer.id }))
-    ? customer.id
-    : null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const owners = await findUserIdsByStripeCustomer(customer.id);
+    if (owners.some((owner) => owner !== user.id)) return null;
+    const result = await patchBillingProfile(
+      user.id,
+      { stripe_customer_id: customer.id },
+      snapshot,
+    );
+    if (result === "updated") return customer.id;
+    if (result === "failed") return null;
+    snapshot = await readBillingProfileAsServiceRole(user.id);
+    if (!snapshot) return null;
+    if (snapshot.stripe_customer_id) return snapshot.stripe_customer_id;
+  }
+  return null;
 }
 
-async function findOpenCheckoutUrl(
+async function readCustomerCheckouts(
   customerId: string,
   config: { secretKey: string; priceId: string },
-): Promise<string | null> {
+): Promise<{
+  url: string | null;
+  terminalSessionIds: string[];
+  terminalSubscriptionIds: string[];
+  hasCurrentSubscription: boolean;
+}> {
   const query = new URLSearchParams({
     customer: customerId,
-    status: "open",
-    limit: "20",
     "expand[]": "data.line_items",
   });
-  const response = await stripeRequest(`/checkout/sessions?${query}`, config);
-  if (!response.ok) return null;
-  const payload = (await response.json()) as {
-    data?: Array<{
-      mode?: string;
-      url?: string;
-      line_items?: { data?: Array<{ price?: { id?: string } }> };
-    }>;
+  const sessions = await stripeList<{
+    id: string;
+    mode?: string;
+    status?: string;
+    subscription?: unknown;
+    url?: string | null;
+    line_items?: { data?: Array<{ price?: { id?: string } }>; has_more?: boolean };
+  }>("/checkout/sessions", query, config);
+  const result = {
+    url: null as string | null,
+    terminalSessionIds: [] as string[],
+    terminalSubscriptionIds: [] as string[],
+    hasCurrentSubscription: false,
   };
-  for (const session of payload.data || []) {
-    if (session.mode !== "subscription" || !session.url) continue;
+  for (const session of sessions) {
+    if (typeof session.mode !== "string") throw new Error("Invalid Stripe checkout mode");
+    if (session.mode !== "subscription") continue;
+    if (!Array.isArray(session.line_items?.data) || session.line_items.has_more)
+      throw new Error("Incomplete Stripe checkout items");
     const matchesConfiguredPrice = session.line_items?.data?.some(
       (lineItem) => lineItem.price?.id === config.priceId,
     );
     if (!matchesConfiguredPrice) continue;
-    try {
+    if (session.status === "complete") {
+      const subscriptionId = objectId(session.subscription);
+      if (!subscriptionId) throw new Error("Completed Checkout is missing its subscription");
+      const current = await retrieveStripeSubscription(subscriptionId, config);
+      if (
+        !current ||
+        stripeCustomerId(current.customer) !== customerId ||
+        !subscriptionHasConfiguredPrice(current, config.priceId)
+      ) {
+        throw new Error("Completed Checkout subscription could not be verified");
+      }
+      // The subscription list can lag a completed Checkout. Never create a
+      // second payable session while that subscription is nonterminal/unknown.
+      if (!["canceled", "incomplete_expired"].includes(current.status))
+        result.hasCurrentSubscription = true;
+      else result.terminalSubscriptionIds.push(current.id);
+      result.terminalSessionIds.push(session.id);
+    } else if (session.status === "expired") {
+      result.terminalSessionIds.push(session.id);
+    } else if (session.status === "open") {
+      if (!session.url) throw new Error("Open Checkout is missing its URL");
       const url = new URL(session.url);
-      if (url.protocol === "https:" && url.hostname === "checkout.stripe.com") return session.url;
-    } catch {
-      // Ignore malformed provider data and continue to a fresh hosted session.
+      if (url.protocol !== "https:" || url.hostname !== "checkout.stripe.com")
+        throw new Error("Invalid Stripe checkout URL");
+      result.url ||= session.url;
+    } else {
+      throw new Error("Invalid Stripe checkout status");
     }
   }
-  return null;
+  return result;
 }
 
 async function handleBillingStatus(request: Request): Promise<Response> {
@@ -2293,22 +2573,31 @@ async function handleBillingStatusInner(request: Request): Promise<Response> {
     return jsonResponse({ isPro: true, state: "development_override", canManage: false });
   }
 
-  const profile = await readBillingProfile(authResult.id, accessToken, request.signal);
+  // Existing profile entitlements remain readable before Stripe is installed.
+  // Partial or invalid billing configuration must never use this legacy path.
+  const billingAbsent = !process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_PRICE_ID;
+  const config = billingAbsent ? null : stripeConfiguration();
+  if (config instanceof Response) return config;
+  const profile = await readBillingProfile(
+    authResult.id,
+    accessToken,
+    request.signal,
+    !billingAbsent,
+  );
   if (!profile) return jsonResponse({ error: "Billing profile is unavailable." }, 503);
+  if (!config) {
+    return jsonResponse({
+      isPro: profile.is_pro,
+      state: profile.is_pro ? "legacy" : "not_configured",
+      canManage: false,
+    });
+  }
   const shouldReconcile = new URL(request.url).searchParams.get("reconcile") !== "false";
   if (!shouldReconcile) {
     return jsonResponse({
       isPro: profile.is_pro,
       state: profile.is_pro ? "active" : "free",
       canManage: Boolean(profile.stripe_customer_id),
-    });
-  }
-  const config = stripeConfiguration();
-  if (config instanceof Response) {
-    return jsonResponse({
-      isPro: profile.is_pro,
-      state: profile.is_pro ? "legacy" : "not_configured",
-      canManage: false,
     });
   }
   if (!profile.stripe_customer_id) {
@@ -2320,45 +2609,41 @@ async function handleBillingStatusInner(request: Request): Promise<Response> {
   }
 
   try {
-    const subscription = preferredSubscription(
-      await listCustomerSubscriptions(profile.stripe_customer_id, config),
+    const current = await reconcileCustomerBilling(
+      profile.stripe_customer_id,
+      config,
+      authResult.id,
     );
+    if (!current) throw new Error("Billing profile could not be synchronized");
+    const { subscription, isPro } = current;
     if (!subscription) {
-      if (profile.is_pro && !(await patchBillingProfile(authResult.id, { is_pro: false }))) {
-        return jsonResponse(
-          { error: "Billing status could not be synchronized.", code: "BILLING_SYNC_FAILED" },
-          503,
-        );
-      }
       return jsonResponse({ isPro: false, state: "canceled", canManage: true });
-    }
-    const isPro = subscriptionEntitled(subscription.status);
-    if (
-      profile.is_pro !== isPro &&
-      !(await patchBillingProfile(authResult.id, { is_pro: isPro }))
-    ) {
-      return jsonResponse(
-        { error: "Billing status could not be synchronized.", code: "BILLING_SYNC_FAILED" },
-        503,
-      );
     }
     return jsonResponse({
       isPro,
-      state: billingStateForSubscription(subscription),
+      state:
+        !isPro && subscription.status === "active"
+          ? "incomplete"
+          : billingStateForSubscription(subscription),
       canManage: true,
-      cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
-      currentPeriodEnd: subscription.current_period_end || null,
+      // Compatibility field: the existing account UI uses this flag/date for
+      // scheduled access-end messaging, including flexible-billing cancel_at.
+      cancelAtPeriodEnd: subscriptionScheduledCancellation(subscription),
+      currentPeriodEnd:
+        subscriptionScheduledCancellation(subscription) &&
+        Number.isSafeInteger(subscription.cancel_at) &&
+        Number(subscription.cancel_at) > 0
+          ? subscription.cancel_at
+          : subscriptionPeriodEnd(subscription, config.priceId),
     });
   } catch (error) {
     console.error("Billing status reconciliation failed", {
       message: error instanceof Error ? error.message : "unknown error",
     });
-    return jsonResponse({
-      isPro: profile.is_pro,
-      state: profile.is_pro ? "legacy" : "free",
-      canManage: true,
-      temporarilyUnavailable: true,
-    });
+    return jsonResponse(
+      { error: "Billing status is temporarily unavailable.", code: "BILLING_SYNC_FAILED" },
+      503,
+    );
   }
 }
 
@@ -2423,12 +2708,18 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
       return jsonResponse({ error: "Your billing account could not be prepared." }, 503);
     }
 
+    let terminalSubscriptionIds: string[] = [];
+    let terminalSessionIds: string[] = [];
     if (customerId) {
       const owners = await findUserIdsByStripeCustomer(customerId);
       if (owners.length !== 1 || owners[0] !== authResult.id) {
         return jsonResponse({ error: "Billing account ownership could not be verified." }, 409);
       }
       const subscriptions = await listCustomerSubscriptions(customerId, config);
+      terminalSubscriptionIds = subscriptions
+        .filter((subscription) => ["canceled", "incomplete_expired"].includes(subscription.status))
+        .map((subscription) => subscription.id)
+        .sort();
       const existing = preferredSubscription(
         subscriptions.filter(
           (subscription) => !["canceled", "incomplete_expired"].includes(subscription.status),
@@ -2438,8 +2729,16 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
         const portalUrl = await createPortalUrl(customerId, `${origin}/upgrade`, config);
         return jsonResponse({ alreadySubscribed: true, url: portalUrl });
       }
-      const openCheckoutUrl = await findOpenCheckoutUrl(customerId, config);
-      if (openCheckoutUrl) return jsonResponse({ url: openCheckoutUrl });
+      const checkouts = await readCustomerCheckouts(customerId, config);
+      if (checkouts.hasCurrentSubscription) {
+        const portalUrl = await createPortalUrl(customerId, `${origin}/upgrade`, config);
+        return jsonResponse({ alreadySubscribed: true, url: portalUrl });
+      }
+      if (checkouts.url) return jsonResponse({ url: checkouts.url });
+      terminalSubscriptionIds = [
+        ...new Set([...terminalSubscriptionIds, ...checkouts.terminalSubscriptionIds]),
+      ].sort();
+      terminalSessionIds = checkouts.terminalSessionIds.sort();
     }
 
     const priceResponse = await stripeRequest(
@@ -2453,17 +2752,18 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
       livemode?: boolean;
       unit_amount?: number;
       currency?: string;
-      recurring?: { interval?: string };
+      recurring?: { interval?: string; interval_count?: number };
     };
     const expectedAmount = Number(process.env.STRIPE_PRO_MONTHLY_AMOUNT_CENTS || "599");
     const expectedCurrency = (process.env.STRIPE_PRO_CURRENCY || "usd").toLowerCase();
     if (
       !price.active ||
       price.type !== "recurring" ||
-      Boolean(price.livemode) !== config.liveMode ||
+      price.livemode !== config.liveMode ||
       price.unit_amount !== expectedAmount ||
       price.currency?.toLowerCase() !== expectedCurrency ||
-      price.recurring?.interval !== "month"
+      price.recurring?.interval !== "month" ||
+      price.recurring.interval_count !== 1
     ) {
       return jsonResponse(
         { error: "The Pro plan is not configured for subscription checkout." },
@@ -2471,6 +2771,21 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
       );
     }
 
+    // Only Stripe's terminal attempts advance the generation, never a clock
+    // bucket or webhook revision. Concurrent/in-flight retries share one key;
+    // expired sessions and canceled subscriptions permit a genuinely new attempt.
+    const generationBytes = new Uint8Array(
+      await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(
+          JSON.stringify([customerId, origin, terminalSubscriptionIds, terminalSessionIds]),
+        ),
+      ),
+    );
+    const generation = Array.from(generationBytes.slice(0, 16), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
+    const idempotencyKey = `checkout-v2-${authResult.id}-${config.priceId}-${generation}`;
     const params = new URLSearchParams({
       mode: "subscription",
       "line_items[0][price]": config.priceId,
@@ -2480,16 +2795,15 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
       client_reference_id: authResult.id,
       "metadata[user_id]": authResult.id,
       "subscription_data[metadata][user_id]": authResult.id,
-      integration_identifier: `unimate_web_${crypto.randomUUID().replaceAll("-", "").slice(0, 8)}`,
+      integration_identifier: await checkoutIntegrationIdentifier(idempotencyKey),
     });
     params.set("customer", customerId);
 
-    const idempotencyWindow = Math.floor(Date.now() / (5 * 60 * 1_000));
     const stripeRes = await stripeRequest(
       "/checkout/sessions",
       config,
       { method: "POST", body: params.toString() },
-      `checkout-${authResult.id}-${config.priceId}-${idempotencyWindow}`,
+      idempotencyKey,
     );
     if (!stripeRes.ok) {
       console.error("Stripe checkout session failed", { status: stripeRes.status });
@@ -2508,6 +2822,17 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
     });
     return jsonResponse({ error: "Checkout is temporarily unavailable." }, 502);
   }
+}
+
+async function checkoutIntegrationIdentifier(identity: string): Promise<string> {
+  // Pseudorandom letters from the unique attempt, stable across retries,
+  // instances AND credential rotation. Neither a fresh UUID nor a key-derived
+  // label can change the payload under an existing Stripe idempotency key.
+  const encoder = new TextEncoder();
+  const bytes = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", encoder.encode(`unimate-checkout:${identity}`)),
+  );
+  return `unimate_web_${Array.from(bytes.slice(0, 8), (byte) => String.fromCharCode(97 + (byte % 26))).join("")}`;
 }
 
 // Verifies a Stripe webhook signature (HMAC-SHA256 over "timestamp.payload")
@@ -2571,64 +2896,75 @@ async function retrieveStripeSubscription(
   return response.ok ? ((await response.json()) as StripeSubscription) : null;
 }
 
-async function retrieveSubscriptionFromInvoice(
-  invoiceId: string,
-  config: { secretKey: string },
-): Promise<StripeSubscription | null> {
-  const invoiceResponse = await stripeRequest(
-    `/invoices/${encodeURIComponent(invoiceId)}?expand[]=subscription`,
-    config,
-  );
-  if (!invoiceResponse.ok) return null;
-  const invoice = (await invoiceResponse.json()) as { subscription?: unknown };
-  const subscriptionId = objectId(invoice.subscription);
-  return subscriptionId ? retrieveStripeSubscription(subscriptionId, config) : null;
+function invoiceSubscriptionId(invoice: StripeInvoice): string | null {
+  // Modern versioned invoices use parent; old webhook snapshots can still
+  // carry subscription. Never interpret another parent type as a subscription.
+  if (invoice.parent != null) {
+    return invoice.parent.type === "subscription_details"
+      ? objectId(invoice.parent.subscription_details?.subscription)
+      : null;
+  }
+  return objectId(invoice.subscription);
 }
 
-async function retrieveSubscriptionFromCharge(
+async function retrieveCustomerFromCharge(
   chargeId: string,
   config: { secretKey: string },
-): Promise<StripeSubscription | null> {
-  const chargeResponse = await stripeRequest(
-    `/charges/${encodeURIComponent(chargeId)}?expand[]=invoice.subscription`,
-    config,
-  );
-  if (!chargeResponse.ok) return null;
-  const charge = (await chargeResponse.json()) as { invoice?: unknown };
-  const invoiceId = objectId(charge.invoice);
-  return invoiceId ? retrieveSubscriptionFromInvoice(invoiceId, config) : null;
+): Promise<string | null> {
+  const chargeResponse = await stripeRequest(`/charges/${encodeURIComponent(chargeId)}`, config);
+  if (!chargeResponse.ok) throw new Error("Stripe charge lookup failed");
+  // Customer is our persisted ownership boundary. Reconcile all its current
+  // subscriptions; do not rely on Charge.invoice (removed in Basil).
+  const charge = (await chargeResponse.json()) as { customer?: unknown };
+  return objectId(charge.customer);
 }
 
-async function syncSubscriptionEntitlement(
-  subscription: StripeSubscription,
-  config: { priceId: string },
+async function syncCustomerEntitlement(
+  customerId: string,
+  config: { secretKey: string; priceId: string },
   fallbackUserId?: string,
 ): Promise<"updated" | "ignored" | "failed"> {
-  if (!subscriptionHasConfiguredPrice(subscription, config.priceId)) return "ignored";
-  const customerId = stripeCustomerId(subscription.customer);
-  if (!customerId) return "failed";
-  const candidateUserId = subscription.metadata?.user_id || fallbackUserId || null;
-  const customerOwners = await findUserIdsByStripeCustomer(customerId);
-  if (customerOwners.length > 1) return "failed";
+  return (await reconcileCustomerBilling(customerId, config, fallbackUserId))
+    ? "updated"
+    : "ignored";
+}
 
-  let userId = customerOwners[0] || null;
-  if (userId && candidateUserId && userId !== candidateUserId) return "failed";
-  if (!userId && candidateUserId) {
-    const candidateProfile = await readBillingProfileAsServiceRole(candidateUserId);
-    if (
-      !candidateProfile ||
-      (candidateProfile.stripe_customer_id && candidateProfile.stripe_customer_id !== customerId)
-    ) {
-      return "failed";
+async function reconcileCustomerBilling(
+  customerId: string,
+  config: { secretKey: string; priceId: string },
+  fallbackUserId?: string,
+): Promise<{ subscription: StripeSubscription | null; isPro: boolean } | null> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const customerOwners = await findUserIdsByStripeCustomer(customerId);
+    if (customerOwners.length > 1) throw new Error("Conflicting billing ownership");
+    const userId = customerOwners[0] || fallbackUserId;
+    if (!userId) return null;
+    if (customerOwners[0] && fallbackUserId && customerOwners[0] !== fallbackUserId) {
+      throw new Error("Conflicting billing ownership");
     }
-    userId = candidateUserId;
+    // Snapshot BEFORE fetching Stripe. Every writer increments revision, even
+    // for an unchanged boolean, so an older in-flight lookup cannot undo it.
+    const snapshot = await readBillingProfileAsServiceRole(userId);
+    if (!snapshot || (snapshot.stripe_customer_id && snapshot.stripe_customer_id !== customerId)) {
+      throw new Error("Billing ownership unavailable");
+    }
+    const current = await currentCustomerBilling(customerId, config);
+    if (
+      current.subscription?.metadata?.user_id &&
+      current.subscription.metadata.user_id !== userId
+    ) {
+      throw new Error("Conflicting subscription ownership");
+    }
+    const result = await patchBillingProfile(
+      userId,
+      { is_pro: current.isPro, stripe_customer_id: customerId },
+      snapshot,
+    );
+    if (result === "updated") return current;
+    if (result === "failed") throw new Error("Entitlement storage unavailable");
+    // Re-fetch both profile and Stripe on conflict; never replay stale values.
   }
-  if (!userId) return "failed";
-  const updated = await patchBillingProfile(userId, {
-    is_pro: subscriptionEntitled(subscription.status),
-    stripe_customer_id: customerId,
-  });
-  return updated ? "updated" : "failed";
+  throw new Error("Billing synchronization conflicted; retry required");
 }
 
 function objectId(value: unknown): string | null {
@@ -2679,10 +3015,18 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
     };
     const config = stripeConfiguration();
     if (config instanceof Response) return new Response("Stripe unavailable", { status: 503 });
-    if (!event.id || !event.type || Boolean(event.livemode) !== config.liveMode) {
+    if (
+      !event.id ||
+      !event.type ||
+      typeof event.livemode !== "boolean" ||
+      event.livemode !== config.liveMode
+    ) {
       return new Response("Invalid event mode", { status: 400 });
     }
     const object = event.data?.object;
+    if (!object || typeof object !== "object" || Array.isArray(object)) {
+      return new Response("Missing event object", { status: 400 });
+    }
     let syncResult: "updated" | "ignored" | "failed" = "ignored";
 
     if (
@@ -2695,51 +3039,61 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
       const eventSubscription = object as StripeSubscription;
       const customerId = stripeCustomerId(eventSubscription.customer);
       if (!customerId) return new Response("Missing Stripe customer", { status: 400 });
-      const currentSubscription = preferredSubscription(
-        await listCustomerSubscriptions(customerId, config),
-      );
-      syncResult = await syncSubscriptionEntitlement(
-        currentSubscription || eventSubscription,
+      syncResult = await syncCustomerEntitlement(
+        customerId,
         config,
+        subscriptionHasConfiguredPrice(eventSubscription, config.priceId)
+          ? eventSubscription.metadata?.user_id
+          : undefined,
       );
     } else if (
       event.type === "checkout.session.completed" ||
       event.type === "checkout.session.async_payment_succeeded"
     ) {
       if (object?.mode !== "subscription") return new Response("ok", { status: 200 });
+      if (!["paid", "no_payment_required"].includes(String(object.payment_status))) {
+        return new Response("ok", { status: 200 });
+      }
       const subscriptionId = objectId(object.subscription);
       const userId: string | undefined = object.client_reference_id || object.metadata?.user_id;
       if (!subscriptionId || !userId)
         return new Response("Missing subscription reference", { status: 400 });
       const subscription = await retrieveStripeSubscription(subscriptionId, config);
       if (!subscription) return new Response("Subscription lookup failed", { status: 503 });
-      syncResult = await syncSubscriptionEntitlement(subscription, config, userId);
+      const customerId = stripeCustomerId(subscription.customer);
+      if (!customerId) return new Response("Missing Stripe customer", { status: 400 });
+      if (object.customer && objectId(object.customer) !== customerId)
+        return new Response("Customer mismatch", { status: 400 });
+      syncResult = await syncCustomerEntitlement(
+        customerId,
+        config,
+        subscriptionHasConfiguredPrice(subscription, config.priceId) ? userId : undefined,
+      );
     } else if (
       event.type === "invoice.paid" ||
       event.type === "invoice.payment_failed" ||
       event.type === "invoice.payment_action_required"
     ) {
-      const subscriptionId = objectId(object?.subscription);
+      const subscriptionId = invoiceSubscriptionId(object as StripeInvoice);
       if (subscriptionId) {
         const subscription = await retrieveStripeSubscription(subscriptionId, config);
         if (!subscription) return new Response("Subscription lookup failed", { status: 503 });
-        syncResult = await syncSubscriptionEntitlement(subscription, config);
+        const customerId = stripeCustomerId(subscription.customer);
+        if (!customerId) return new Response("Missing Stripe customer", { status: 400 });
+        syncResult = await syncCustomerEntitlement(customerId, config);
       }
     } else if (event.type === "checkout.session.async_payment_failed") {
       const subscriptionId = objectId(object?.subscription);
       if (subscriptionId) {
         const subscription = await retrieveStripeSubscription(subscriptionId, config);
         if (!subscription) return new Response("Subscription lookup failed", { status: 503 });
-        syncResult = await syncSubscriptionEntitlement(subscription, config);
+        const customerId = stripeCustomerId(subscription.customer);
+        if (!customerId) return new Response("Missing Stripe customer", { status: 400 });
+        syncResult = await syncCustomerEntitlement(customerId, config);
       } else {
         const customerId = objectId(object?.customer);
         if (customerId) {
-          const currentSubscription = preferredSubscription(
-            await listCustomerSubscriptions(customerId, config),
-          );
-          if (currentSubscription) {
-            syncResult = await syncSubscriptionEntitlement(currentSubscription, config);
-          }
+          syncResult = await syncCustomerEntitlement(customerId, config);
         }
       }
     } else if (
@@ -2751,12 +3105,12 @@ async function handleStripeWebhook(request: Request): Promise<Response> {
         ? objectId(object?.charge)
         : objectId(object?.id);
       if (chargeId) {
-        const subscription = await retrieveSubscriptionFromCharge(chargeId, config);
-        if (subscription) {
+        const customerId = await retrieveCustomerFromCharge(chargeId, config);
+        if (customerId) {
           // Stripe remains the source of truth. Refund/dispute events force a
           // current subscription lookup; access follows its current state rather
           // than trusting an out-of-order charge event.
-          syncResult = await syncSubscriptionEntitlement(subscription, config);
+          syncResult = await syncCustomerEntitlement(customerId, config);
         }
       }
     }

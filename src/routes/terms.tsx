@@ -83,8 +83,8 @@ function Terms() {
       <LegalSection title="Contact">
         <p>
           Questions, billing concerns, or notices can be sent to{" "}
-          <a className="underline underline-offset-4" href="mailto:support@unimate.site">
-            support@unimate.site
+          <a className="underline underline-offset-4" href="mailto:unimatesupport@gmail.com">
+            unimatesupport@gmail.com
           </a>
           . These terms should receive owner and legal review before public launch.
         </p>

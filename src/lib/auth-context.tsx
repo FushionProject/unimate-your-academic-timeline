@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { authDestinationPath, type AuthDestination } from "./auth-destination";
@@ -40,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [recoveryMode, setRecoveryMode] = useState(false);
+  const recoveryIdentity = useRef({ generation: 0, userId: null as string | null });
 
   useEffect(() => {
     if (!supabase) {
@@ -56,10 +57,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRecoveryMode(readBrowserStorage(() => sessionStorage, RECOVERY_SESSION_KEY) === "active");
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      const nextUserId = newSession?.user.id ?? null;
+      const accountChanged = recoveryIdentity.current.userId !== nextUserId;
+      if (accountChanged || event === "PASSWORD_RECOVERY" || event === "SIGNED_OUT") {
+        recoveryIdentity.current = {
+          generation: recoveryIdentity.current.generation + 1,
+          userId: nextUserId,
+        };
+      }
       setSession(newSession);
       if (event === "PASSWORD_RECOVERY") {
         setRecoveryMode(writeBrowserStorage(() => sessionStorage, RECOVERY_SESSION_KEY, "active"));
-      } else if (event === "SIGNED_OUT") {
+      } else if (event === "SIGNED_OUT" || (accountChanged && event !== "INITIAL_SESSION")) {
         removeBrowserStorage(() => sessionStorage, RECOVERY_SESSION_KEY);
         setRecoveryMode(false);
       }
@@ -89,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (signupStatus.enabled !== true) {
         return {
           error: "New accounts are temporarily paused while we make room for more students.",
+          errorCode: "signup_disabled",
         };
       }
       const { data, error } = await supabase.auth.signUp({
@@ -119,8 +129,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const requestPasswordReset = async (email: string): Promise<AuthResult> => {
     if (!supabase) return { error: NOT_CONFIGURED_ERROR };
     const redirectTo = `${window.location.origin}/reset-password`;
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-    return { error: error?.message ?? null };
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      return { error: error?.message ?? null, errorCode: error?.code };
+    } catch {
+      return unavailableAuthResult();
+    }
   };
 
   const updatePassword = async (password: string): Promise<AuthResult> => {
@@ -134,12 +148,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           "This password reset link is no longer valid. Request a new link and allow browser storage to continue.",
       };
     }
-    const { error } = await supabase.auth.updateUser({ password });
-    if (!error) {
-      removeBrowserStorage(() => sessionStorage, RECOVERY_SESSION_KEY);
-      setRecoveryMode(false);
+    const identity = recoveryIdentity.current;
+    const sessionChangedResult = (): AuthResult => ({
+      error: "Your password recovery session changed. Use the latest reset link to continue.",
+      errorCode: "auth_session_changed",
+    });
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (recoveryIdentity.current !== identity) return sessionChangedResult();
+      if (!error) {
+        recoveryIdentity.current = { ...identity, generation: identity.generation + 1 };
+        removeBrowserStorage(() => sessionStorage, RECOVERY_SESSION_KEY);
+        setRecoveryMode(false);
+      }
+      return { error: error?.message ?? null, errorCode: error?.code };
+    } catch {
+      if (recoveryIdentity.current !== identity) return sessionChangedResult();
+      return unavailableAuthResult();
     }
-    return { error: error?.message ?? null };
   };
 
   const signOut = async (): Promise<AuthResult> => {

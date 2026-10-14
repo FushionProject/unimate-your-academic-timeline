@@ -1,0 +1,136 @@
+:root {
+  font-family:
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: #24211d;
+  background: #faf7f2;
+  color-scheme: light;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 420px;
+  padding: 24px 32px;
+  margin: 0 auto;
+}
+.mascot {
+  width: 54px;
+  height: 72px;
+  object-fit: contain;
+  display: block;
+  margin-bottom: 12px;
+}
+.eyebrow {
+  color: #746e66;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+h1 {
+  font-size: 26px;
+  line-height: 1.2;
+  margin: 8px 0;
+  letter-spacing: -0.03em;
+}
+.intro {
+  color: #746e66;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+  margin: 14px 0 6px;
+}
+input[type="email"],
+input[type="password"],
+input[type="text"] {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 12px;
+  border: 1px solid #d6d0c7;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+  background: white;
+  color: inherit;
+}
+button {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #f5c518;
+  color: #2c2508;
+  padding: 11px;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid #8d7014;
+  outline-offset: 3px;
+}
+.show-password {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #746e66;
+  font-weight: 500;
+  margin-bottom: 18px;
+}
+.privacy {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #746e66;
+}
+.secondary {
+  background: transparent;
+  color: #675512;
+  font-size: 11px;
+  text-decoration: underline;
+}
+#status {
+  font-size: 13px;
+  line-height: 1.5;
+}
+#status:empty {
+  display: none;
+}
+#status.error {
+  padding: 10px;
+  border-radius: 10px;
+  background: #fff0ed;
+  color: #9a3429;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-height: 580px) {
+  main {
+    padding-top: 16px;
+  }
+  .mascot {
+    width: 36px;
+    height: 48px;
+  }
+  .intro {
+    margin-bottom: 12px;
+  }
+}

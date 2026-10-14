@@ -177,6 +177,16 @@ function Dashboard() {
   const activeCourseCount = new Set(pressureItems.map((item) => item.course_id)).size;
   const loading = coursesLoading || assignmentsLoading;
   const loadError = coursesError || assignmentsError;
+  useEffect(() => {
+    if (loading || loadError) return;
+    // A review fallback can arrive before course queries finish. Focus the
+    // requested form once it exists, rather than leaving the student at the top.
+    const hash = window.location.hash;
+    if (hash !== "#course-setup" && hash !== "#deadline-setup") return;
+    const target = document.getElementById(hash.slice(1));
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: "start" });
+  }, [loading, loadError]);
   const progressPercent = dailyBrief.totalCount
     ? Math.round((dailyBrief.completedCount / dailyBrief.totalCount) * 100)
     : 0;
@@ -835,11 +845,30 @@ function Dashboard() {
                   )}
                 </section>
 
-                <section className="rounded-3xl border border-border/60 bg-card/80 p-5 shadow-[var(--shadow-card)]">
+                <section
+                  id="deadline-setup"
+                  tabIndex={-1}
+                  aria-labelledby="deadline-setup-heading"
+                  className="scroll-mt-24 rounded-3xl border border-border/60 bg-card/80 p-5 shadow-[var(--shadow-card)]"
+                >
                   <div className="mb-4 flex items-center gap-2">
                     <Plus className="h-4 w-4 text-primary" />
-                    <h2 className="font-semibold text-foreground">Add a deadline</h2>
+                    <h2 id="deadline-setup-heading" className="font-semibold text-foreground">
+                      Add a deadline
+                    </h2>
                   </div>
+                  {courses.length === 0 && (
+                    <p className="mb-4 text-sm text-muted-foreground">
+                      First,{" "}
+                      <a
+                        href="#course-setup"
+                        className="font-medium text-foreground underline underline-offset-4"
+                      >
+                        add your class
+                      </a>{" "}
+                      so this deadline has a home.
+                    </p>
+                  )}
                   <div className="space-y-2.5">
                     <input
                       value={assignmentName}
@@ -889,10 +918,24 @@ function Dashboard() {
                   </div>
                 </section>
 
-                <section className="rounded-3xl border border-border/60 bg-card/80 p-5 shadow-[var(--shadow-card)]">
-                  <h2 className="font-semibold text-foreground">Courses</h2>
+                <section
+                  id="course-setup"
+                  tabIndex={-1}
+                  aria-labelledby="course-setup-heading"
+                  className="scroll-mt-24 rounded-3xl border border-border/60 bg-card/80 p-5 shadow-[var(--shadow-card)]"
+                >
+                  <h2 id="course-setup-heading" className="font-semibold text-foreground">
+                    Courses
+                  </h2>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Keep the semester map organized by class.
+                    Add a class, then{" "}
+                    <a
+                      href="#deadline-setup"
+                      className="font-medium text-foreground underline underline-offset-4"
+                    >
+                      add its first deadline
+                    </a>
+                    . No syllabus needed.
                   </p>
                   <div className="mt-4 space-y-2">
                     <input

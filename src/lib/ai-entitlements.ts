@@ -1,3 +1,5 @@
+import { supabaseServiceHeaders } from "./supabase-service.ts";
+
 /**
  * Launch entitlement contract. Keep product limits centralized so the web app,
  * Browser Companion, server guards, and database reservation RPC cannot drift.
@@ -76,8 +78,7 @@ export async function reserveEntitlementUsage(options: {
   const response = await fetch(`${url}/rest/v1/rpc/reserve_ai_entitlement_usage`, {
     method: "POST",
     headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
+      ...supabaseServiceHeaders(key),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

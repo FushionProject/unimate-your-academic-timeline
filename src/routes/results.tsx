@@ -257,19 +257,7 @@ function Results() {
             <p className="mt-3 text-sm">Opening your syllabus review…</p>
           </div>
         ) : items.length === 0 && !saved ? (
-          <div className="rounded-3xl border border-border bg-card p-10 text-center shadow-[var(--shadow-card)]">
-            <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground" />
-            <h1 className="mt-4 text-2xl font-bold text-foreground">No timeline found</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Upload or paste a syllabus to extract its dated items.
-            </p>
-            <Link
-              to="/planner"
-              className="mt-5 inline-flex rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
-            >
-              Upload syllabus
-            </Link>
-          </div>
+          <EmptySyllabusReview hasReview={draftAvailable} />
         ) : (
           <>
             <header className="mb-7">
@@ -461,6 +449,37 @@ function Results() {
             )}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+function EmptySyllabusReview({ hasReview }: { hasReview: boolean }) {
+  return (
+    <div className="rounded-3xl border border-border bg-card p-10 text-center shadow-[var(--shadow-card)]">
+      <CalendarDays aria-hidden="true" className="mx-auto h-8 w-8 text-muted-foreground" />
+      <h1 className="mt-4 text-2xl font-bold text-foreground">
+        {hasReview ? "No dated items to review yet" : "Let’s start with your syllabus"}
+      </h1>
+      <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
+        {hasReview
+          ? "We couldn’t find dated items to save in this review. Try the course schedule or paste the section with due dates. You can also add your class and deadlines yourself."
+          : "Upload or paste a syllabus to review its dates before saving. No syllabus yet? You can build your plan one deadline at a time."}
+      </p>
+      <div className="mt-5 flex flex-wrap justify-center gap-3">
+        <Link
+          to="/planner"
+          className="inline-flex min-h-11 items-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+        >
+          {hasReview ? "Try another syllabus or paste text" : "Bring in my syllabus"}
+        </Link>
+        <Link
+          to="/dashboard"
+          hash="course-setup"
+          className="inline-flex min-h-11 items-center rounded-xl border border-border px-4 py-2 text-sm font-semibold"
+        >
+          Add my class manually
+        </Link>
       </div>
     </div>
   );

@@ -118,9 +118,15 @@ const context = vm.createContext({
         return "data:image/jpeg;base64,TEST";
       },
       async sendMessage(_tabId, request) {
-        if (request?.type === "PREPARE_COMPANION_CAPTURE") return { ok: true, hidden: true };
+        if (request?.type === "PREPARE_COMPANION_CAPTURE")
+          return { ok: true, hidden: true, captureId: request.captureId };
         if (request?.type === "RESTORE_COMPANION_CAPTURE") return { ok: true, restored: true };
         return { ok: true };
+      },
+    },
+    scripting: {
+      async executeScript() {
+        return [{ documentId: "document-42", frameId: 0, result: true }];
       },
     },
     runtime: { onMessage: { addListener() {} } },
@@ -135,7 +141,7 @@ const context = vm.createContext({
 
 vm.runInContext(source, context);
 const { sendChat } = context.__unimateBackgroundTests;
-const sender = { tab: { id: 42, windowId: 7 } };
+const sender = { documentId: "document-42", tab: { id: 42, windowId: 7 } };
 const pageContext = {
   pageTitle: "Quiz review",
   pageUrl: "https://canvas.example/courses/1/quizzes/2",
@@ -220,6 +226,19 @@ assert.equal(screenshotResult.diagnostics.screenshotFallbackStatus, "captured");
 assert.equal(screenshotResult.diagnostics.selectedIntent, "answer");
 assert.equal(screenshotResult.diagnostics.promptTemplate, "screenshot-first-tutor-v2");
 
+const finalInstruction = " Please explain the final question, not the opening example.";
+const completeQuestion = "M".repeat(4000 - finalInstruction.length) + finalInstruction;
+const completeQuestionResult = await sendChat(
+  { message: completeQuestion, context: pageContext, useScreenshot: true, history: [] },
+  sender,
+);
+assert.equal(
+  lastVisionBody.question,
+  completeQuestion,
+  "every character accepted by the composer, including final instructions, must reach analysis",
+);
+assert.equal(completeQuestionResult.user.message, completeQuestion);
+
 await sendChat(
   {
     message: "M".repeat(10_000),
@@ -230,9 +249,10 @@ await sendChat(
   },
   sender,
 );
-assert.ok(
-  lastVisionBody.question.length <= 1400,
-  "the raw question must be clamped before it leaves the extension",
+assert.equal(
+  lastVisionBody.question,
+  "M".repeat(4000),
+  "over-limit input must use the same 4000-character boundary as the composer and backend",
 );
 assert.ok(
   lastVisionBody.pageContext.visiblePageText.length <= 3500,
@@ -253,7 +273,7 @@ assert.equal(
   "screenshot+supporting-text",
   "every eligible Send must be screenshot-first even if an old caller requests text mode",
 );
-assert.equal(captureCount, 3, "every eligible Send must capture exactly once");
+assert.equal(captureCount, 4, "every eligible Send must capture exactly once");
 assert.equal(dashboardCalls, 0, "normal Send must not take the DOM-only route");
 
 captureShouldFail = true;

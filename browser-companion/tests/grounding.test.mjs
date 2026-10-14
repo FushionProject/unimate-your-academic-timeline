@@ -312,3 +312,202 @@ check(
 );
 
 console.log(`PASS ${passed} screenshot-first tutor grounding assertions`);
+
+// Whole numeric evidence, not digit substrings or URL metadata.
+for (const [source, answer, blocked] of [
+  ["Population: 1,024.", "Population: 1024.", false],
+  ["Population: 1024.", "Population: 1,024.", false],
+  ["Population: 1234.", "Population: 123.", true],
+  ["Value: 1.024.", "Value: 1024.", true],
+  ["Value: -1024.", "Value: 1024.", true],
+  ["Value: 1024.", "Value: -1024.", true],
+  ["Rate: 12.5%.", "Rate: 12.5%.", false],
+  ["Rate: 125%.", "Rate: 12.5%.", true],
+  ["Count: 125.", "Rate: 125%.", true],
+  ["Count: 9007199254740992.", "Count: 9007199254740993.", true],
+]) {
+  assert.equal(
+    detectHallucination(answer, normalizeProvenance({ visiblePageText: source }), "Summarize this")
+      .flagged,
+    blocked,
+    `${source} -> ${answer}`,
+  );
+}
+assert.ok(
+  detectHallucination(
+    "Population: 1234.",
+    normalizeProvenance({ pageUrl: "https://course.test/1234", pageTitle: "Course 1234" }),
+    "Summarize this",
+  ).flagged,
+);
+
+// Policy distinction: this guard checks attribution, not arithmetic correctness.
+// Old tests requiring every newly authored number to match a binary equation
+// were intentionally removed: they rejected hints, quizzes, and ordinary
+// academic knowledge. Source-reporting negatives below remain strict.
+const teachingCases = [
+  [
+    "What is 12 × 12?",
+    "Just give me one hint, without the answer.",
+    "Try 12 × 10 = 120 first, then add two more groups of 12.",
+  ],
+  [
+    "Multiplication combines equal groups.",
+    "Quiz me with a new multiplication practice problem.",
+    "Practice question: What is 120 × 3?",
+  ],
+  [
+    "Which gas is released during photosynthesis?",
+    "Answer this question.",
+    "The correct answer is oxygen. Plants release oxygen during photosynthesis.",
+  ],
+  [
+    "Light travels at a constant speed in a vacuum.",
+    "Explain the speed of light simply.",
+    "Light travels at about 300,000 km/s in a vacuum.",
+  ],
+  [
+    "Human cells contain chromosomes.",
+    "Explain this simply.",
+    "There are 46 chromosomes in a typical human body cell, arranged in 23 pairs.",
+  ],
+  [
+    "Find the area of a circle with radius 12 cm.",
+    "Solve this.",
+    "Answer: 144π cm², approximately 452.39 cm². Area = π × 12².",
+  ],
+  [
+    "Percent means out of a hundred.",
+    "Explain percentages with an example.",
+    "Hypothetical example: A survey found 87% of 200 students agreed. How many students is that?",
+  ],
+];
+for (const [text, question, answer] of teachingCases) {
+  assert.equal(
+    detectHallucination(answer, normalizeProvenance({ visiblePageText: text }), question).flagged,
+    false,
+    answer,
+  );
+}
+const source = normalizeProvenance({
+  visiblePageText: "Photosynthesis produces oxygen. Which gas is released?",
+});
+for (const answer of [
+  "87% of students prefer this method.",
+  "A survey found 97% agree.",
+  "There were 999 participants.",
+  "General background: the page says 87% of students agree.",
+  "The page says:\n87% agree.",
+  "According to Smith (2024), 87% preferred this method.",
+  "Practice question: The page says 87% of students agree.",
+  "Your assignment is worth 45% of the grade.",
+  "The syllabus says the exam is worth 45% of your grade.",
+  "The answer key says the correct answer is oxygen.",
+  "Your professor marked oxygen correct.",
+  'The passage reads "An unseen scientific study proves that every instructor selected this answer."',
+])
+  assert.ok(detectHallucination(answer, source, "Explain this").flagged, answer);
+assert.equal(
+  detectHallucination(
+    "A survey found 87% agreed.",
+    normalizeProvenance({ visiblePageText: "A survey found 87% agreed." }),
+    "Explain this",
+  ).flagged,
+  false,
+);
+const quoted = "Photosynthesis converts light energy into chemical energy stored in sugars.";
+assert.equal(
+  detectHallucination(
+    '"' + quoted + '"',
+    normalizeProvenance({ selectedText: quoted }),
+    "Quote this",
+  ).flagged,
+  false,
+);
+assert.ok(
+  detectHallucination(
+    '"A source passage that was never supplied cannot be reconstructed as an exact quotation."',
+    source,
+    "Quote this",
+  ).flagged,
+);
+assert.equal(
+  detectHallucination(
+    "The answer key says the correct answer is oxygen.",
+    normalizeProvenance({ visiblePageText: "Answer key: correct answer is oxygen." }),
+    "Answer this",
+  ).flagged,
+  false,
+);
+const missing = normalizeProvenance({ visiblePageText: "Question 1. Define a cell." });
+assert.ok(
+  detectHallucination("Answer: B.", missing, "Answer question 9").reasons.includes(
+    "missing_requested_source",
+  ),
+);
+for (const answer of [
+  "I cannot see question 9, but choose B.",
+  "Scroll up to question 9 and select B.",
+]) {
+  assert.ok(
+    detectHallucination(answer, missing, "Answer question 9").reasons.includes(
+      "missing_requested_source",
+    ),
+  );
+}
+assert.equal(
+  detectHallucination(
+    "Question 9 isn't visible. Please paste it or capture that section.",
+    missing,
+    "Answer question 9",
+  ).flagged,
+  false,
+);
+assert.equal(
+  detectHallucination("Answer: 144.", normalizeProvenance({}, true), "Answer question 9").flagged,
+  false,
+  "A screenshot may contain the numbered question; the guard is not OCR",
+);
+const longTeaching =
+  "Think of a cell as a small working community. Nutrients supply the raw material and energy for its activities. " +
+  "Enzymes are proteins that help chemical reactions happen under conditions the cell can tolerate. " +
+  "Membranes separate spaces so each process can maintain the conditions it needs. Transport proteins control what enters and leaves those spaces. " +
+  "Energy transfers connect these processes, letting the cell build molecules, move materials, and respond to changes around it. " +
+  "To study this, sketch one boundary, then add an arrow for nutrients entering and an arrow for waste leaving. " +
+  "Next, describe what each arrow means in your own words. You can build the details gradually instead of trying to memorize everything at once.";
+assert.ok(longTeaching.length > 600);
+assert.equal(
+  detectHallucination(
+    longTeaching,
+    normalizeProvenance({ visiblePageText: "Cell biology." }),
+    "Explain in detail",
+  ).flagged,
+  false,
+);
+
+// Exact captured live answer remains a regression without arithmetic whitelists.
+const discountQuestion = "Solve question 4 and show me the shortest useful working.";
+const discountSource = normalizeProvenance({
+  visiblePageText:
+    "Question 4. A textbook costs $80. A student discount reduces the price by 25%. What is the sale price?",
+});
+const capturedDiscountAnswer =
+  "Answer: $60\n\n80 × 0.25 = 20, so the discount is $20.\n80 − 20 = $60.\n\nA 25% discount means you pay 75% of the original price.";
+assert.equal(
+  detectHallucination(capturedDiscountAnswer, discountSource, discountQuestion).flagged,
+  false,
+);
+for (const suffix of [
+  "A study found 97% of students agree.",
+  "75% of students agree.",
+  "There were 999 participants.",
+]) {
+  assert.ok(
+    detectHallucination(capturedDiscountAnswer + "\n" + suffix, discountSource, discountQuestion)
+      .flagged,
+    suffix,
+  );
+}
+console.log(
+  "PASS authored teaching vs source reporting, missing targets, and exact live discount regression",
+);

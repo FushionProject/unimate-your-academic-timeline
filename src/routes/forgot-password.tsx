@@ -8,15 +8,17 @@ export const Route = createFileRoute("/forgot-password")({
   component: ForgotPassword,
 });
 
-function friendlyResetError(message: string) {
+function friendlyResetError(message: string, code?: string) {
   const lower = message.toLowerCase();
   if (lower.includes("rate") || lower.includes("too many")) {
     return "Too many reset requests. Wait a few minutes, then try again.";
   }
-  if (lower.includes("fetch") || lower.includes("network")) {
+  if (code === "network_error" || lower.includes("fetch") || lower.includes("network")) {
     return "We could not reach the sign-in service. Check your connection and try again.";
   }
-  return message || "We could not send the reset email. Please try again.";
+  // Provider errors can contain account or mail-server details. Do not expose
+  // those, or claim an email was sent when the request actually failed.
+  return "We couldn't send a reset link right now. Please try again later or contact support.";
 }
 
 function ForgotPassword() {
@@ -31,13 +33,18 @@ function ForgotPassword() {
     setError("");
     setLoading(true);
     const normalizedEmail = email.trim();
-    const result = await requestPasswordReset(normalizedEmail);
-    setLoading(false);
-    if (result.error) {
-      setError(friendlyResetError(result.error));
-      return;
+    try {
+      const result = await requestPasswordReset(normalizedEmail);
+      if (result.error) {
+        setError(friendlyResetError(result.error, result.errorCode));
+        return;
+      }
+      setSubmittedEmail(normalizedEmail);
+    } catch {
+      setError("We could not reach the sign-in service. Check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-    setSubmittedEmail(normalizedEmail);
   };
 
   if (submittedEmail) {

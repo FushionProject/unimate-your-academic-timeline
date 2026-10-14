@@ -55,8 +55,8 @@ function Support() {
       <LegalSection title="Contact support">
         <p>
           Email{" "}
-          <a className="underline underline-offset-4" href="mailto:support@unimate.site">
-            support@unimate.site
+          <a className="underline underline-offset-4" href="mailto:unimatesupport@gmail.com">
+            unimatesupport@gmail.com
           </a>
           . Include your browser, the UniMate page, when the problem occurred, and the visible error
           wording. Do not include passwords, authentication tokens, full payment details, or private

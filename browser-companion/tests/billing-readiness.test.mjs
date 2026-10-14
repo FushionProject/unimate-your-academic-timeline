@@ -33,10 +33,7 @@ assert.match(checkout, /"metadata\[user_id\]": authResult\.id/);
 assert.match(checkout, /"subscription_data\[metadata\]\[user_id\]": authResult\.id/);
 assert.match(checkout, /client_reference_id: authResult\.id/);
 assert.match(server, /"Idempotency-Key": idempotencyKey/);
-assert.match(
-  checkout,
-  /`checkout-\$\{authResult\.id\}-\$\{config\.priceId\}-\$\{idempotencyWindow\}`/,
-);
+assert.match(checkout, /`checkout-v2-\$\{authResult\.id\}-\$\{config\.priceId\}-\$\{generation\}`/);
 assert.match(checkout, /profile\.stripe_customer_id/);
 assert.match(checkout, /listCustomerSubscriptions/);
 assert.match(checkout, /price\.type !== "recurring"/);
@@ -44,7 +41,7 @@ assert.match(checkout, /price\.unit_amount !== expectedAmount/);
 assert.match(checkout, /price\.recurring\?\.interval !== "month"/);
 assert.match(checkout, /integration_identifier/);
 assert.match(checkout, /createOrBindStripeCustomer/);
-assert.match(checkout, /findOpenCheckoutUrl/);
+assert.match(checkout, /readCustomerCheckouts/);
 assert.match(server, /"expand\[\]": "data\.line_items"/);
 assert.match(server, /lineItem\.price\?\.id === config\.priceId/);
 assert.match(checkout, /config\.canonicalOrigin/);
@@ -66,8 +63,8 @@ assert.match(webhook, /checkout\.session\.async_payment_succeeded/);
 assert.match(webhook, /checkout\.session\.async_payment_failed/);
 assert.match(webhook, /charge\.refunded/);
 assert.match(webhook, /charge\.dispute\.created/);
-assert.match(webhook, /Boolean\(event\.livemode\) !== config\.liveMode/);
-assert.match(webhook, /listCustomerSubscriptions\(customerId, config\)/);
+assert.match(webhook, /event\.livemode !== config\.liveMode/);
+assert.match(webhook, /syncCustomerEntitlement\(customerId, config/);
 assert.match(server, /subscriptionEntitled\(subscription\.status\)/);
 assert.match(server, /stripeStateEntitled/);
 
@@ -93,4 +90,6 @@ assert.match(billingMigration, /create unique index[\s\S]*stripe_customer_id/);
 assert.match(envExample, /STRIPE_PRO_MONTHLY_AMOUNT_CENTS=599/);
 assert.match(envExample, /UNIMATE_CANONICAL_ORIGIN=http:\/\/localhost:8080/);
 
-console.log("PASS complete test-mode subscription, lifecycle, portal, and override safeguards");
+console.log(
+  "PASS billing source wiring; executable lifecycle coverage is in billing-lifecycle.test.mjs",
+);

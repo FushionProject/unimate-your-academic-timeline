@@ -75,8 +75,8 @@ function Privacy() {
       <LegalSection title="Contact">
         <p>
           Privacy and account-data requests can be sent to{" "}
-          <a className="underline underline-offset-4" href="mailto:support@unimate.site">
-            support@unimate.site
+          <a className="underline underline-offset-4" href="mailto:unimatesupport@gmail.com">
+            unimatesupport@gmail.com
           </a>
           .
         </p>

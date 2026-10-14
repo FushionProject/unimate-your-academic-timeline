@@ -11,6 +11,7 @@ const files = execFileSync(
   .filter((file) => !file.startsWith("dist/") && !file.startsWith("tmp/"));
 
 const signatures = [
+  ["Supabase secret", /\bsb_secret_[A-Za-z0-9_-]{16,}\b/],
   ["private key", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
   ["OpenAI secret", /\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}\b/],
   ["Stripe secret", /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/],

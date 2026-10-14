@@ -55,7 +55,7 @@ for (const code of ["AI_BILLING_UNAVAILABLE", "AI_CONFIGURATION_ERROR", "AI_NOT_
       assert.equal(error.phase, "ai");
       assert.equal(content.api.isRetryableMessagingError(error), false);
       const message = content.api.studentFacingError(error);
-      assert.match(message, /Your question is saved/);
+      assert.match(message, /Your question is kept here/);
       assert.doesNotMatch(message, /try again|upgrade|sign in/i);
       return true;
     },
@@ -77,6 +77,11 @@ for (const [status, code, expectedCode, expectedPhase] of [
     (error) => error.code === expectedCode && error.phase === expectedPhase,
   );
 }
+
+assert.match(
+  content.api.studentFacingError({ code: "AI_RESPONSE_TRUNCATED" }),
+  /cut short.*kept here.*one part at a time/,
+);
 
 let answer;
 let response;

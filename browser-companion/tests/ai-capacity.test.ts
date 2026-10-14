@@ -145,6 +145,36 @@ try {
   assert.match(migration, /for update/);
   assert.match(migration, /grant execute[\s\S]*to service_role/);
 
+  // Reservation and completion touch the same counters. Keep their first row
+  // locks in the same order so a finishing request cannot deadlock a new one.
+  const reserveSql = migration.slice(
+    migration.indexOf("create or replace function public.reserve_ai_usage("),
+    migration.indexOf("create or replace function public.complete_ai_usage("),
+  );
+  const completionSql = migration.slice(
+    migration.indexOf("create or replace function public.complete_ai_usage("),
+    migration.indexOf("create or replace function public.record_ai_provider_signal("),
+  );
+  for (const [label, body, operation] of [
+    ["reservation", reserveSql, "insert into"],
+    ["completion", completionSql, "update"],
+  ]) {
+    const positions = ["ai_usage_global_daily", "ai_usage_daily", "ai_usage_monthly"].map(
+      (table) =>
+        body.indexOf(`${operation} public.${table} `) >= 0
+          ? body.indexOf(`${operation} public.${table} `)
+          : body.indexOf(`${operation} public.${table}(`),
+    );
+    assert.ok(
+      positions.every((position) => position >= 0),
+      `${label} must account for all counters`,
+    );
+    assert.ok(
+      positions[0] < positions[1] && positions[1] < positions[2],
+      `${label} must lock global, daily, then monthly counters`,
+    );
+  }
+
   console.log("AI capacity tests passed");
 } finally {
   globalThis.fetch = originalFetch;

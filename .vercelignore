@@ -1,0 +1,55 @@
+# Source uploads only. Run node scripts/vercel-upload-preflight.mjs first.
+# Keep this policy synchronized with that preflight's reviewed allowlist.
+/*
+!/src
+!/public
+!/package.json
+!/package-lock.json
+!/tsconfig.json
+!/vite.vercel.config.ts
+!/vercel.json
+
+# Defense in depth inside the two allowed source directories.
+**/.*
+**/*.local
+**/*.log
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.dump
+**/*.backup
+**/*.bak
+**/*.sqlite*
+**/*.db
+**/*.zip
+**/*.har
+**/*.trace
+**/config.local.js
+**/storage-state*.json
+**/storageState*.json
+**/auth-state*.json
+**/Cookies
+**/Login Data
+**/Local State
+**/Preferences
+**/History
+**/Web Data
+**/Default
+**/Profile *
+**/node_modules
+**/goplatinum_export
+**/browser-companion
+**/browser-profiles
+**/browser-profile*
+**/chrome-profile*
+**/chromium-profile*
+**/unimate-companion-live-preview-*
+**/unimate-companion-browser-*
+**/test-results
+**/playwright-report
+**/reports
+**/artifacts
+**/logs
+**/tmp
+**/temp

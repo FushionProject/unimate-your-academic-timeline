@@ -248,6 +248,11 @@ begin
   update public.ai_request_ledger set status = p_status,
     estimated_output_tokens = p_estimated_output_tokens,
     error_kind = left(p_error_kind, 40), completed_at = now() where id = v_event.id;
+  -- Match reserve_ai_usage: global, then daily, then monthly. Reversing this
+  -- order can deadlock a completion against a new request for the same user.
+  update public.ai_usage_global_daily set estimated_output_tokens = estimated_output_tokens + p_estimated_output_tokens,
+    provider_error_count = provider_error_count + case when p_status = 'provider_error' then 1 else 0 end,
+    updated_at = now() where usage_date = v_event.created_at::date;
   update public.ai_usage_daily set estimated_output_tokens = estimated_output_tokens + p_estimated_output_tokens,
     provider_error_count = provider_error_count + case when p_status = 'provider_error' then 1 else 0 end,
     updated_at = now()
@@ -258,9 +263,6 @@ begin
     updated_at = now()
     where user_id = v_event.user_id and usage_month = v_month
       and feature = v_event.feature and entitlement = v_event.entitlement;
-  update public.ai_usage_global_daily set estimated_output_tokens = estimated_output_tokens + p_estimated_output_tokens,
-    provider_error_count = provider_error_count + case when p_status = 'provider_error' then 1 else 0 end,
-    updated_at = now() where usage_date = v_event.created_at::date;
 end;
 $$;
 

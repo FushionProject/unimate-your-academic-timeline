@@ -4,6 +4,8 @@
 -- provider circuit breaker. This step adds the separate product-tier allowance.
 -- Contract: Free: exactly 2 lifetime syllabus parses; no Ask/Companion AI.
 -- Pro: 30 syllabus/month, 750 text/month, 25 screenshots/day and 300/month.
+begin;
+
 create table if not exists public.ai_usage_buckets (
   user_id uuid not null references auth.users (id) on delete cascade,
   feature text not null check (feature in ('syllabus', 'text', 'screenshot')),
@@ -32,16 +34,16 @@ create index if not exists ai_usage_reservations_created_at_idx on public.ai_usa
 alter table public.ai_usage_buckets enable row level security;
 alter table public.ai_usage_daily_buckets enable row level security;
 alter table public.ai_usage_reservations enable row level security;
-revoke all on table public.ai_usage_buckets from anon, authenticated;
-revoke all on table public.ai_usage_daily_buckets from anon, authenticated;
-revoke all on table public.ai_usage_reservations from anon, authenticated;
+revoke all on table public.ai_usage_buckets from public, anon, authenticated;
+revoke all on table public.ai_usage_daily_buckets from public, anon, authenticated;
+revoke all on table public.ai_usage_reservations from public, anon, authenticated;
 grant select, insert, update, delete on table public.ai_usage_buckets to service_role;
 grant select, insert, update, delete on table public.ai_usage_daily_buckets to service_role;
 grant select, insert, update, delete on table public.ai_usage_reservations to service_role;
 
 create or replace function public.reserve_ai_entitlement_usage(requested_user_id uuid, requested_feature text, requested_request_id uuid)
 returns table (allowed boolean, used integer, quota_limit integer, period_key text, denial_code text)
-language plpgsql security definer set search_path = pg_catalog, public as $$
+language plpgsql security definer set search_path = '' as $$
 declare
   pro_user boolean := false;
   selected_limit integer;
@@ -92,15 +94,16 @@ begin
   end if;
   insert into public.ai_usage_buckets as b (user_id, feature, period_key, used)
   values (requested_user_id, requested_feature, selected_period, 1)
-  on conflict (user_id, feature, period_key) do update
+  -- The named constraint avoids ambiguity with the period_key output variable.
+  on conflict on constraint ai_usage_buckets_pkey do update
   set used = b.used + 1, updated_at = now() where b.used < selected_limit
   returning b.used into next_used;
   if next_used is null then
     delete from public.ai_usage_reservations where user_id = requested_user_id and request_id = requested_request_id;
     if pro_user and requested_feature = 'screenshot' then
-      update public.ai_usage_daily_buckets set used = greatest(0, used - 1), updated_at = now()
-      where user_id = requested_user_id and feature = requested_feature
-        and usage_date = timezone('utc', now())::date;
+      update public.ai_usage_daily_buckets as d set used = greatest(0, d.used - 1), updated_at = now()
+      where d.user_id = requested_user_id and d.feature = requested_feature
+        and d.usage_date = timezone('utc', now())::date;
     end if;
     select b.used into next_used from public.ai_usage_buckets as b
     where b.user_id = requested_user_id and b.feature = requested_feature and b.period_key = selected_period;
@@ -112,3 +115,5 @@ $$;
 revoke all on function public.reserve_ai_entitlement_usage(uuid, text, uuid) from public, anon, authenticated;
 grant execute on function public.reserve_ai_entitlement_usage(uuid, text, uuid) to service_role;
 comment on function public.reserve_ai_entitlement_usage(uuid, text, uuid) is 'Server-only product-tier allowance reservation; deployment step 2 after capacity controls.';
+
+commit;

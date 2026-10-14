@@ -7,18 +7,21 @@ export const Route = createFileRoute("/reset-password")({
   component: ResetPassword,
 });
 
-function friendlyUpdateError(message: string) {
+function friendlyUpdateError(message: string, code?: string) {
   const lower = message.toLowerCase();
-  if (lower.includes("same password") || lower.includes("different")) {
-    return "Choose a password you have not used for this account.";
+  if (code === "network_error" || lower.includes("fetch") || lower.includes("network")) {
+    return "We couldn't update your password. Check your connection and try again.";
   }
-  if (lower.includes("weak") || lower.includes("password")) {
-    return "Use a stronger password with at least 8 characters.";
+  if (code === "same_password" || lower.includes("same password")) {
+    return "Choose a password you have not used for this account.";
   }
   if (lower.includes("expired") || lower.includes("invalid")) {
     return "This reset link has expired or was already used. Request a new one below.";
   }
-  return message || "We could not update your password. Please request a new reset link.";
+  if (code === "weak_password" || lower.includes("weak")) {
+    return "Use a stronger password with at least 8 characters.";
+  }
+  return "We could not update your password. Please try again or request a new reset link.";
 }
 
 function ResetPassword() {
@@ -47,13 +50,18 @@ function ResetPassword() {
       return;
     }
     setLoading(true);
-    const result = await updatePassword(password);
-    setLoading(false);
-    if (result.error) {
-      setError(friendlyUpdateError(result.error));
-      return;
+    try {
+      const result = await updatePassword(password);
+      if (result.error) {
+        setError(friendlyUpdateError(result.error, result.errorCode));
+        return;
+      }
+      setComplete(true);
+    } catch {
+      setError("We couldn't update your password. Check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-    setComplete(true);
   };
 
   if (authLoading) {

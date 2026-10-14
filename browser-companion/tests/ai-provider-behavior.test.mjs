@@ -15,6 +15,7 @@ import {
 import { courseworkEvidence } from "../../src/lib/coursework-grounding.ts";
 import { entitlementFor } from "../../src/lib/ai-entitlements.ts";
 import { getCompanionAccessState } from "../../src/lib/companion-store.ts";
+import { supabaseServiceHeaders } from "../../src/lib/supabase-service.ts";
 
 const source = fs.readFileSync(new URL("../../src/server.ts", import.meta.url), "utf8");
 const ast = ts.createSourceFile("server.ts", source, ts.ScriptTarget.Latest, true);
@@ -43,6 +44,153 @@ function serverHelpers(names, globals = {}) {
   }).outputText;
   vm.runInContext(`${compiled}\nglobalThis.api = { ${names.join(", ")} };`, context);
   return context;
+}
+
+// All privileged Supabase transports accept both key formats without placing
+// opaque secret keys in JWT headers. No real credentials or network are used.
+{
+  const modern = ["sb", "secret", "synthetic".repeat(4)].join("_");
+  const legacy = ["eyJhbGciOiJIUzI1NiJ9", "eyJyb2xlIjoic2VydmljZV9yb2xlIn0", "synthetic"].join(".");
+  assert.throws(() => supabaseServiceHeaders("   "), /not configured/);
+  for (const key of [modern, legacy]) {
+    const expected =
+      key === modern ? { apikey: key } : { apikey: key, Authorization: `Bearer ${key}` };
+    assert.deepEqual(supabaseServiceHeaders(`  ${key}  `), expected);
+    const calls = [];
+    const env = {
+      VITE_SUPABASE_URL: "https://fixture.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: key,
+      AI_DURABLE_QUOTAS_ENABLED: "true",
+      AI_DURABLE_ENTITLEMENTS_ENABLED: "true",
+    };
+    const context = serverHelpers(
+      [
+        "CompanionUpstreamError",
+        "patchBillingProfile",
+        "readBillingProfileAsServiceRole",
+        "findUserIdsByStripeCustomer",
+        "readBillingProfile",
+      ],
+      {
+        supabaseServiceHeaders,
+        process: { env: { ...env, VITE_SUPABASE_ANON_KEY: "public-fixture" } },
+        SUPABASE_ENTITLEMENT_TIMEOUT_MS: 8000,
+        fetchWithTimeout: async (...args) => {
+          calls.push(args);
+          return new Response(
+            JSON.stringify([{ id: "student", is_pro: true, billing_revision: 1 }]),
+          );
+        },
+      },
+    );
+    assert.equal(
+      await context.api.patchBillingProfile(
+        "student",
+        { is_pro: true },
+        { is_pro: false, stripe_customer_id: null, billing_revision: 0 },
+      ),
+      "updated",
+    );
+    assert.equal((await context.api.readBillingProfileAsServiceRole("student")).is_pro, true);
+    assert.equal((await context.api.findUserIdsByStripeCustomer("customer"))[0], "student");
+    for (const [, options, timeout] of calls) {
+      const headers = new Headers(options.headers);
+      assert.equal(headers.get("apikey"), key);
+      assert.equal(headers.get("authorization"), key === modern ? null : `Bearer ${key}`);
+      assert.equal(timeout, 8000);
+    }
+    assert.equal(calls[0][1].method, "PATCH");
+    assert.equal(calls[0][1].headers.Prefer, "return=representation");
+    assert.deepEqual(JSON.parse(calls[0][1].body), { is_pro: true, billing_revision: 1 });
+    assert.equal(new URL(calls[0][0]).searchParams.get("billing_revision"), "eq.0");
+    assert.equal(new URL(calls[0][0]).searchParams.get("stripe_customer_id"), "is.null");
+    await context.api.readBillingProfile("student", "student-session-jwt");
+    assert.equal(calls.at(-1)[1].headers.apikey, "public-fixture");
+    assert.equal(calls.at(-1)[1].headers.Authorization, "Bearer student-session-jwt");
+
+    function moduleFixture(path) {
+      const moduleSource = fs.readFileSync(new URL(path, import.meta.url), "utf8");
+      const moduleContext = vm.createContext({
+        exports: {},
+        process: { env },
+        AbortSignal,
+        crypto,
+        require: (name) => {
+          assert.equal(name, "./supabase-service.ts");
+          return { supabaseServiceHeaders };
+        },
+        fetch: async (...args) => {
+          calls.push(args);
+          return new Response(
+            JSON.stringify([{ allowed: true, used: 1, quota_limit: 750, period_key: "fixture" }]),
+          );
+        },
+      });
+      vm.runInContext(
+        ts.transpileModule(moduleSource, {
+          compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+        }).outputText,
+        moduleContext,
+      );
+      return moduleContext.exports;
+    }
+    const capacity = moduleFixture("../../src/lib/ai-capacity.ts");
+    await capacity.recordProviderSignal({ success: true });
+    const entitlement = moduleFixture("../../src/lib/ai-entitlements.ts");
+    assert.equal(
+      (
+        await entitlement.reserveEntitlementUsage({
+          userId: "student",
+          feature: "text",
+          requestId: "fixture",
+        })
+      ).allowed,
+      true,
+    );
+    for (const [url, options] of calls.slice(-2)) {
+      assert.match(url, /^https:\/\/fixture\.supabase\.co\/rest\/v1\/rpc\//);
+      assert.equal(options.method, "POST");
+      const headers = new Headers(options.headers);
+      assert.equal(headers.get("apikey"), key);
+      assert.equal(headers.get("authorization"), key === modern ? null : `Bearer ${key}`);
+      assert.ok(options.signal instanceof AbortSignal);
+    }
+    assert.deepEqual(JSON.parse(calls.at(-1)[1].body), {
+      requested_user_id: "student",
+      requested_feature: "text",
+      requested_request_id: "fixture",
+    });
+  }
+
+  // Execute the scanner with in-memory synthetic files, never actual env files.
+  const scanner = fs
+    .readFileSync(new URL("../../scripts/secret-scan.mjs", import.meta.url), "utf8")
+    .replace(/^import .*;\n/gm, "");
+  for (const [value, shouldReject] of [
+    [modern, true],
+    [["sb", "publishable", "synthetic".repeat(4)].join("_"), false],
+  ]) {
+    const output = [];
+    let exitCode = 0;
+    try {
+      vm.runInNewContext(scanner, {
+        execFileSync: () => "fixture.txt\0",
+        readFileSync: () => value,
+        console: { error: (text) => output.push(text), log: (text) => output.push(text) },
+        process: {
+          exit: (code) => {
+            exitCode = code;
+            throw new Error("fixture-exit");
+          },
+        },
+      });
+    } catch (error) {
+      assert.equal(error.message, "fixture-exit");
+    }
+    assert.equal(exitCode, shouldReject ? 1 : 0);
+    assert.equal(output.join("\n").includes(value), false, "Scanner never prints credentials");
+    if (shouldReject) assert.match(output.join("\n"), /fixture.txt: Supabase secret/);
+  }
 }
 
 // Exercise the production request body for both text and image messages.
@@ -175,6 +323,25 @@ assert.equal(
     context.api.aiTextCompletion("fixture", [], { maxTokens: 100 }),
     (error) => error.code === "AI_EMPTY_RESPONSE",
   );
+  reply = Response.json({
+    choices: [
+      { finish_reason: "length", message: { content: "Start by multiplying both sides by" } },
+    ],
+  });
+  const callsBeforeTruncation = calls.length;
+  await assert.rejects(context.api.aiTextCompletion("fixture", [], { maxTokens: 320 }), (error) => {
+    const response = context.api.aiErrorResponse(error);
+    assert.equal(response.status, 502);
+    assert.equal(error.code, "AI_RESPONSE_TRUNCATED");
+    assert.match(error.message, /cut off.*try again.*shorter response/s);
+    return true;
+  });
+  assert.equal(
+    calls.length,
+    callsBeforeTruncation + 1,
+    "Truncated answers never trigger a hidden paid retry",
+  );
+  assert.equal(signals.at(-1).success, false);
   networkFailure = true;
   try {
     await context.api.aiTextCompletion("fixture", [], { maxTokens: 100 });
@@ -204,6 +371,7 @@ assert.equal(
       readAiProviderError,
       AI_PROVIDER_TIMEOUT_MS: 45000,
       MAX_IMAGE_DATA_URL_CHARS: 2500000,
+      MAX_SCREENSHOT_BODY_BYTES: 3000000,
       process: { env: { OPENAI_API_KEY: "fixture-key" } },
       jsonResponse: (body, status = 200, headers) =>
         new Response(JSON.stringify(body), { status, headers }),
@@ -273,6 +441,23 @@ assert.equal(
   const unknown = context.api.aiErrorResponse(new Error("private-provider-secret"));
   assert.equal(unknown.status, 502);
   assert.equal((await unknown.json()).retryable, true);
+  reply = Response.json({
+    choices: [{ finish_reason: "length", message: { content: "Partial screenshot answer" } }],
+  });
+  const truncated = await context.api.handleAnalyzeScreenshot(
+    new Request("https://unimate.test/api/analyze-screenshot", {
+      method: "POST",
+      body: JSON.stringify({ imageBase64: "data:image/png;base64,AAAA", question: "Explain this" }),
+    }),
+  );
+  const truncatedBody = await truncated.json();
+  assert.equal(truncated.status, 502);
+  assert.equal(truncatedBody.code, "AI_RESPONSE_TRUNCATED");
+  assert.equal(truncatedBody.retryable, true);
+  assert.equal(truncatedBody.answer, undefined, "No partial answer is returned as success");
+  assert.match(truncatedBody.error, /cut off.*try again.*shorter response/s);
+  assert.equal(signals.at(-1).success, false);
+  assert.equal(completions.at(-1)[2], "provider_error");
 }
 
 // Execute the Ask client adapter with simulated API responses, proving the
@@ -341,7 +526,13 @@ assert.equal(
   let refetches = 0;
   const context = vm.createContext({
     useBillingStatus: () => billing,
+    useAuth: () => ({ user: { id: "synthetic-gate-user" } }),
+    useState: (value) => [value, () => {}],
+    useRef: (value) => ({ current: value }),
+    useCallback: (callback) => callback,
+    useEffect: () => {},
     getCompanionAccessState,
+    Link: "link",
     AskProIntroduction: "paywall",
     Ask: "chat",
     LoaderCircle: "loader",

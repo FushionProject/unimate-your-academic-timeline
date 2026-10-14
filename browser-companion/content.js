@@ -1,17 +1,32 @@
 (() => {
   if (window.top !== window) return;
+  // Capture the generation once. Duplicate declarative/recovery injections
+  // must decide synchronously in this isolated world, not from an earlier
+  // background PING whose answer can race a newly mounted instance.
+  const extensionVersion = extensionRuntime()?.getManifest?.().version || "";
   // This binding exists only in Chrome's extension isolated world; host-page
   // JavaScript cannot read or invoke it. It allows a newly injected generation
   // to synchronously stop an older instance without a forgeable DOM event.
   try {
-    globalThis.__unimateCompanionPrivateDispose?.();
+    const previous = globalThis.__unimateCompanionPrivateDispose;
+    if (
+      previous?.protocolVersion === 2 &&
+      previous.extensionVersion === extensionVersion &&
+      previous.isActive?.()
+    )
+      return;
+    previous?.();
   } catch {
     // An invalidated older extension world may already be inert.
   }
   document.getElementById("unimate-companion-host")?.remove();
+  let disposed = false;
 
   const state = {
     open: false,
+    view: "loading",
+    renderedConversationId: null,
+    readingPosition: null,
     auth: null,
     privacyConsent: null,
     messages: [],
@@ -20,11 +35,20 @@
     conversationStartIndex: 0,
     pageHistory: [],
     draft: "",
+    failedQuestion: null,
+    unresolvedRequest: null,
     pendingSave: null,
     contextMode: null,
     busy: false,
+    sessionVersion: 0,
+    historyLoadVersion: 0,
+    pageHistoryUrl: location.href,
     captureHidden: false,
     captureStyle: null,
+    captureFocus: null,
+    captureLease: null,
+    captureTimer: null,
+    initialFocusPending: false,
     previouslyFocused: null,
     diagnostics: null,
     runtime: {
@@ -55,7 +79,7 @@
 
   const style = document.createElement("style");
   style.textContent = `
-    :host { all: initial; }
+    :host { all: initial; --um-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     * { box-sizing: border-box; }
     .um-root { position: fixed; z-index: 2147483647; right: 0; top: 50%; transform: translateY(-50%); font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #24211d; }
     .um-mascot { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 62px; height: 76px; padding: 0; border: 0; border-radius: 24px 0 0 24px; background: #F5C518; box-shadow: 0 10px 32px rgba(37, 31, 20, .2); cursor: pointer; display: grid; place-items: center; transition: width .18s ease, filter .18s ease; }
@@ -67,17 +91,18 @@
     .um-header { min-height: 70px; padding: 16px 18px; border-bottom: 1px solid rgba(36,33,29,.08); display: flex; align-items: center; justify-content: space-between; background: rgba(250,247,242,.95); }
     .um-brand { display: flex; align-items: center; gap: 11px; }
     .um-mark { width: 37px; height: 37px; border-radius: 13px; background: #F5C518; display: grid; place-items: center; font-size: 19px; }
-    .um-title { font: 700 15px/1.15 inherit; }
-    .um-subtitle { margin-top: 3px; color: #746e66; font: 500 11px/1.2 inherit; }
-    .um-icon-button { border: 0; background: transparent; color: #746e66; cursor: pointer; padding: 7px; border-radius: 10px; font: 600 18px/1 inherit; }
+    .um-title { font: 700 15px/1.15 var(--um-font); }
+    .um-subtitle { margin-top: 3px; color: #746e66; font: 500 11px/1.2 var(--um-font); }
+    .um-icon-button { border: 0; background: transparent; color: #746e66; cursor: pointer; padding: 7px; border-radius: 10px; font: 600 18px/1 var(--um-font); }
     .um-icon-button:hover { background: rgba(36,33,29,.06); color: #24211d; }
-    .um-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-    .um-status { margin: 14px 16px 0; padding: 9px 11px; border-radius: 12px; background: #fff9dc; color: #675512; font: 600 11px/1.35 inherit; }
+    .um-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+    .um-status { margin: 14px 16px 0; padding: 9px 11px; border-radius: 12px; background: #fff9dc; color: #675512; font: 600 11px/1.35 var(--um-font); }
     .um-status.error { background: #fff0ed; color: #9a3429; }
-    .um-messages { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 17px 16px 8px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; scrollbar-color: rgba(36,33,29,.2) transparent; }
-    .um-empty { margin: auto 22px; text-align: center; color: #746e66; font: 500 13px/1.55 inherit; }
+    .um-recovery-question { max-height: 96px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .um-messages { flex: 1; min-height: 80px; overflow-y: auto; overscroll-behavior: auto; padding: 17px 16px 8px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; scrollbar-color: rgba(36,33,29,.2) transparent; }
+    .um-empty { margin: auto 22px; text-align: center; color: #746e66; font: 500 13px/1.55 var(--um-font); }
     .um-empty strong { display: block; color: #24211d; font-size: 17px; margin-bottom: 7px; }
-    .um-message { max-width: 86%; border-radius: 16px; padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; font: 500 13px/1.48 inherit; }
+    .um-message { max-width: 86%; border-radius: 16px; padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; font: 500 13px/1.48 var(--um-font); }
     .um-message.user { align-self: flex-end; background: #F5C518; color: #2c2508; border-bottom-right-radius: 5px; }
     .um-message.assistant { align-self: flex-start; background: #fff; border: 1px solid rgba(36,33,29,.08); border-bottom-left-radius: 5px; }
     .um-thinking { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 38px; padding: 11px 13px; border: 1px solid rgba(36,33,29,.08); border-radius: 16px 16px 16px 5px; background: #fff; color: #827b72; }
@@ -87,39 +112,40 @@
     @keyframes um-pulse { 0%, 70%, 100% { opacity: .28; transform: translateY(0); } 35% { opacity: .9; transform: translateY(-2px); } }
     .um-composer { padding: 12px; border-top: 1px solid rgba(36,33,29,.08); background: #FAF7F2; }
     .um-context-row { margin: 0 4px 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .um-context { min-width: 0; color: #827b72; font: 500 10px/1.3 inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .um-screen { flex: 0 0 auto; border: 0; padding: 3px 0; background: transparent; color: #675512; cursor: pointer; font: 650 10px/1.2 inherit; }
+    .um-context { min-width: 0; color: #746e66; font: 500 10px/1.3 var(--um-font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .um-screen { flex: 0 0 auto; border: 0; padding: 3px 0; background: transparent; color: #675512; cursor: pointer; font: 650 10px/1.2 var(--um-font); }
     .um-screen:disabled { opacity: .45; cursor: default; }
     .um-form { display: flex; align-items: flex-end; gap: 8px; padding: 7px 7px 7px 12px; border: 1px solid rgba(36,33,29,.14); border-radius: 17px; background: #fff; }
     .um-form:focus-within { border-color: #b39117; box-shadow: 0 0 0 3px rgba(245,197,24,.15); }
-    .um-input { flex: 1; resize: none; border: 0; outline: 0; min-height: 30px; max-height: 112px; padding: 7px 0; background: transparent; color: #24211d; font: 500 13px/1.4 inherit; }
-    .um-send { flex: 0 0 auto; width: 38px; height: 38px; border: 0; border-radius: 13px; background: #F5C518; color: #2c2508; cursor: pointer; font: 800 17px/1 inherit; }
+    .um-input { flex: 1; min-width: 0; resize: none; border: 0; outline: 0; min-height: 30px; max-height: 112px; padding: 7px 0; background: transparent; color: #24211d; font: 500 13px/1.4 var(--um-font); }
+    .um-send { flex: 0 0 auto; width: 38px; height: 38px; border: 0; border-radius: 13px; background: #F5C518; color: #2c2508; cursor: pointer; font: 800 17px/1 var(--um-font); }
     .um-send:disabled { opacity: .45; cursor: default; }
-    .um-auth { margin: auto; width: 100%; padding: 28px; text-align: center; }
-    .um-auth h2 { margin: 0 0 8px; font: 750 20px/1.2 inherit; }
-    .um-auth p { margin: 0 0 20px; color: #746e66; font: 500 13px/1.5 inherit; }
-    .um-disclosure { margin: 16px 0 4px; padding: 14px; border: 1px solid rgba(36,33,29,.1); border-radius: 14px; background: #fff; color: #5f5951; text-align: left; font: 500 12px/1.5 inherit; }
+    .um-auth { margin: auto; width: 100%; padding: 28px; text-align: center; overflow-y: auto; overscroll-behavior: contain; }
+    .um-auth h2 { margin: 0 0 8px; font: 750 20px/1.2 var(--um-font); }
+    .um-auth p { margin: 0 0 20px; color: #746e66; font: 500 13px/1.5 var(--um-font); }
+    .um-disclosure { margin: 16px 0 4px; padding: 14px; border: 1px solid rgba(36,33,29,.1); border-radius: 14px; background: #fff; color: #5f5951; text-align: left; font: 500 12px/1.5 var(--um-font); }
     .um-disclosure strong { display: block; margin-bottom: 5px; color: #24211d; font-size: 12px; }
-    .um-secondary { width: 100%; margin-top: 8px; padding: 11px; border: 1px solid rgba(36,33,29,.14); border-radius: 13px; background: transparent; color: #5f5951; cursor: pointer; font: 700 12px/1 inherit; }
-    .um-field { width: 100%; margin-top: 10px; padding: 12px 13px; border: 1px solid rgba(36,33,29,.15); border-radius: 13px; background: #fff; outline: none; font: 500 13px/1 inherit; }
-    .um-field:focus { border-color: #d3aa13; box-shadow: 0 0 0 3px rgba(245,197,24,.18); }
-    .um-primary { width: 100%; margin-top: 12px; padding: 12px; border: 0; border-radius: 13px; background: #F5C518; color: #2c2508; cursor: pointer; font: 750 13px/1 inherit; }
+    .um-secondary { width: 100%; margin-top: 8px; padding: 11px; border: 1px solid rgba(36,33,29,.14); border-radius: 13px; background: transparent; color: #5f5951; cursor: pointer; font: 700 12px/1 var(--um-font); }
+    .um-primary { width: 100%; margin-top: 12px; padding: 12px; border: 0; border-radius: 13px; background: #F5C518; color: #2c2508; cursor: pointer; font: 750 13px/1 var(--um-font); }
     .um-primary:disabled { opacity: .5; }
-    .um-link { border: 0; background: transparent; margin-top: 14px; color: #746e66; text-decoration: underline; cursor: pointer; font: 600 11px/1 inherit; }
+    .um-link { border: 0; background: transparent; margin-top: 14px; color: #746e66; text-decoration: underline; cursor: pointer; font: 600 11px/1 var(--um-font); }
     .um-hidden { display: none !important; }
-    @media (max-width: 520px) { .um-root { top: auto; bottom: 16px; transform: none; } .um-panel, .um-panel.open { position: fixed; inset: 12px 68px 12px 12px; width: auto; height: auto; transform: translateX(0); border-radius: 20px; } .um-mascot { width: 54px; height: 68px; } }
+    .um-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+    @media (max-width: 520px) { .um-root { top: auto; bottom: 16px; transform: none; } .um-panel, .um-panel.open { position: fixed; inset: 12px 68px 12px 12px; width: auto; height: auto; transform: none; transition: none; border-radius: 20px; } .um-mascot { width: 54px; height: 68px; } }
     @media (prefers-reduced-motion: reduce) { .um-mascot, .um-panel { transition: none; } .um-thinking i { animation: none; opacity: .55; } }
   `;
 
   const root = document.createElement("div");
   root.className = "um-root";
   root.innerHTML = `
-    <section class="um-panel" role="dialog" aria-modal="true" aria-hidden="true" aria-label="UniMate Browser Companion" tabindex="-1">
+    <section class="um-panel" role="dialog" aria-hidden="true" aria-label="UniMate Browser Companion" tabindex="-1">
       <header class="um-header">
         <div class="um-brand"><div class="um-mark">✦</div><div><div class="um-title">UniMate</div><div class="um-subtitle">Browser Companion</div></div></div>
         <button class="um-icon-button um-close" type="button" aria-label="Close companion">×</button>
       </header>
       <div class="um-body"><div class="um-auth"><p>Loading your UniMate session…</p></div></div>
+      <div class="um-announcer um-sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div class="um-alert-announcer um-sr-only" role="alert" aria-atomic="true"></div>
     </section>
     <button class="um-mascot" type="button" aria-label="Open UniMate Browser Companion" title="Ask UniMate about this page" aria-expanded="false">
       ${
@@ -134,16 +160,59 @@
   const panel = root.querySelector(".um-panel");
   const mascot = root.querySelector(".um-mascot");
   const body = root.querySelector(".um-body");
+  const announcer = root.querySelector(".um-announcer");
+  const alertAnnouncer = root.querySelector(".um-alert-announcer");
   panel.inert = true;
 
   const nextPaint = () =>
     new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-  async function prepareForCapture() {
+  function canRestorePanelFocus() {
+    const active = document.activeElement;
+    return active === host || active === document.body || active === document.documentElement;
+  }
+
+  function handleCaptureFocusChange(event) {
+    if (
+      event.target !== host &&
+      event.target !== document.body &&
+      event.target !== document.documentElement
+    ) {
+      state.captureFocus = null;
+    }
+  }
+
+  async function prepareForCapture(request) {
+    const captureId = request?.captureId;
+    const expiresAt = request?.expiresAt;
+    const now = Date.now();
+    if (
+      typeof captureId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(captureId) ||
+      !Number.isFinite(expiresAt) ||
+      expiresAt <= now ||
+      expiresAt > now + 8000
+    )
+      throw new Error("The capture lease is invalid or expired.");
+    if (
+      state.captureLease &&
+      (state.captureLease.captureId !== captureId || state.captureLease.expiresAt !== expiresAt)
+    )
+      throw new Error("Another capture is already in progress.");
     if (!document.documentElement.contains(host)) {
       throw new Error("The UniMate interface is not mounted.");
     }
     if (!state.captureHidden) {
+      const active = shadow.activeElement;
+      state.captureFocus = active
+        ? {
+            element: active,
+            selectionStart: active.selectionStart,
+            selectionEnd: active.selectionEnd,
+            selectionDirection: active.selectionDirection,
+          }
+        : null;
+      document.addEventListener("focusin", handleCaptureFocusChange, true);
       state.captureStyle = {
         display: host.style.getPropertyValue("display"),
         displayPriority: host.style.getPropertyPriority("display"),
@@ -153,21 +222,39 @@
       host.style.setProperty("pointer-events", "none", "important");
       host.style.setProperty("display", "none", "important");
       state.captureHidden = true;
+      state.captureLease = { captureId, expiresAt };
+      state.captureTimer = setTimeout(
+        () => {
+          restoreAfterCapture(captureId);
+        },
+        expiresAt + 2000 - now,
+      );
     }
     try {
       await nextPaint();
+      if (state.captureLease?.captureId !== captureId || Date.now() >= expiresAt) {
+        throw new Error("The capture lease expired before the interface was ready.");
+      }
       if (getComputedStyle(host).display !== "none") {
         throw new Error("The UniMate interface could not be hidden safely.");
       }
-      return { hidden: true };
+      return { hidden: true, captureId };
     } catch (error) {
-      restoreAfterCapture();
+      restoreAfterCapture(captureId);
       throw error;
     }
   }
 
-  function restoreAfterCapture() {
+  function restoreAfterCapture(captureId, force = false) {
+    if (!force && (!captureId || captureId !== state.captureLease?.captureId)) {
+      return { restored: false };
+    }
+    clearTimeout(state.captureTimer);
+    state.captureTimer = null;
+    state.captureLease = null;
     if (!state.captureHidden) return { restored: true };
+    document.removeEventListener("focusin", handleCaptureFocusChange, true);
+    const focus = state.captureFocus;
     const previous = state.captureStyle || {};
     if (previous.display) {
       host.style.setProperty("display", previous.display, previous.displayPriority || "");
@@ -185,6 +272,21 @@
     }
     state.captureHidden = false;
     state.captureStyle = null;
+    state.captureFocus = null;
+    if (
+      focus?.element.isConnected &&
+      (state.open || focus.element === mascot) &&
+      canRestorePanelFocus()
+    ) {
+      focus.element.focus({ preventScroll: true });
+      if (typeof focus.selectionStart === "number") {
+        focus.element.setSelectionRange(
+          focus.selectionStart,
+          focus.selectionEnd,
+          focus.selectionDirection,
+        );
+      }
+    }
     return { restored: true };
   }
 
@@ -202,7 +304,7 @@
             error.phase = response?.errorPhase || "runtime";
             error.retryAfterMs = Number(response?.retryAfterMs || 0);
             error.retryable = response?.retryable;
-            error.backgroundResponded = true;
+            error.backgroundResponded = typeof response?.ok === "boolean";
             return reject(error);
           }
           resolve(response.data);
@@ -249,6 +351,7 @@
     if (nextOpen === state.open) return;
     if (nextOpen) state.previouslyFocused = document.activeElement;
     state.open = nextOpen;
+    state.initialFocusPending = nextOpen;
     panel.classList.toggle("open", state.open);
     panel.inert = !state.open;
     panel.setAttribute("aria-hidden", String(!state.open));
@@ -272,10 +375,20 @@
   }
 
   async function refreshMessagesOnOpen() {
+    const sessionVersion = state.sessionVersion;
+    const loadVersion = ++state.historyLoadVersion;
     try {
-      if (state.pendingSave) return; // Keep an unsaved answer visible until it is saved.
+      if (state.pendingSave || state.failedQuestion) return; // Keep unresolved work in its conversation.
       const chatState = await send({ type: "LOAD_CHAT_STATE" });
-      if (!state.open || state.busy) return;
+      if (
+        !state.open ||
+        state.busy ||
+        state.pendingSave ||
+        state.failedQuestion ||
+        sessionVersion !== state.sessionVersion ||
+        loadVersion !== state.historyLoadVersion
+      )
+        return;
       if (state.activeConversationId !== chatState.conversationId) {
         state.pageHistory = [];
         state.draft = "";
@@ -286,9 +399,16 @@
       // Shared history is visible for continuity, but it is not treated as
       // evidence about the current webpage in the next screenshot request.
       state.conversationStartIndex = chatState.messages.length;
-      renderChat();
+      if (state.view !== "privacy") renderChat();
     } catch (error) {
-      if (state.open && !state.busy) {
+      if (
+        state.open &&
+        !state.busy &&
+        sessionVersion === state.sessionVersion &&
+        loadVersion === state.historyLoadVersion &&
+        state.view !== "privacy"
+      ) {
+        if (handleAccessRequired(error)) return;
         renderChat(error?.message || "Shared chat history could not be refreshed.", true);
       }
     }
@@ -314,59 +434,67 @@
 
   function focusInitialControl() {
     if (!state.open) return;
-    const preferred = panel.querySelector(".um-input, .um-email");
+    const preferred = panel.querySelector(".um-input, .um-signin");
     (preferred || focusableControls()[0] || panel).focus({ preventScroll: true });
   }
 
-  function trapPanelKeyboard(event) {
+  function prepareRenderFocus() {
+    const active = shadow.activeElement;
+    const restore =
+      state.open &&
+      (body.contains(active) || (state.initialFocusPending && panel.contains(active)));
+    state.initialFocusPending = false;
+    return restore;
+  }
+
+  function restoreRenderedFocus() {
+    if (canRestorePanelFocus()) focusInitialControl();
+  }
+
+  function handlePanelKeyboard(event) {
     if (!state.open) return;
-    if (event.key === "Escape") {
+    if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) {
       event.preventDefault();
       event.stopPropagation();
       toggle(false);
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const controls = focusableControls();
-    if (!controls.length) {
-      event.preventDefault();
-      panel.focus({ preventScroll: true });
-      return;
-    }
-    const first = controls[0];
-    const last = controls[controls.length - 1];
-    const active = shadow.activeElement;
-    if (event.shiftKey && (active === first || active === panel)) {
-      event.preventDefault();
-      last.focus({ preventScroll: true });
-    } else if (!event.shiftKey && (active === last || !panel.contains(active))) {
-      event.preventDefault();
-      first.focus({ preventScroll: true });
     }
   }
 
   function containWheel(event) {
     if (!state.open || !panel.contains(event.target)) return;
+    if (event.ctrlKey) return; // Preserve the browser's zoom gesture.
+    if (!event.deltaY) {
+      if (event.deltaX) event.preventDefault();
+      return;
+    }
     let current = event.target instanceof Element ? event.target : null;
-    let scrollable = null;
+    let passedScrollable = false;
     while (current && current !== panel) {
       const styles = getComputedStyle(current);
       if (/(auto|scroll)/.test(styles.overflowY) && current.scrollHeight > current.clientHeight) {
-        scrollable = current;
-        break;
+        const atTop = current.scrollTop <= 0;
+        const atBottom =
+          Math.ceil(current.scrollTop + current.clientHeight) >= current.scrollHeight;
+        if (event.deltaY < 0 ? !atTop : !atBottom) {
+          if (passedScrollable) {
+            // A textarea or message list has reached its edge. Move the panel's
+            // next scrollable parent without passing this gesture to the page.
+            event.preventDefault();
+            const unit =
+              event.deltaMode === 1
+                ? parseFloat(styles.lineHeight) || 16
+                : event.deltaMode === 2
+                  ? current.clientHeight
+                  : 1;
+            current.scrollTop += event.deltaY * unit;
+          }
+          return;
+        }
+        passedScrollable = true;
       }
       current = current.parentElement;
     }
-    if (!scrollable) {
-      event.preventDefault();
-      return;
-    }
-    const atTop = scrollable.scrollTop <= 0;
-    const atBottom =
-      Math.ceil(scrollable.scrollTop + scrollable.clientHeight) >= scrollable.scrollHeight;
-    if ((event.deltaY < 0 && atTop) || (event.deltaY > 0 && atBottom)) {
-      event.preventDefault();
-    }
+    event.preventDefault();
   }
 
   function escapeHtml(value) {
@@ -390,12 +518,14 @@
 
   function studentFacingError(error, captureAttempted = false) {
     const raw = String(error?.message || "");
+    if (error?.code === "AI_RESPONSE_TRUNCATED")
+      return "That answer was cut short, so I haven’t shown an incomplete explanation. Your question is kept here. Try asking for one part at a time.";
     if (
       ["AI_BILLING_UNAVAILABLE", "AI_CONFIGURATION_ERROR", "AI_NOT_CONFIGURED"].includes(
         error?.code,
       )
     ) {
-      return "AI help is temporarily unavailable while UniMate restores service. Your question is saved below.";
+      return "AI help is temporarily unavailable while UniMate restores service. Your question is kept here.";
     }
     if (error?.code === "AUTH_REQUIRED" || error?.phase === "auth") {
       return "Your UniMate session has ended. Sign in again to continue.";
@@ -407,12 +537,12 @@
       return "UniMate couldn't verify your Pro access. Please try again in a moment.";
     }
     if (error?.retryable === false) {
-      return "AI help is temporarily unavailable. Your question is saved below.";
+      return "AI help is temporarily unavailable. Your question is kept here.";
     }
     if (/429|rate limit|too many requests/i.test(raw)) {
       return error?.retryAfterMs > 0
-        ? `UniMate is a little busy right now. Your question is saved below; try again in about ${Math.ceil(error.retryAfterMs / 1000)} seconds.`
-        : "UniMate is a little busy right now. Your question is saved below; wait a moment, then try again.";
+        ? `UniMate is a little busy right now. Your question is kept here; try again in about ${Math.ceil(error.retryAfterMs / 1000)} seconds.`
+        : "UniMate is a little busy right now. Your question is kept here; wait a moment, then try again.";
     }
     if (/updated or reloaded|receiving end|message port|could not establish/i.test(raw)) {
       return "UniMate needs to reconnect to this page. Refresh once, then try again.";
@@ -452,29 +582,32 @@
   }
 
   function renderAuth(error = "") {
+    const restoreFocus = prepareRenderFocus();
+    state.view = "auth";
     const configured = state.auth?.configured !== false;
     body.innerHTML = `
       <div class="um-auth">
         <div class="um-mark" style="margin:0 auto 16px">✦</div>
         <h2>${configured ? "Welcome back" : "Setup needed"}</h2>
-        <p>${configured ? "Sign in with your existing UniMate account. No new account is created." : "Run npm run companion:configure, then reload this extension."}</p>
+        <p>${configured ? "Open a private UniMate window to sign in with your existing account. You’ll be ready to continue here when you’re done." : "Run npm run companion:configure, then reload this extension."}</p>
         ${error ? `<div class="um-status error" role="alert">${escapeHtml(error)}</div>` : ""}
         ${
           configured
             ? `
-          <form class="um-login">
-            <input class="um-field um-email" type="email" autocomplete="username" placeholder="UniMate email" aria-label="UniMate email" required />
-            <input class="um-field um-password" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password" required />
-            <button class="um-primary" type="submit">Sign in to UniMate</button>
-          </form>`
+          <button class="um-primary um-signin" type="button">Sign in securely</button>`
             : ""
         }
       </div>`;
-    body.querySelector(".um-login")?.addEventListener("submit", handleSignIn);
-    queueMicrotask(focusInitialControl);
+    body.querySelector(".um-signin")?.addEventListener("click", handleOpenSignIn);
+    if (restoreFocus) queueMicrotask(restoreRenderedFocus);
   }
 
   function renderPrivacyConsent(error = "") {
+    const restoreFocus = prepareRenderFocus();
+    rememberReadingPosition();
+    state.view = "privacy";
+    // A disclosure opened deliberately must supersede an older access/history load.
+    state.historyLoadVersion += 1;
     body.innerHTML = `
       <div class="um-auth">
         <div class="um-mark" style="margin:0 auto 16px">✦</div>
@@ -498,7 +631,7 @@
         renderPrivacyConsent("We couldn’t save that choice. Please try again.");
       }
     });
-    queueMicrotask(focusInitialControl);
+    if (restoreFocus) queueMicrotask(restoreRenderedFocus);
   }
 
   async function handlePrivacyConsent() {
@@ -513,12 +646,15 @@
     }
   }
 
-  function renderNotPro() {
+  function renderNotPro(error = "") {
+    const restoreFocus = prepareRenderFocus();
+    state.view = "upgrade";
     body.innerHTML = `
       <div class="um-auth">
         <div class="um-mark" style="margin:0 auto 16px">✦</div>
         <h2>Meet UniMate Pro</h2>
         <p>A little help, right beside your coursework. Companion unlocks after your Pro purchase is confirmed.</p>
+        ${error ? `<div class="um-status error" role="alert">${escapeHtml(error)}</div>` : ""}
         <button class="um-primary um-upgrade" type="button">Explore UniMate Pro</button>
         <button class="um-secondary um-check-plan" type="button">I’ve upgraded · Check access</button>
         <button class="um-link um-signout" type="button">Sign out</button>
@@ -526,20 +662,65 @@
     body.querySelector(".um-signout").addEventListener("click", handleSignOut);
     body
       .querySelector(".um-upgrade")
-      .addEventListener("click", () => send({ type: "OPEN_UPGRADE" }));
+      .addEventListener("click", () =>
+        send({ type: "OPEN_UPGRADE" }).catch(() =>
+          renderNotPro("We couldn’t open UniMate. Please try again."),
+        ),
+      );
     body.querySelector(".um-check-plan").addEventListener("click", initialize);
-    queueMicrotask(focusInitialControl);
+    if (restoreFocus) queueMicrotask(restoreRenderedFocus);
   }
 
-  function renderChat(status = "", isError = false) {
+  function rememberReadingPosition() {
+    if (state.view !== "chat") return;
+    const messages = body.querySelector(".um-messages");
+    if (!messages) return;
+    state.readingPosition = {
+      conversationId: state.renderedConversationId,
+      top: messages.scrollTop,
+      atBottom: messages.scrollHeight - messages.clientHeight - messages.scrollTop <= 4,
+    };
+  }
+
+  function announce(message, isError = false) {
+    // This node survives body rerenders; insert text only after it already exists.
+    // History refreshes intentionally do not announce the entire conversation.
+    announcer.textContent = isError ? "" : String(message || "");
+    alertAnnouncer.textContent = isError ? String(message || "") : "";
+  }
+
+  function renderChat(status = "", isError = false, scrollToLatest = false) {
     if (!state.privacyConsent?.accepted) return renderPrivacyConsent();
     if (!state.auth?.authenticated) return renderAuth();
     if (!state.auth.isPro) return renderNotPro();
+    rememberReadingPosition();
+    const readingPosition = state.readingPosition;
+    const preserveReading =
+      !scrollToLatest &&
+      readingPosition &&
+      readingPosition.conversationId === state.activeConversationId &&
+      !readingPosition.atBottom;
+    state.view = "chat";
+    state.renderedConversationId = state.activeConversationId;
+    const restoreFocus = prepareRenderFocus();
+    const previousAction = [
+      ".um-privacy-settings",
+      ".um-signout",
+      ".um-retry-save",
+      ".um-skip-save",
+      ".um-retry-question",
+      ".um-discard-question",
+    ].find((selector) => shadow.activeElement?.matches?.(selector));
+    const previousInput = body.querySelector(".um-input");
+    const restoreInputFocus = previousInput && shadow.activeElement === previousInput;
+    const selection = restoreInputFocus
+      ? [previousInput.selectionStart, previousInput.selectionEnd]
+      : null;
     const messages = state.messages.length
       ? state.messages
           .map(
             (item) =>
-              `<div class="um-message ${item.role}">${
+              `<div class="um-message ${item.role === "assistant" ? "assistant" : "user"}"><span class="um-sr-only">${item.role === "assistant" ? "UniMate" : "You"}: </span>${
                 item.role === "assistant"
                   ? formatAssistantMessage(item.message)
                   : escapeHtml(item.message)
@@ -548,9 +729,10 @@
           .join("")
       : `<div class="um-empty"><strong>Let’s work through it together.</strong>Ask me to explain a tricky idea, find a starting point, or walk through a problem. Highlight a passage to help me focus.</div>`;
     body.innerHTML = `
-      ${status ? `<div class="um-status ${isError ? "error" : ""}" ${isError ? 'role="alert"' : 'role="status"'}>${escapeHtml(status)}</div>` : ""}
-      ${state.pendingSave ? '<div class="um-status" role="status">This answer has not synced yet. Copy it before continuing without saving if you want to keep it.<button class="um-secondary um-retry-save" type="button">Save this answer again</button><button class="um-link um-skip-save" type="button">Continue without saving</button></div>' : ""}
-      <div class="um-messages" role="log" aria-live="polite" aria-relevant="additions text" aria-busy="${state.busy}">${messages}${state.busy ? '<div class="um-thinking" role="status" aria-label="UniMate is thinking"><i></i><i></i><i></i></div>' : ""}</div>
+      ${status ? `<div class="um-status ${isError ? "error" : ""}">${escapeHtml(status)}</div>` : ""}
+      ${state.failedQuestion ? `<div class="um-status"><strong>${state.unresolvedRequest ? "Your earlier question’s status is uncertain." : "Your earlier question is still here."}</strong> Your new draft is safe below. ${state.unresolvedRequest ? "Retry checks the same request; it does not start a separate question." : "Retry this question or discard it before sending your new draft."}<p class="um-recovery-question" tabindex="0" aria-label="Earlier question">${escapeHtml(state.failedQuestion)}</p><button class="um-secondary um-retry-question" type="button" ${state.busy ? "disabled" : ""}>Retry earlier question</button><button class="um-link um-discard-question" type="button" ${state.busy ? "disabled" : ""}>Discard earlier question</button></div>` : ""}
+      ${state.pendingSave ? '<div class="um-status">This answer has not synced yet. Copy it before continuing without saving if you want to keep it.<button class="um-secondary um-retry-save" type="button">Save this answer again</button><button class="um-link um-skip-save" type="button">Continue without saving</button></div>' : ""}
+      <div class="um-messages" role="log" aria-live="off" aria-busy="${state.busy}">${messages}${state.busy ? '<div class="um-thinking" aria-label="UniMate is thinking"><i></i><i></i><i></i></div>' : ""}</div>
       <div class="um-composer">
         <div class="um-context-row">
           <span class="um-context">${escapeHtml(state.activeConversationTitle)}</span>
@@ -565,15 +747,21 @@
         <div style="display:flex;justify-content:space-between"><button class="um-link um-privacy-settings" type="button" ${state.busy ? "disabled" : ""}>Page sharing</button><button class="um-link um-signout" type="button" ${state.busy ? "disabled" : ""}>Sign out</button></div>
       </div>`;
     const messagesNode = body.querySelector(".um-messages");
-    messagesNode.scrollTop = messagesNode.scrollHeight;
+    messagesNode.scrollTop = preserveReading ? readingPosition.top : messagesNode.scrollHeight;
+    if (status)
+      announce(
+        `${status}${isError && state.failedQuestion ? " Your earlier question and new draft are both kept here. Retry or discard the earlier question before sending your new draft." : ""}`,
+        isError,
+      );
     const input = body.querySelector(".um-input");
+    input.style.height = `${Math.min(input.scrollHeight, 112)}px`;
     input.addEventListener("input", () => {
       state.draft = input.value;
       input.style.height = "auto";
       input.style.height = `${Math.min(input.scrollHeight, 112)}px`;
     });
     input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
         event.preventDefault();
         body.querySelector(".um-form").requestSubmit();
       }
@@ -584,24 +772,47 @@
       .addEventListener("click", () => renderPrivacyConsent());
     body.querySelector(".um-signout").addEventListener("click", handleSignOut);
     body.querySelector(".um-retry-save")?.addEventListener("click", retrySaving);
+    body.querySelector(".um-retry-question")?.addEventListener("click", () => {
+      if (!state.busy && state.failedQuestion) void submitChat(state.failedQuestion, true);
+    });
+    body.querySelector(".um-discard-question")?.addEventListener("click", () => {
+      if (state.busy) return;
+      state.failedQuestion = null;
+      state.unresolvedRequest = null;
+      renderChat("Earlier question discarded. Your new draft is ready below.");
+    });
     body.querySelector(".um-skip-save")?.addEventListener("click", () => {
       state.pendingSave = null;
       renderChat(
         "You can keep studying. The unsaved answer may disappear when this chat refreshes.",
       );
     });
-    if (!state.busy) queueMicrotask(focusInitialControl);
+    if (restoreInputFocus && state.open) {
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(...selection);
+    } else if (restoreFocus)
+      queueMicrotask(() => {
+        if (!state.open || !canRestorePanelFocus()) return;
+        const action = previousAction && body.querySelector(previousAction);
+        if (action && !action.disabled) action.focus({ preventScroll: true });
+        else focusInitialControl();
+      });
   }
 
   async function retrySaving(event) {
+    const sessionVersion = state.sessionVersion;
+    const requestId = state.pendingSave;
     const button = event.currentTarget;
     button.disabled = true;
     button.textContent = "Saving…";
     try {
-      await send({ type: "RETRY_CHAT_PERSISTENCE", requestId: state.pendingSave });
+      await send({ type: "RETRY_CHAT_PERSISTENCE", requestId });
+      if (sessionVersion !== state.sessionVersion || requestId !== state.pendingSave) return;
       state.pendingSave = null;
       renderChat("Saved. You can pick this up in Ask UniMate, too.");
     } catch (error) {
+      if (sessionVersion !== state.sessionVersion || requestId !== state.pendingSave) return;
+      if (handleAccessRequired(error)) return;
       renderChat(
         error?.code === "PERSISTENCE_EXPIRED"
           ? error.message
@@ -611,47 +822,102 @@
     }
   }
 
-  async function handleSignIn(event) {
-    event.preventDefault();
-    const button = event.currentTarget.querySelector("button");
+  async function handleOpenSignIn(event) {
+    const sessionVersion = state.sessionVersion;
+    const button = event.currentTarget;
     button.disabled = true;
-    button.textContent = "Signing in…";
+    button.textContent = "Opening secure sign-in…";
     try {
-      state.auth = await send({
-        type: "SIGN_IN",
-        email: event.currentTarget.querySelector(".um-email").value.trim(),
-        password: event.currentTarget.querySelector(".um-password").value,
-      });
-      await initialize();
+      await send({ type: "OPEN_SIGN_IN" });
+      if (sessionVersion !== state.sessionVersion) return;
+      button.disabled = false;
+      button.textContent = "Sign in securely";
     } catch (error) {
-      renderAuth(error.message);
+      if (sessionVersion !== state.sessionVersion) return;
+      renderAuth("We couldn’t open your secure sign-in window. Please try again.");
     }
   }
 
-  async function handleSignOut() {
-    await send({ type: "SIGN_OUT" }).catch(() => undefined);
-    state.auth = { configured: true, authenticated: false, isPro: false };
+  function applyAuthState(auth, forceReset = false) {
+    const accountChanged =
+      forceReset || Boolean(state.auth?.userId && state.auth.userId !== auth.userId);
+    state.auth = auth;
+    if (!accountChanged) return false;
+    state.sessionVersion += 1;
+    state.historyLoadVersion += 1;
+    state.busy = false;
     state.messages = [];
     state.activeConversationId = null;
     state.activeConversationTitle = "Browser Companion";
     state.conversationStartIndex = 0;
     state.pageHistory = [];
+    state.pageHistoryUrl = location.href;
     state.draft = "";
+    state.failedQuestion = null;
+    state.unresolvedRequest = null;
     state.pendingSave = null;
+    state.contextMode = null;
+    state.diagnostics = null;
+    state.readingPosition = null;
+    state.renderedConversationId = null;
+    announce("");
+    return true;
+  }
+
+  function handleAccessRequired(error) {
+    if (error?.code === "AUTH_REQUIRED") {
+      // A definitive rejection is an identity boundary, not a network outage.
+      // Clear account-scoped work exactly as on sign-out before showing login.
+      applyAuthState({ configured: true, authenticated: false, isPro: false }, true);
+      renderAuth("Your UniMate session has ended. Sign in securely to continue.");
+      return true;
+    }
+    if (error?.code !== "PRO_REQUIRED" || !state.auth?.authenticated) return false;
+    // Entitlement changed, not identity: keep drafts, conversation and unsaved
+    // work so the same account can resume after access is restored.
+    applyAuthState({ ...state.auth, isPro: false });
+    state.busy = false;
+    renderNotPro("Your Pro access is not active. Your draft and earlier work are kept here.");
+    return true;
+  }
+
+  function handleSessionChanged() {
+    // Only the extension runtime can deliver this signal. Re-read account state
+    // from the background; never accept identity or tokens from event payloads.
+    applyAuthState({ configured: true, authenticated: false, isPro: false }, true);
+    state.privacyConsent = null;
+    if (state.open) void initialize();
+    else renderAuth();
+  }
+
+  async function handleSignOut() {
+    if (state.busy) return;
+    const sessionVersion = state.sessionVersion;
+    state.busy = true;
+    try {
+      await send({ type: "SIGN_OUT" });
+    } catch {
+      if (sessionVersion !== state.sessionVersion) return;
+      state.busy = false;
+      const error = "We couldn’t sign you out. Please try again.";
+      if (state.auth?.isPro) renderChat(error, true);
+      else renderNotPro(error);
+      return;
+    }
+    if (sessionVersion !== state.sessionVersion) return;
+    state.busy = false;
+    applyAuthState({ configured: true, authenticated: false, isPro: false });
     renderAuth();
   }
 
   async function handleWebsiteSignOut() {
+    const sessionVersion = state.sessionVersion;
     try {
       await send({ type: "WEBSITE_SIGN_OUT" });
-      state.auth = { configured: true, authenticated: false, isPro: false };
-      state.messages = [];
-      state.activeConversationId = null;
-      state.activeConversationTitle = "Browser Companion";
-      state.conversationStartIndex = 0;
-      state.pageHistory = [];
-      state.draft = "";
-      state.pendingSave = null;
+      if (sessionVersion !== state.sessionVersion) return;
+      // Even a sign-in that has not returned yet belongs to the old session.
+      if (!state.auth?.userId) state.sessionVersion += 1;
+      applyAuthState({ configured: true, authenticated: false, isPro: false });
       if (state.open) renderAuth();
     } catch {
       // Untrusted host pages cannot sign the extension out by spoofing a DOM event.
@@ -673,34 +939,72 @@
     await submitChat(message, false);
   }
 
-  async function submitChat(message) {
+  function retainFailedQuestion(message) {
+    if (state.failedQuestion || (state.draft && state.draft !== message)) {
+      state.failedQuestion = String(message).slice(0, 4000);
+    } else state.draft = message;
+  }
+
+  async function submitChat(message, retryFailed = false) {
     if (state.busy) return;
+    if (state.failedQuestion && !retryFailed)
+      return renderChat(
+        "Retry or discard your earlier question first. Your new draft is safe below.",
+        true,
+      );
     if (state.pendingSave)
       return renderChat(
         "Please save the answer above before sending your next question. You can also copy it to keep a personal note.",
         true,
       );
+    const sessionVersion = state.sessionVersion;
+    const unresolved = retryFailed ? state.unresolvedRequest : null;
+    state.historyLoadVersion += 1;
+    if (!retryFailed) state.draft = "";
     state.busy = true;
-    renderChat("Getting ready to help…");
+    renderChat("Getting ready to help…", false, true);
     try {
-      state.privacyConsent = await send({ type: "PRIVACY_CONSENT_STATE" });
-      if (!state.privacyConsent.accepted) return renderPrivacyConsent();
-      state.auth = await send({ type: "AUTH_STATE" });
-      if (!state.auth.authenticated) return renderAuth();
-      if (!state.auth.isPro) return renderNotPro();
+      const consent = await send({ type: "PRIVACY_CONSENT_STATE" });
+      if (sessionVersion !== state.sessionVersion) return;
+      state.privacyConsent = consent;
+      if (!consent.accepted) {
+        retainFailedQuestion(message);
+        return renderPrivacyConsent();
+      }
+      const auth = await send({ type: "AUTH_STATE" });
+      if (sessionVersion !== state.sessionVersion) return;
+      if (applyAuthState(auth)) {
+        return renderChat("Your account changed. Ask your question again to start fresh.");
+      }
+      if (!auth.authenticated || !auth.isPro) {
+        retainFailedQuestion(message);
+        return !auth.authenticated ? renderAuth() : renderNotPro();
+      }
     } catch (error) {
+      if (sessionVersion !== state.sessionVersion) return;
       state.busy = false;
+      retainFailedQuestion(message);
+      if (handleAccessRequired(error)) return;
       renderChat(studentFacingError(error), true);
       return;
     } finally {
-      state.busy = false;
+      if (sessionVersion === state.sessionVersion) state.busy = false;
     }
     // V2 is screenshot-first: every explicit Send captures exactly what the
     // student sees. DOM context stays small and supplemental.
-    const extractedContext = extractContext();
-    const context =
-      globalThis.UniMateContextExtractor?.buildFocusedContextPacket(extractedContext, message) ||
-      extractedContext;
+    const extractedContext = unresolved?.payload.context || extractContext();
+    let context = extractedContext;
+    try {
+      context = unresolved
+        ? extractedContext
+        : globalThis.UniMateContextExtractor?.buildFocusedContextPacket(
+            extractedContext,
+            message,
+          ) || extractedContext;
+    } catch {
+      // A page-specific text issue must not strand the composer. The screenshot
+      // remains available after the same consent and entitlement checks.
+    }
     const decision = { useScreenshot: true, reason: "screenshot-first", confidence: 1 };
     state.diagnostics = {
       activeTabUrl: context.pageUrl,
@@ -711,28 +1015,37 @@
     // Persisted chat rows remain visible, but only turns created in this page
     // session are sent back to the model. This prevents claims from another
     // site or an earlier Canvas page becoming evidence in a new conversation.
+    if (state.pageHistoryUrl !== location.href) {
+      state.pageHistory = [];
+      state.pageHistoryUrl = location.href;
+    }
     const previousHistory = state.pageHistory.slice(-12);
-    const requestPageUrl = location.href;
+    const requestPageUrl = unresolved?.pageUrl || location.href;
     const requestUserId = state.auth.userId;
-    const requestId = crypto.randomUUID();
+    const requestId = unresolved?.payload.requestId || crypto.randomUUID();
+    const requestPayload = unresolved?.payload || {
+      type: "SEND_CHAT",
+      requestId,
+      conversationId: state.activeConversationId,
+      message,
+      context,
+      useScreenshot: decision.useScreenshot,
+      screenshotReason: decision.reason,
+      contextConfidence: decision.confidence,
+      history: previousHistory,
+    };
     const optimisticMessage = { role: "user", message, created_at: new Date().toISOString() };
     state.messages.push(optimisticMessage);
-    state.draft = "";
     state.busy = true;
-    renderChat();
-    try {
-      const result = await send({
-        type: "SEND_CHAT",
-        requestId,
-        conversationId: state.activeConversationId,
-        message,
-        context,
-        useScreenshot: decision.useScreenshot,
-        screenshotReason: decision.reason,
-        contextConfidence: decision.confidence,
-        history: previousHistory,
-      });
-      if (!state.auth?.authenticated || state.auth.userId !== requestUserId) return;
+    renderChat(undefined, false, true);
+    announce("UniMate is thinking.");
+    const acceptResult = (result) => {
+      if (
+        sessionVersion !== state.sessionVersion ||
+        !state.auth?.authenticated ||
+        state.auth.userId !== requestUserId
+      )
+        return;
       if (result.conversationId && result.conversationId !== state.activeConversationId) {
         state.activeConversationId = result.conversationId;
         state.activeConversationTitle = "Browser Companion";
@@ -748,24 +1061,109 @@
       if (result.diagnostics) {
         state.diagnostics = { ...state.diagnostics, ...result.diagnostics };
       }
+      state.failedQuestion = null;
+      state.unresolvedRequest = null;
       state.busy = false;
       renderChat(result.persistenceWarning || undefined);
+      announce(
+        `UniMate: ${result.assistant.message}${result.persistenceWarning ? ` ${result.persistenceWarning}` : ""}`,
+      );
+    };
+    try {
+      if (unresolved) {
+        const recovery = await send({ type: "RECOVER_CHAT_REQUEST", requestId });
+        if (sessionVersion !== state.sessionVersion || state.auth?.userId !== requestUserId) return;
+        if (recovery?.status === "complete" && recovery.response) {
+          acceptResult(recovery.response);
+          return;
+        }
+        let samePage = requestPageUrl === location.href;
+        if (samePage) {
+          try {
+            const fresh = extractContext();
+            const focused =
+              globalThis.UniMateContextExtractor?.buildFocusedContextPacket(fresh, message) ||
+              fresh;
+            const provenance = (value) =>
+              JSON.stringify([
+                value.pageUrl || "",
+                value.pageTitle || "",
+                value.highlightedText || "",
+                value.nearbyText || "",
+                value.visiblePageText || "",
+                value.relevance?.matchedQuestionNumber || "",
+                value.relevance?.bestBlockId || "",
+                value.matchedQuestionText || "",
+              ]);
+            samePage = provenance(focused) === provenance(requestPayload.context);
+          } catch {
+            samePage = false; // Never combine unverified page text with a new screenshot.
+          }
+        }
+        if (!samePage) {
+          state.messages = state.messages.filter((item) => item !== optimisticMessage);
+          state.busy = false;
+          renderChat(
+            "Your earlier question’s status is still uncertain, and the page has changed. Return to the original page and content before retrying, or discard it to ask about this page. Your new draft is safe below.",
+            true,
+          );
+          return;
+        }
+      }
+      acceptResult(await send(requestPayload));
     } catch (error) {
-      if (!state.auth?.authenticated || state.auth.userId !== requestUserId) return;
+      if (
+        sessionVersion !== state.sessionVersion ||
+        !state.auth?.authenticated ||
+        state.auth.userId !== requestUserId
+      )
+        return;
       const failureDetails = {
         message: error?.message || "Unknown error",
         code: error?.code || "COMPANION_ERROR",
         phase: error?.phase || "runtime",
       };
+      const uncertain =
+        !error?.backgroundResponded ||
+        ["DUPLICATE_REQUEST", "DUPLICATE_IN_FLIGHT"].includes(error?.code);
+      if (uncertain) {
+        try {
+          const recovery = await send({ type: "RECOVER_CHAT_REQUEST", requestId });
+          if (sessionVersion !== state.sessionVersion || state.auth?.userId !== requestUserId)
+            return;
+          if (recovery?.status === "complete" && recovery.response) {
+            acceptResult(recovery.response);
+            return;
+          }
+        } catch (recoveryError) {
+          if (sessionVersion !== state.sessionVersion || state.auth?.userId !== requestUserId)
+            return;
+          if (recoveryError?.code === "AUTH_REQUIRED" && handleAccessRequired(recoveryError))
+            return;
+          // The outcome is still unknown. Never substitute a new paid request ID.
+        }
+        if (sessionVersion !== state.sessionVersion || state.auth?.userId !== requestUserId) return;
+        state.unresolvedRequest = { payload: requestPayload, pageUrl: requestPageUrl };
+        state.failedQuestion = String(message).slice(0, 4000);
+      } else {
+        state.unresolvedRequest = null;
+      }
       try {
-        // Successful exchanges are persisted atomically. Recover a completed
-        // response if only the extension transport failed after saving it.
-        if (!state.pendingSave) state.messages = await send({ type: "LOAD_MESSAGES" });
-      } catch {
+        // Refresh history, but never infer request identity from matching text.
+        if (!state.pendingSave) {
+          const messages = await send({ type: "LOAD_MESSAGES" });
+          if (sessionVersion !== state.sessionVersion || state.auth?.userId !== requestUserId)
+            return;
+          state.messages = messages;
+        }
+      } catch (historyError) {
+        if (sessionVersion !== state.sessionVersion || state.auth?.userId !== requestUserId) return;
+        if (historyError?.code === "AUTH_REQUIRED" && handleAccessRequired(historyError)) return;
         // Keep earlier answers when the connection is unavailable.
       }
+      if (sessionVersion !== state.sessionVersion || state.auth?.userId !== requestUserId) return;
       state.messages = state.messages.filter((item) => item !== optimisticMessage);
-      if (!state.draft) state.draft = message;
+      retainFailedQuestion(message);
       state.runtime.lastError = failureDetails.message;
       state.runtime.lastErrorCode = failureDetails.code;
       state.runtime.lastErrorPhase = failureDetails.phase;
@@ -774,37 +1172,71 @@
         /capture|cannot access contents|active tab|permission|chrome:|web store/i.test(
           error.message,
         );
-      const messageText = studentFacingError(error, decision.useScreenshot && isCaptureFailure);
+      const messageText = uncertain
+        ? "The connection was interrupted, so I can’t confirm whether your earlier question finished. It’s kept here; retry will use the same request."
+        : studentFacingError(error, decision.useScreenshot && isCaptureFailure);
       if (state.diagnostics && decision.useScreenshot) {
         state.diagnostics.screenshotFallbackStatus = `unavailable (${decision.reason})`;
       }
       state.busy = false;
+      if (handleAccessRequired(error)) return;
       renderChat(messageText, true);
     } finally {
-      state.busy = false;
-      const sendButton = body.querySelector(".um-send");
-      if (sendButton) sendButton.disabled = false;
+      if (sessionVersion === state.sessionVersion) {
+        state.busy = false;
+        const sendButton = body.querySelector(".um-send");
+        if (sendButton) sendButton.disabled = false;
+      }
     }
   }
 
   async function initialize() {
     if (state.busy) return;
+    const restoreFocus = state.open && body.contains(shadow.activeElement);
+    const sessionVersion = state.sessionVersion;
+    const loadVersion = ++state.historyLoadVersion;
+    const isCurrent = () =>
+      sessionVersion === state.sessionVersion && loadVersion === state.historyLoadVersion;
+    state.view = "loading";
     body.innerHTML =
       '<div class="um-auth" role="status"><p>Checking your Companion access…</p></div>';
+    if (restoreFocus) {
+      state.initialFocusPending = true;
+      panel.focus({ preventScroll: true });
+    }
     try {
-      state.privacyConsent = await send({ type: "PRIVACY_CONSENT_STATE" });
+      const consent = await send({ type: "PRIVACY_CONSENT_STATE" });
+      if (!isCurrent()) return;
+      state.privacyConsent = consent;
       if (!state.privacyConsent.accepted) return renderPrivacyConsent();
-      state.auth = await send({ type: "AUTH_STATE" });
+      const auth = await send({ type: "AUTH_STATE" });
+      if (!isCurrent()) return;
+      if (applyAuthState(auth)) return initialize();
       state.runtime.serviceWorker = await send({ type: "RUNTIME_DIAGNOSTICS" }).catch(() => null);
+      if (!isCurrent()) return;
       if (!state.auth.authenticated) return renderAuth();
       if (!state.auth.isPro) return renderNotPro();
+      if (state.pendingSave || state.failedQuestion) return renderChat();
       const chatState = await send({ type: "LOAD_CHAT_STATE" });
+      if (!isCurrent()) return;
+      if (state.activeConversationId && state.activeConversationId !== chatState.conversationId) {
+        state.pageHistory = [];
+        state.draft = "";
+      }
       state.messages = chatState.messages;
       state.activeConversationId = chatState.conversationId;
       state.activeConversationTitle = chatState.conversationTitle;
       state.conversationStartIndex = state.messages.length;
       renderChat();
     } catch (error) {
+      if (!isCurrent()) return;
+      if (handleAccessRequired(error)) return;
+      if (state.auth?.authenticated) {
+        return renderChat(
+          "We couldn’t refresh your Companion. Please try again in a moment.",
+          true,
+        );
+      }
       state.auth = { configured: true, authenticated: false, isPro: false };
       renderAuth(error.message);
     }
@@ -815,7 +1247,7 @@
 
   // Let controls handle events normally, then stop those events at the closed
   // shadow boundary so host-page shortcuts and delegated handlers cannot react.
-  shadow.addEventListener("keydown", trapPanelKeyboard);
+  shadow.addEventListener("keydown", handlePanelKeyboard);
   shadow.addEventListener("wheel", containWheel, { passive: false });
   for (const eventName of [
     "auxclick",
@@ -858,25 +1290,35 @@
 
   const initialRuntime = extensionRuntime();
   const runtimeMessageListener = (request, _sender, sendResponse) => {
+    if (request?.type === "SESSION_CHANGED") {
+      handleSessionChanged();
+      sendResponse?.({ ok: true });
+      return undefined;
+    }
     if (request?.type === "TOGGLE_COMPANION") {
       toggle();
       return undefined;
     }
     if (request?.type === "COMPANION_PING") {
-      sendResponse?.({ ok: true, nonce: request.nonce });
+      sendResponse?.({ ok: true, nonce: request.nonce, protocolVersion: 2, extensionVersion });
       return undefined;
     }
     if (request?.type === "PREPARE_COMPANION_CAPTURE") {
-      prepareForCapture()
+      prepareForCapture(request)
         .then((result) => sendResponse?.({ ok: true, ...result }))
         .catch((error) => sendResponse?.({ ok: false, error: error?.message || "Hide failed." }));
       return true;
     }
     if (request?.type === "RESTORE_COMPANION_CAPTURE") {
-      sendResponse?.({ ok: true, ...restoreAfterCapture() });
+      sendResponse?.({ ok: true, ...restoreAfterCapture(request.captureId) });
       return undefined;
     }
     if (request?.type === "DISPOSE_COMPANION_INSTANCE") {
+      const compatible = request.preserveIfCompatible;
+      if (compatible?.protocolVersion === 2 && compatible.extensionVersion === extensionVersion) {
+        sendResponse?.({ ok: true, preserved: true, protocolVersion: 2, extensionVersion });
+        return undefined;
+      }
       sendResponse?.({ ok: true });
       queueMicrotask(dispose);
     }
@@ -919,9 +1361,10 @@
     currentPageUrl = location.href;
     state.conversationStartIndex = state.messages.length;
     state.pageHistory = [];
+    state.pageHistoryUrl = location.href;
     state.contextMode = null;
     state.diagnostics = null;
-    if (state.open && !state.busy) renderChat();
+    if (state.open && !state.busy && state.view !== "privacy") renderChat();
   }
   const urlObserver = new MutationObserver(updatePageBoundary);
   urlObserver.observe(document.documentElement, { childList: true, subtree: true });
@@ -931,7 +1374,10 @@
   addEventListener("pageshow", updatePageBoundary);
 
   function dispose() {
-    restoreAfterCapture();
+    disposed = true;
+    state.sessionVersion += 1;
+    state.historyLoadVersion += 1;
+    restoreAfterCapture(undefined, true);
     mountObserver.disconnect();
     urlObserver.disconnect();
     clearInterval(urlPoll);
@@ -954,5 +1400,9 @@
       delete globalThis.__unimateCompanionPrivateDispose;
     }
   }
-  globalThis.__unimateCompanionPrivateDispose = dispose;
+  globalThis.__unimateCompanionPrivateDispose = Object.assign(dispose, {
+    protocolVersion: 2,
+    extensionVersion,
+    isActive: () => !disposed && Boolean(extensionRuntime()),
+  });
 })();
