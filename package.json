@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "cloudflare:test": "node scripts/test-cloudflare-build.mjs",
     "build:vercel": "vite build --config vite.vercel.config.ts",
     "vercel:test": "node scripts/test-vercel-build.mjs",
     "build:dev": "vite build --mode development",
@@ -23,7 +24,7 @@
     "capacity:test": "node --experimental-strip-types browser-companion/tests/ai-capacity.test.ts && node --experimental-strip-types browser-companion/tests/ai-provider-behavior.test.mjs",
     "capacity:test:postgres": "node scripts/test-ai-usage-postgres.mjs",
     "resilience:test": "node browser-companion/tests/launch-resilience.test.mjs",
-    "operations:test": "node --experimental-strip-types browser-companion/tests/operational-readiness.test.mjs && node browser-companion/tests/companion-sandbox-browser.test.mjs && node browser-companion/tests/ci-workflow.test.mjs",
+    "operations:test": "node --experimental-strip-types browser-companion/tests/operational-readiness.test.mjs && node browser-companion/tests/companion-sandbox-browser.test.mjs && node browser-companion/tests/ci-workflow.test.mjs && node browser-companion/tests/build-config.test.mjs",
     "release:readiness": "node scripts/release-readiness.mjs",
     "entitlements:test": "node --experimental-strip-types browser-companion/tests/entitlement-policy.test.ts && node browser-companion/tests/entitlement-migration.test.mjs && node browser-companion/tests/entitlement-server-wiring.test.mjs",
     "secret:scan": "node scripts/secret-scan.mjs",
@@ -96,14 +97,8 @@
     "vite-tsconfig-paths": "^6.0.2",
     "zod": "^3.24.2"
   },
-  "overrides": {
-    "lovable-tagger": {
-      "postcss-selector-parser": "7.1.6"
-    }
-  },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
-    "@lovable.dev/vite-tanstack-config": "1.7.0",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

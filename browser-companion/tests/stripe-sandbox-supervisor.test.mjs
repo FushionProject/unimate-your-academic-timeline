@@ -47,7 +47,9 @@ for (const suffix of [
   ".env.local",
 ])
   assert(denied(repository + suffix));
-assert(!denied(repository + "node_modules/example/dist/client.js"));
+// The managed checkout can itself live under .codex, which is deliberately
+// denied. Check the ordinary dependency path independently of checkout layout.
+assert(!denied("/workspace/unimate/node_modules/example/dist/client.js"));
 assert(LISTEN_ARGS.includes("--events"));
 const secret = "whsec_" + "synthetic01234567890123456789";
 const config = {

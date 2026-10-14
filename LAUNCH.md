@@ -16,7 +16,8 @@ The active candidate is on `codex/unimate-premium-revival`. The product work was
 committed and pushed as `da82c64`, followed by tested billing checkpoints
 `40057cb` (concurrent Checkout recovery and renewal checks), `794ed35`
 (installed Companion entitlement and native event redelivery checks), and
-`90b6a15` (refund/dispute/race verification and tests-only GitHub checks). GitHub
+`90b6a15` (refund/dispute/race verification and tests-only GitHub checks), and
+`291be77` (real portal isolation/initial decline plus billing UI regressions). GitHub
 `main` was not changed. This branch is still under verification, not frozen or
 approved for public release. The August record below is historical. The protected
 Preview uploaded October 13 local / October 14 UTC remains on its recorded source;
@@ -27,17 +28,29 @@ The tests-only GitHub workflow covers pushes to this candidate and `main`, pull
 requests targeting `main`, and manual runs. It uses pinned official actions,
 read-only repository permissions, no persisted checkout credentials, and the
 verified Node 22.16 application runtime. It runs the full offline tests, typecheck,
-lint, secret scan, and local Vercel build/artifact verification; it does not deploy
+lint, secret scan, a read-only registry vulnerability audit, and local Cloudflare
+and Vercel build/artifact verification; it does not deploy
 or receive service credentials. Local workflow-policy checks pass. The first
 GitHub/Linux run for `90b6a15` completed successfully:
 [Verify UniMate #1](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38519205802).
 This includes a clean dependency install and is separate from local verification.
+The subsequent billing checkpoint `291be77` also passed its complete
+[GitHub/Linux run](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38603810280).
+
+Latest billing evidence: real cross-account portal attempts returned 409, unsigned
+requests returned 401, and the valid portal's Stripe event matched the exact
+synthetic customer. A real browser submission using the generic-decline fixture
+was rejected; the account remained Free and Companion returned 403. Its unpaid
+Checkout was then expired, with no open Checkout or new subscription remaining.
+The second synthetic portal-test user remains Free and unbound; owner coursework
+was not modified. Full details and remaining hosted/browser gaps are recorded in
+`STRIPE_SANDBOX_MANUAL_TESTS.md`. These checks do not authorize live billing.
 
 - [ ] Freeze and record the exact new release commit and rollback point
 - [x] Re-verify the exact uploaded candidate's Companion study flow in its protected hosted environment
 - [ ] Complete the remaining real Stripe sandbox lifecycle matrix
 - [ ] Configure and verify signup/confirmation/password-recovery email delivery
-- [ ] Resolve or explicitly accept the open development dependency advisory
+- [x] Remove the vulnerable development dependency chain and verify both build targets (October 14)
 - [ ] Complete production-origin, legal, support, and Chrome Web Store gates
 
 Current email evidence: the restored project's SMTP Settings shows custom SMTP
@@ -82,15 +95,33 @@ dashboard. Do not create a duplicate Resend domain. No optional DMARC record was
 added and no SMTP credential was created. Resume by verifying Namecheap access,
 then inspect and add only these records before triggering Resend verification.
 
-Current dependency evidence: a fresh audit on October 13 found zero production
-dependency advisories and seven high development findings from
-`GHSA-vfj7-8cjw-p6xm`. The scoped exposure assessment remains in the Companion
-Store-readiness document. This is not an accepted or cleared development risk.
-The October 14 recheck still found seven development findings and zero production
-findings. No patched `braces` release was available. Removing the vulnerable chain
-via `@lovable.dev/vite-tanstack-config@2.7.2` requires a deliberate build-adapter
-migration, not a drop-in audit fix; both Cloudflare and Vercel outputs must be
-preserved and retested. No forced dependency update was performed.
+Current dependency evidence — October 14: the Lovable wrapper/tagger/`braces`
+chain was removed instead of forcing an incompatible wrapper/Nitro upgrade.
+Explicit configurations retain the existing plugin versions, Cloudflare default,
+Vercel opt-in, custom server entry, public-only VITE defines and pinned Nitro
+runtime. The lockfile removes 92 packages with no retained version/integrity
+changes. A fresh locked install succeeded; full and production audits both report
+zero vulnerabilities. Both builds and emitted-handler tests, full offline suite,
+typecheck, lint and secret scan passed in the isolated checkout and the main local
+checkout. Eight existing Fast Refresh lint warnings remain. The unused `bun.lock`
+was removed (recoverable in Git); npm is the sole authoritative lockfile.
+
+The cleanup review also found a pre-existing sandbox isolation gap: TanStack's
+environment-loading hook ignored `envDir:false`. Existing explicit blank AI keys
+and disabled feature flags took precedence, so this is not evidence of paid calls
+or client-secret exposure. The sandbox now removes exactly that known loader,
+fails closed if its expected plugin shape changes, and tests real configuration
+hook execution with synthetic environment-file canaries. Production app configs
+retain normal environment loading. These are local/build checks, not a new hosted
+deployment or actual Workers-runtime certification. Recharts/ESLint/tsconfck
+maintenance warnings remain separate from the cleared security advisories.
+
+Post-cleanup smoke: the rebuilt local sandbox started successfully, its verified
+owned process returned the unchanged synthetic Free/403 state and expired
+Checkout, and it was stopped cleanly afterward. In an actual browser, the landing
+page hydrated, its sample-conversation selector responded, and client navigation
+to Pricing showed the Pro-only Companion and current price without console errors.
+This is a narrow local smoke check, not the complete authenticated hosted journey.
 
 ### Local verification — October 13, 2026
 
@@ -405,7 +436,7 @@ Complete these in order. Do not begin live billing or public promotion before st
 
 1. **Finish Stripe sandbox verification:** the dedicated sandbox, private test credentials and real purchase/period-end cancellation path are verified locally. Complete the remaining scenarios in `STRIPE_SANDBOX_MANUAL_TESTS.md`; this is not approval for live billing or a production webhook.
 2. **Review remaining Supabase production gates:** the dated billing prerequisite migration was backed up, restored, applied and verified. Preserve that evidence; check remaining RLS, triggers, quota and production-state requirements before any separately approved migration. Do not reapply historical SQL solely because older checklist entries predate this run.
-3. **Resolve the dependency gate:** the October 13 audit has zero production advisories but seven high development findings. Apply and verify a compatible repair when available, or obtain explicit scoped risk acceptance; do not force a major wrapper upgrade just to clear audit output.
+3. **Preserve the cleared dependency gate:** the October 14 cleanup has zero full/production advisories, with both build adapters verified. Keep the locked install, audit and dual-build checks passing; review future runtime upgrades separately.
 4. **Configure the production environment:** review every required variable, set global AI/provider spending ceilings, and keep live Stripe disabled.
 5. **Publish legal/support surfaces:** Privacy Policy, Terms, subscription/cancellation/refund language, support email, and incident/status communication.
 6. **Prepare and submit the Companion:** configure it against the HTTPS production origin, perform the installed-extension smoke test, package it, submit to Chrome Web Store, and connect the approved listing URL to `VITE_COMPANION_STORE_URL`.

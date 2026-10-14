@@ -274,6 +274,75 @@ export async function supervise({
   }
 }
 
+async function sandboxPluginList(options) {
+  const resolved = await options;
+  return Array.isArray(resolved)
+    ? (await Promise.all(resolved.map(sandboxPluginList))).flat()
+    : resolved
+      ? [resolved]
+      : [];
+}
+
+export async function sandboxStartPlugins(options) {
+  const plugins = await sandboxPluginList(options);
+  // This pinned Start plugin ignores Vite's envDir:false and imports all keys
+  // from root env files during configResolved. Remove only that known loader.
+  // A changed framework plugin shape requires review, never a silent bypass.
+  const loaders = plugins.filter((plugin) => plugin.name === "tanstack-start-core:load-env");
+  if (loaders.length !== 1) fail("SANDBOX_ENV_PLUGIN_CHANGED");
+  return plugins.filter((plugin) => plugin !== loaders[0]);
+}
+
+// Export the real config factory for offline smoke tests without opening a port
+// or reading private configuration. The supervised child uses this exact path.
+export async function sandboxViteConfig() {
+  const { default: tailwindcss } = await import("@tailwindcss/vite");
+  const { default: tsConfigPaths } = await import("vite-tsconfig-paths");
+  const { tanstackStart } = await import("@tanstack/react-start/plugin/vite");
+  const { default: react } = await import("@vitejs/plugin-react");
+  // Deliberately independent of app configs: no env loader/defines, deployment
+  // adapter, hosted-preview tooling, or code-rewriting error loggers.
+  return {
+    resolve: {
+      alias: { "@": path.join(ROOT, "src") },
+      dedupe: [
+        "react",
+        "react-dom",
+        "react/jsx-runtime",
+        "react/jsx-dev-runtime",
+        "@tanstack/react-query",
+        "@tanstack/query-core",
+      ],
+    },
+    plugins: [
+      tailwindcss(),
+      tsConfigPaths({ projects: [path.join(ROOT, "tsconfig.json")] }),
+      await sandboxStartPlugins(
+        tanstackStart({
+          server: { entry: "server" },
+          importProtection: {
+            behavior: "error",
+            client: { files: ["**/server/**"], specifiers: ["server-only"] },
+          },
+        }),
+      ),
+      react(),
+    ],
+    root: ROOT,
+    configFile: false,
+    envDir: false,
+    mode: "sandbox",
+    server: {
+      host: "localhost",
+      port: 8080,
+      strictPort: true,
+      open: false,
+      watch: { awaitWriteFinish: { stabilityThreshold: 1000, pollInterval: 100 } },
+      fs: { deny: PRIVATE_FS_DENY },
+    },
+  };
+}
+
 async function viteChild() {
   if (process.env.UNIMATE_LOCAL_SANDBOX_CHILD !== "approved" || !process.send)
     fail("SUPERVISOR_REQUIRED");
@@ -282,33 +351,8 @@ async function viteChild() {
   process.loadEnvFile = () => {
     throw new Error("Local sandbox env files are disabled");
   };
-  const { defineConfig } = await import("@lovable.dev/vite-tanstack-config");
   const { createServer } = await import("vite");
-  const factory = defineConfig({
-    envDefine: false,
-    serverFnErrorLogger: false,
-    ssrErrorLogger: false,
-    tanstackStart: { server: { entry: "server" } },
-  });
-  const config =
-    typeof factory === "function"
-      ? await factory({ command: "serve", mode: "sandbox", isSsrBuild: false, isPreview: false })
-      : await factory;
-  const server = await createServer({
-    ...config,
-    root: ROOT,
-    configFile: false,
-    envDir: false,
-    mode: "sandbox",
-    server: {
-      ...config.server,
-      host: "localhost",
-      port: 8080,
-      strictPort: true,
-      open: false,
-      fs: { ...config.server?.fs, deny: PRIVATE_FS_DENY },
-    },
-  });
+  const server = await createServer(await sandboxViteConfig());
   let closing = false;
   const close = async () => {
     if (closing) return;

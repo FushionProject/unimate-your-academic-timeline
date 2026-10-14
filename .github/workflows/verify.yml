@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Offline tests and Vercel build
+    name: Verification and both builds
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -33,6 +33,8 @@ jobs:
           package-manager-cache: false
       - name: Install locked dependencies
         run: npm ci
+      - name: Audit dependency vulnerabilities (read-only registry lookup)
+        run: npm audit --audit-level=high
       - name: Verify workflow safety
         run: node browser-companion/tests/ci-workflow.test.mjs
       - name: Scan repository for secrets
@@ -43,6 +45,10 @@ jobs:
         run: npm run lint
       - name: Full offline test suite
         run: npm test
+      - name: Build Cloudflare artifact
+        run: npm run build
+      - name: Verify emitted Cloudflare artifact with synthetic transport
+        run: npm run cloudflare:test
       # This is a local artifact build, not a Vercel CLI deploy or cloud call.
       - name: Build Vercel artifact
         run: npm run build:vercel
