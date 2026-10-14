@@ -99,12 +99,22 @@ Current dependency evidence — October 14: the Lovable wrapper/tagger/`braces`
 chain was removed instead of forcing an incompatible wrapper/Nitro upgrade.
 Explicit configurations retain the existing plugin versions, Cloudflare default,
 Vercel opt-in, custom server entry, public-only VITE defines and pinned Nitro
-runtime. The lockfile removes 92 packages with no retained version/integrity
+runtime. The lockfile removes 90 packages with no retained version/integrity
 changes. A fresh locked install succeeded; full and production audits both report
 zero vulnerabilities. Both builds and emitted-handler tests, full offline suite,
 typecheck, lint and secret scan passed in the isolated checkout and the main local
 checkout. Eight existing Fast Refresh lint warnings remain. The unused `bun.lock`
 was removed (recoverable in Git); npm is the sole authoritative lockfile.
+
+Cross-version install follow-up: the first cleanup
+[GitHub run](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38605120273)
+stopped at `npm ci` because npm 11 had pruned two optional bundled Tailwind records
+needed by npm 10.9.2. Restoring the exact original `@emnapi/core` and
+`@emnapi/runtime` 1.11.1 bundle entries fixes the reproduced failure without a
+dependency upgrade or peer-check bypass. Fresh isolated installs with npm 10.9.2
+and 11.6.2 pass, the full audit still reports zero vulnerabilities, and the
+build-config regression now checks completeness of every declared bundle.
+The corrected GitHub/Linux verification is pending; do not promote before it passes.
 
 The cleanup review also found a pre-existing sandbox isolation gap: TanStack's
 environment-loading hook ignored `envDir:false`. Existing explicit blank AI keys
@@ -419,7 +429,7 @@ Record only operational metadata—never student content or secrets.
 
 | Time | System | Symptom | Action | Owner | Resolved |
 | ---- | ------ | ------- | ------ | ----- | -------- |
-|      |        |         |        |       |          |
+| October 14, 2026 | GitHub dependency install | npm 10.9.2 rejected missing optional bundled lock records after npm 11 cleanup | Restored exact original bundle metadata; fresh installs pass under both npm versions; added regression | Codex | Local fix verified; GitHub rerun pending |
 
 ## Final decision
 

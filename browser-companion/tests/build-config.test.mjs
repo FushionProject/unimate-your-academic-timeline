@@ -19,6 +19,17 @@ if (!process.argv.includes("--isolated")) {
 }
 
 const root = new URL("../../", import.meta.url);
+// npm 11 on macOS can prune optional bundled records that npm 10's clean
+// Linux install still requires. Keep every declared bundle explicitly locked.
+const lock = JSON.parse(await readFile(new URL("package-lock.json", root), "utf8"));
+for (const [name, entry] of Object.entries(lock.packages)) {
+  if (!Array.isArray(entry.bundleDependencies)) continue;
+  for (const dependency of entry.bundleDependencies) {
+    const bundled = lock.packages[`${name}/node_modules/${dependency}`];
+    assert.ok(bundled?.inBundle, `Missing bundled lock record: ${name}/${dependency}`);
+    assert.ok(bundled.version, `Missing bundled version: ${name}/${dependency}`);
+  }
+}
 const dedupe = [
   "react",
   "react-dom",
@@ -186,11 +197,10 @@ try {
 } finally {
   await rm(fixture, { recursive: true, force: true });
 }
-const lock = JSON.parse(await readFile(new URL("package-lock.json", root), "utf8"));
 for (const name of Object.keys(lock.packages))
   assert.doesNotMatch(name, /(?:^|\/)(?:@lovable\.dev|lovable-tagger|braces)(?:\/|$)/);
 assert.equal(lock.packages["node_modules/nitro"].version, "3.0.260903-beta");
 console.log(
-  "PASS explicit build configs: adapter parity, public-only defines, real sandbox configResolved isolation",
+  "PASS explicit build configs: complete bundled lock, adapter parity, public-only defines, real sandbox configResolved isolation",
 );
 process.exit(0);
