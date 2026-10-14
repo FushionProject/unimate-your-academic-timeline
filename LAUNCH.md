@@ -45,12 +45,16 @@ The deployed source `5694bdb4b2a668e2f42297fe37a4a27fd34e000e` passed all checks
 The later operator-tooling checkpoint `e68f55d` also passed
 [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38616618364);
 that tooling was not redeployed as application code.
+The purchase-only evidence checkpoint `76d5031` also passed
+[GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38620047237).
 
-Latest hosted billing evidence: a sandbox purchase on the current private Preview
-delivered signed webhooks and persisted Pro before app return. The same open,
-installed Companion panel unlocked using its existing session; the website then
-showed Pro active and opened the correct customer's portal. Cancellation and
-continuous revocation are still pending; this is not full-flow certification.
+Latest hosted billing evidence: the core sandbox purchase → Companion unlock →
+Portal period-end cancellation → access revocation flow **passed** on the current
+private Preview. Signed events reached the real hosted handler through the local
+relay; persisted Pro/Free state was verified before each app return. The same
+open installed Companion panel/session unlocked, then showed its upgrade gate
+after expiry. The website ended on Restart Pro. This is not production-direct
+webhook, AI-answer, draft-preservation or public-launch certification.
 
 Previous local billing evidence: real cross-account portal attempts returned 409, unsigned
 requests returned 401, and the valid portal's Stripe event matched the exact
@@ -63,6 +67,7 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 
 - [ ] Freeze and record the exact new release commit and rollback point
 - [x] Protected Preview purchase unlocks the same open Companion panel/session (October 14)
+- [x] Protected Preview period-end cancellation revokes the same open Companion panel/session (October 14)
 - [ ] Re-verify the current protected Preview's Companion study and billing flow end to end
 - [ ] Complete the remaining real Stripe sandbox lifecycle matrix
 - [ ] Configure and verify signup/confirmation/password-recovery email delivery
@@ -197,8 +202,9 @@ unbound customer. Its test profile is Free at billing revision 16. This clears
 the observable old-attempt hazard for that sandbox, not a hypothetical live
 account. At that historical checkpoint Vercel Preview had no Stripe
 secret/price/webhook keys and billing remained unconfigured. That configuration
-finding is superseded by the October 14 protected-Preview checkpoint below; the
-new hosted purchase/cancellation flow is not yet certified.
+finding and the then-unverified core hosted purchase/cancellation flow are
+superseded by the October 14 protected-Preview checkpoint below. Broader launch
+gates remain open.
 
 Final source checks: the full test matrix passed on an already-installed Node
 22.16 runtime, including five consecutive Companion runtime runs. That command
@@ -240,18 +246,31 @@ and the synthetic browser session signed out after verification.
   showed the Pro composer at revision 46. Zero AI requests, captures or page
   extractions occurred. After return, the website showed Pro active and Manage
   billing; that button opened the exact synthetic customer's Stripe portal.
-- Cancellation and continuous Companion revocation are **pending**, not passed.
-  Read-only portal configuration confirms `at_period_end` cancellation is enabled;
-  no completed cancellation is recorded. The latest synthetic profile read is
-  still Pro at revision 48. No hosted draft-preservation test or new AI-answer
-  test was performed; this is not full lifecycle or public-launch sign-off.
+- The real customer-scoped Portal cancellation was submitted once. Two signed
+  `customer.subscription.updated` deliveries returned 200; `cancel_at` equaled
+  period end while `cancel_at_period_end:false`, and Pro correctly remained at
+  revision 50 before expiry.
+- Only the synthetic customer's clock advanced to period end + 1 and returned
+  ready. Signed `customer.subscription.deleted` returned 200; **before app
+  return**, the database was Free at revision 51, with zero active subscriptions
+  and open Checkouts. All four historical synthetic subscriptions are canceled.
+- The same open Companion panel/session changed to the upgrade gate with no
+  composer; its screenshot was reviewed. The existing return-to-page focus handler
+  was exercised, not passive server push. After the proof-gated return, the website
+  showed Restart Pro/$5.99 and no Pro-active state. AI requests, captures and
+  extractions stayed zero. Core hosted billing passed; draft preservation, new
+  AI answers and the broader release matrix are not certified by this run.
+- Final post-return status was Free at revision 52, with zero active subscriptions
+  and open Checkouts. The owned runner exited cleanly; its test browsers and relay
+  were closed.
 
 Operator notes: the setup uses the locally cached, version-validated Vercel CLI
 63.1.2 through Node and a private ignored journal that preserves the failed
 branch attempt and approved Preview scope change. Do not repeat completed setup
 or discard that audit. The hosted test runner uses a local signed-event relay
 and short-lived, exact-origin OIDC access to the protected Preview, not a public
-Stripe webhook or a persistent protection bypass. See
+Stripe webhook or a persistent protection bypass. Email/domain setup, direct
+production webhook delivery and Chrome Web Store gates remain open. See
 [Stripe sandbox manual tests](./STRIPE_SANDBOX_MANUAL_TESTS.md) for the boundaries.
 
 ### Historical protected Preview — October 13 local / October 14 UTC, 2026

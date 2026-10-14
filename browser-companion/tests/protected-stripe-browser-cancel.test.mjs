@@ -34,8 +34,9 @@ function fixture({
         return values.href ?? "/p/session/fixture/cancel";
       },
       waitFor: async (options) => {
-        assert.deepEqual(options, { state: "visible", timeout: 15000 });
-        waiters.push(key);
+        assert.equal(options.timeout, 15000);
+        assert.ok(options.state === "visible" || (key === "other" && options.state === "hidden"));
+        waiters.push(options.state === "hidden" ? `${key}:hidden` : key);
         if (key === "link") hydrated = true;
       },
       click: async () => {
@@ -73,6 +74,11 @@ function fixture({
       return control("comment");
     },
     getByRole: (role, { name, exact }) => {
+      if (role === "option") {
+        assert.equal(name, "Other reason");
+        assert.equal(exact, true);
+        return control("other");
+      }
       if (role === "link") {
         assert.equal(name, "Cancel subscription");
         assert.equal(exact, true);
@@ -86,21 +92,23 @@ function fixture({
         return control("confirm");
       }
       assert.equal(exact, true);
-      assert.ok(["Choose an option", "Continue to cancellation"].includes(name));
-      return control(name === "Choose an option" ? "choice" : "next");
+      assert.equal(name, "Continue to cancellation");
+      return control("next");
     },
     getByText: (text, options) => {
-      assert.equal(text, "Other");
+      assert.equal(text, "Choose an option");
       assert.deepEqual(options, { exact: true });
-      return control("other");
+      return control("choice");
     },
   };
   return { page, actions, waiters, phase: () => phase };
 }
 
 // The staged exports and combined wrapper must perform one confirmation only,
-// after the observed dropdown/modal progression, with or without a comment.
-for (const comments of [0, 1]) {
+// after the observed dropdown/modal progression and its one visible textarea.
+// The comment itself is optional in Stripe, but this bounded helper waits for
+// the observed Other reason UI instead of guessing whether it has rendered.
+for (const comments of [1]) {
   for (const staged of [false, true]) {
     const x = fixture({ comments });
     if (staged) {
@@ -119,7 +127,15 @@ for (const comments of [0, 1]) {
       "next",
       "confirm",
     ]);
-    assert.deepEqual(x.waiters, ["link", "choice", "other", "next", "confirm"]);
+    assert.deepEqual(x.waiters, [
+      "link",
+      "choice",
+      "other",
+      "other:hidden",
+      "comment",
+      "next",
+      "confirm",
+    ]);
     assert.equal(x.actions.filter((action) => action === "confirm").length, 1);
     assert.equal(x.phase(), "finished");
   }
@@ -171,6 +187,7 @@ for (const [overrides, expected] of [
   [{ other: { count: 2 } }, ["choice"]],
   [{ other: { visible: false } }, ["choice"]],
   [{ comment: { count: 2 } }, ["choice", "other"]],
+  [{ comment: { count: 0 } }, ["choice", "other"]],
   [{ comment: { enabled: false } }, ["choice", "other"]],
   [{ next: { count: 2 } }, ["choice", "other", "comment"]],
   [{ next: { visible: false } }, ["choice", "other", "comment"]],
@@ -194,5 +211,5 @@ for (const options of [
 }
 
 console.log(
-  "PASS offline sandbox cancellation: staged dropdown/modal flow, optional comment, one confirmation, origin/sandbox/control guards",
+  "PASS offline sandbox cancellation: observed dropdown/textarea readiness, one confirmation, origin/sandbox/control guards",
 );

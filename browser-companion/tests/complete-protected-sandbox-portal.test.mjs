@@ -7,6 +7,7 @@ import {
   parsePortalCompletionCommand,
   completeProtectedSandboxPortal,
   assertPortalOpenRecovery,
+  assertPortalFeedbackRecovery,
 } from "../../scripts/complete-protected-sandbox-portal.mjs";
 
 const now = 1800000000000,
@@ -93,6 +94,50 @@ const priorOpen = {
   ],
 };
 assert.doesNotThrow(() => assertPortalOpenRecovery(priorOpen, f.record, f.journal));
+const priorFeedback = {
+  ...priorOpen,
+  createdAt: 3000,
+  updatedAt: 6000,
+  phase: "reason-pending",
+  navigationRecovery: true,
+  priorAttempt: structuredClone(priorOpen),
+  audit: ["ready", "open-pending", "opened", "reason-pending"].map((phase, index) => ({
+    phase,
+    at: 3000 + index * 1000,
+  })),
+};
+assert.doesNotThrow(() =>
+  assertPortalFeedbackRecovery(priorFeedback, priorOpen, f.record, f.journal),
+);
+for (const patch of [
+  { phase: "confirm-pending" },
+  { phase: "submitted" },
+  { phase: "reason-selected" },
+  { navigationRecovery: false },
+  { feedbackRecovery: true },
+  { confirmAttempted: false },
+  { subscriptionId: "sub_other" },
+  { userId: "other" },
+  { customerId: "cus_other" },
+  { priorAttempt: { ...priorOpen, updatedAt: 1999 } },
+  { audit: [...priorFeedback.audit, { phase: "confirm-pending", at: 6000 }] },
+  { audit: priorFeedback.audit.slice(0, 3) },
+  {
+    audit: priorFeedback.audit.map((entry, index) =>
+      index === 2 ? { ...entry, phase: "confirm-pending" } : entry,
+    ),
+  },
+])
+  assert.throws(
+    () =>
+      assertPortalFeedbackRecovery({ ...priorFeedback, ...patch }, priorOpen, f.record, f.journal),
+    /NOT_ELIGIBLE/,
+  );
+assert.equal(
+  priorFeedback.phase,
+  "reason-pending",
+  "feedback recovery validation preserves failed prior record",
+);
 for (const patch of [
   { phase: "reason-pending" },
   { phase: "confirm-pending" },
@@ -294,6 +339,8 @@ assert(source.includes('"protected-portal-cancellation-completion-v1.json"'));
 assert(/"wx",\s*0o600/.test(source));
 assert(source.includes("ORIGINAL_PORTAL_JOURNAL_CHANGED"));
 assert(source.includes("ORIGINAL_PORTAL_COMPLETION_CHANGED"));
+assert(source.includes("ORIGINAL_PORTAL_OPEN_RECOVERY_CHANGED"));
+assert(source.includes('"protected-portal-feedback-recovery-v1.json"'));
 assert(source.includes('"protected-portal-open-recovery-v1.json"'));
 assert(source.includes("continuationRoutePolicy({"));
 assert(source.includes("if (main && url.origin !== PORTAL)"));

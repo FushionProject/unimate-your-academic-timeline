@@ -179,10 +179,59 @@ export function assertPortalOpenRecovery(previous, record, journal) {
     fail("NAVIGATION_ONLY_PORTAL_RECOVERY_NOT_ELIGIBLE");
 }
 
+export function assertPortalFeedbackRecovery(previous, original, record, journal) {
+  assertPortalOpenRecovery(original, record, journal);
+  const phases = ["ready", "open-pending", "opened", "reason-pending"];
+  if (
+    previous?.version !== 1 ||
+    previous.account !== TARGET.account ||
+    previous.userId !== record.userId ||
+    previous.customerId !== CUSTOMER ||
+    previous.subscriptionId !== journal.subscriptionId ||
+    previous.phase !== "reason-pending" ||
+    previous.navigationRecovery !== true ||
+    JSON.stringify(previous.priorAttempt) !== JSON.stringify(original) ||
+    !Number.isSafeInteger(previous.createdAt) ||
+    previous.createdAt <= 0 ||
+    !Number.isSafeInteger(previous.updatedAt) ||
+    previous.updatedAt < previous.createdAt ||
+    !Array.isArray(previous.audit) ||
+    previous.audit.length !== phases.length ||
+    previous.audit.some(
+      (entry, index) =>
+        entry?.phase !== phases[index] ||
+        !Number.isSafeInteger(entry.at) ||
+        entry.at < previous.createdAt ||
+        entry.at > previous.updatedAt ||
+        (index > 0 && entry.at < previous.audit[index - 1].at) ||
+        Object.keys(entry).some((key) => !["phase", "at"].includes(key)),
+    ) ||
+    Object.keys(previous).some(
+      (key) =>
+        ![
+          "version",
+          "account",
+          "userId",
+          "customerId",
+          "subscriptionId",
+          "createdAt",
+          "updatedAt",
+          "phase",
+          "audit",
+          "navigationRecovery",
+          "priorAttempt",
+        ].includes(key),
+    )
+  )
+    fail("ZERO_FEEDBACK_PORTAL_RECOVERY_NOT_ELIGIBLE");
+}
+
 export async function completeProtectedSandboxPortal({
   approved = false,
   resumeOpen = false,
+  resumeFeedback = false,
 } = {}) {
+  if (resumeFeedback) resumeOpen = true;
   if (!approved || process.env.DEBUG || process.env.PWDEBUG || process.env.NODE_OPTIONS)
     fail("EXPLICIT_PORTAL_COMPLETION_APPROVAL_REQUIRED");
   let browser,
@@ -217,6 +266,10 @@ export async function completeProtectedSandboxPortal({
     const priorText = resumeOpen ? await readPrivate(completionPath) : null;
     const priorAttempt = priorText ? JSON.parse(priorText) : null;
     if (resumeOpen) assertPortalOpenRecovery(priorAttempt, record, journal);
+    const openRecoveryPath = path.join(directory, "protected-portal-open-recovery-v1.json");
+    const feedbackPriorText = resumeFeedback ? await readPrivate(openRecoveryPath) : null;
+    const feedbackPrior = feedbackPriorText ? JSON.parse(feedbackPriorText) : null;
+    if (resumeFeedback) assertPortalFeedbackRecovery(feedbackPrior, priorAttempt, record, journal);
     const stripe = (suffix) =>
       privateJson(fetch, `https://api.stripe.com/v1${suffix}`, {
         method: "GET",
@@ -233,6 +286,8 @@ export async function completeProtectedSandboxPortal({
       if ((await readPrivate(originalPath)) !== original) fail("ORIGINAL_PORTAL_JOURNAL_CHANGED");
       if (resumeOpen && (await readPrivate(completionPath)) !== priorText)
         fail("ORIGINAL_PORTAL_COMPLETION_CHANGED");
+      if (resumeFeedback && (await readPrivate(openRecoveryPath)) !== feedbackPriorText)
+        fail("ORIGINAL_PORTAL_OPEN_RECOVERY_CHANGED");
       const scope = await sandboxClock({
         action: "status",
         approved: true,
@@ -248,7 +303,11 @@ export async function completeProtectedSandboxPortal({
     };
     const portalUrl = verifyPortalCompletionScope(record, journal, await read());
     handle = await fs.open(
-      resumeOpen ? path.join(directory, "protected-portal-open-recovery-v1.json") : completionPath,
+      resumeFeedback
+        ? path.join(directory, "protected-portal-feedback-recovery-v1.json")
+        : resumeOpen
+          ? openRecoveryPath
+          : completionPath,
       "wx",
       0o600,
     );
@@ -261,7 +320,11 @@ export async function completeProtectedSandboxPortal({
       createdAt: Date.now(),
       phase: "ready",
       audit: [],
-      ...(resumeOpen ? { navigationRecovery: true, priorAttempt } : {}),
+      ...(resumeFeedback
+        ? { feedbackRecovery: true, priorAttempt: feedbackPrior }
+        : resumeOpen
+          ? { navigationRecovery: true, priorAttempt }
+          : {}),
     };
     const save = async (phase) => {
       attempt = { ...attempt, phase, updatedAt: Date.now() };
@@ -399,11 +462,13 @@ export async function completeProtectedSandboxPortal({
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const resumeOpen = process.argv.length === 3 && process.argv[2] === "--resume-open";
+  const resumeFeedback = process.argv.length === 3 && process.argv[2] === "--resume-feedback";
   completeProtectedSandboxPortal({
     approved:
-      (process.argv.length === 2 || resumeOpen) &&
+      (process.argv.length === 2 || resumeOpen || resumeFeedback) &&
       process.env.UNIMATE_PORTAL_COMPLETION === "approved",
     resumeOpen,
+    resumeFeedback,
   }).catch((error) => {
     console.error(
       JSON.stringify({

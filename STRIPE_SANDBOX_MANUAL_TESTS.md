@@ -2,7 +2,7 @@
 
 Status: **test mode only**. Do not use live keys, enable `STRIPE_LIVE_MODE_ENABLED`, or make live charges while following this checklist.
 
-## Protected Preview purchase checkpoint — October 14, 2026
+## Protected Preview core billing flow — passed October 14, 2026
 
 The current private test deployment is
 https://unimate-fwcn4d8vz-resumejuice-s-projects.vercel.app/
@@ -21,7 +21,7 @@ The existing Preview-only live-mode flag was verified `false` without replacing
 it. This supersedes historical notes that Preview had no Stripe billing keys;
 it does not change the results or scope of the dated local runs below.
 
-### Verified hosted purchase and continuous Companion unlock
+### Verified purchase, period-end cancellation and continuous Companion access
 
 - The marked synthetic account completed one sandbox purchase against the exact
   Preview above. Signed `checkout.session.completed`, `invoice.paid` and
@@ -37,17 +37,47 @@ it does not change the results or scope of the dated local runs below.
   showed Pro active and Manage billing. The actual button opened a Stripe portal
   verified against the exact synthetic customer. A read-only configuration check
   confirmed cancellation is enabled in `at_period_end` mode.
+- The real Portal cancellation was submitted once. Two signed
+  `customer.subscription.updated` deliveries returned 200. The subscription
+  stayed active with `cancel_at:1804995910` equal to period end and
+  `cancel_at_period_end:false` (flexible billing); persisted Pro correctly remained
+  at revision 50 until expiry.
+- Only this synthetic customer's clock advanced to `1804995911` (period end + 1)
+  and returned ready. The exact subscription became canceled, and signed
+  `customer.subscription.deleted` delivery returned 200. Before app return, the
+  database was Free at revision 51, with zero active subscriptions and zero open
+  Checkouts; all four historical synthetic subscriptions were canceled.
+- The same continuously open installed Companion panel reused its session and
+  changed to “Your Pro access is not active,” with the upgrade gate and no composer.
+  The screenshot was reviewed. The existing return-to-page focus handler was exercised;
+  this is not a passive-push claim. After the proof-gated return, the website
+  showed Restart Pro/$5.99 rather than Pro active. AI requests, captures and
+  extractions remained zero across the sequence.
+- Final post-return verification showed Free revision 52, zero active
+  subscriptions and zero open Checkouts, with hosted-webhook proof still valid.
+  The owned runner exited successfully and all owned test browsers and the relay
+  closed. This final revision is distinct from pre-return Free revision 51.
 
-**Still pending:** completing hosted cancellation and proving continuous
-Companion access revocation. The latest synthetic profile read remains Pro at
-revision 48; there is no completed cancellation result in this checkpoint. The
-whole purchase → cancellation → revocation flow is not certified. No live charge,
-public billing launch, custom-domain change or production deployment is authorized.
+The same Companion source hash was retained throughout:
+`886954937542390887a84c6573fd726f0e5eb3cdc00f6c5f261e3b28d865d3d6`.
+Terminal evidence links subscription `sub_1UQX6pIxB8W4eFUhZTXTf1no` to deletion
+event `evt_1UQXZ2IxB8W4eFUh4LxmQUy5`.
+
+**Scope:** the core protected-hosted purchase → unlock → scheduled cancellation
+→ terminal revocation flow passed. Genuine Stripe sandbox events reached the
+real hosted handler through the signed local relay; this does **not** certify
+direct production webhook delivery. No hosted draft-preservation or AI-answer
+test was performed. Email/domain, public-webhook, Store and remaining lifecycle
+matrix gates stay open. No live charge or public launch is authorized.
 
 The operator-tooling checkpoint `e68f55d` passed
 [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38616618364).
+The purchase-only evidence checkpoint `76d5031` also passed
+[GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38620047237).
 New operator scripts run locally; the application deployment remains on the exact
 `5694bdb` source above and was not redeployed for those tooling changes.
+Final local verification passed the full offline suite, typecheck, lint (zero
+errors/eight existing warnings), focused operator lint and secret scan (335 files).
 
 ### Protected Preview operator notes
 
@@ -128,7 +158,7 @@ The same isolated Stripe sandbox and local provider-disabled supervisor were use
 
 The new operator helpers have fixed, private attempt journals and fail closed after uncertain mutations. `stripe-sandbox-portal-isolation.mjs` uses `UNIMATE_STRIPE_TEST_PORTAL=approved` with `status`, `prepare-secondary`, `verify-isolation`, `create-primary-portal`, and `verify-primary-portal`. `stripe-sandbox-initial-decline.mjs` uses `UNIMATE_STRIPE_TEST_INITIAL_DECLINE=approved` with `create`, `status`, and `cleanup`; the operator enters the decline fixture in Stripe's browser UI separately. It never pays automatically or cancels an unexpected subscription. Never repeat a journaled create or disclose its private redirect URL.
 
-Remaining release evidence includes the connected protected-hosted billing journey and complete website/Companion browser-state transitions. Production billing remains blocked on the existing release gates, including explicit live-mode approval and owner decisions on refund/dispute treatment and applicable tax registrations. No tax collection was enabled by these tests.
+The core protected-hosted purchase/period-end-cancellation journey is now verified above. Remaining release evidence includes the broader website/Companion state matrix and direct production webhook delivery. Production billing remains blocked on the existing release gates, including explicit live-mode approval and owner decisions on refund/dispute treatment and applicable tax registrations. No tax collection was enabled by these tests.
 
 ### Controlled local helpers
 

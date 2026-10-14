@@ -38,21 +38,23 @@ async function assertConfirmationPage(page) {
 
 export async function chooseVerifiedCancellationReason({ page }) {
   await assertConfirmationPage(page);
-  const choice = page.getByRole("button", { name: "Choose an option", exact: true });
+  // Stripe's aria-labelledby names the anchor from the Reason label, not its
+  // visible placeholder. The exact visible span receives pointer hits natively.
+  const choice = page.getByText("Choose an option", { exact: true });
   await choice.waitFor({ state: "visible", timeout: 15000 });
   if ((await choice.count()) !== 1 || !(await choice.isEnabled())) fail();
   await choice.click();
-  const other = page.getByText("Other", { exact: true });
+  const other = page.getByRole("option", { name: "Other reason", exact: true });
   await other.waitFor({ state: "visible", timeout: 15000 });
   if ((await other.count()) !== 1 || !(await other.isVisible())) fail();
   await other.click();
+  await other.waitFor({ state: "hidden", timeout: 15000 });
+  // The verified Other reason state renders one optional feedback textarea
+  // alongside a hidden one. Wait for that observed state, not an immediate count.
   const comment = page.locator("textarea:visible");
-  const comments = await comment.count();
-  if (comments > 1) fail();
-  if (comments === 1) {
-    if (!(await comment.isEnabled())) fail();
-    await comment.fill("Sandbox subscription lifecycle verification");
-  }
+  await comment.waitFor({ state: "visible", timeout: 15000 });
+  if ((await comment.count()) !== 1 || !(await comment.isEnabled())) fail();
+  await comment.fill("Sandbox subscription lifecycle verification");
   const next = page.getByRole("button", { name: "Continue to cancellation", exact: true });
   await next.waitFor({ state: "visible", timeout: 15000 });
   if ((await next.count()) !== 1 || !(await next.isVisible()) || !(await next.isEnabled())) fail();
