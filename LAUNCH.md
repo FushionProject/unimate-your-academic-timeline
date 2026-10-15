@@ -10,7 +10,7 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - Every completed manual item must include a dated evidence note or link.
 - If a release-blocking check fails, stop promotion and record the response under **Launch incidents**.
 
-## Current candidate — October 14, 2026
+## Current candidate — October 15, 2026
 
 The active candidate is on `codex/unimate-premium-revival`. The product work was
 committed and pushed as `da82c64`, followed by tested billing checkpoints
@@ -20,13 +20,15 @@ committed and pushed as `da82c64`, followed by tested billing checkpoints
 `291be77` (real portal isolation/initial decline plus billing UI regressions),
 `5a6f3a4` (dependency cleanup and both hosting adapters), and `fbd059f`
 (cross-version bundled-lock repair and regression), `3d5943e` (guarded immutable
-Preview billing-return origin), and `5694bdb` (protected sandbox setup and test
-tooling). GitHub
+Preview billing-return origin), `5694bdb` (protected sandbox setup and test
+tooling), and `72a0e29` (account-boundary, pending-work access and packaging
+protections). GitHub
 `main` was not changed. This branch is still under verification, not frozen or
-approved for public release. The current protected Preview is the October 14
-deployment recorded below; it includes the newer billing changes. The August and
-earlier protected-Preview records are historical. No domain change, Store
-submission, live payment, or public launch was performed.
+approved for public release. The current protected Preview is the October 15
+deployment recorded below. The owner bought `askunimate.com` through Vercel;
+registration is separate from connecting or launching the website. Earlier
+protected-Preview records remain historical evidence. No public domain
+assignment, Store submission, live payment, or public launch was performed.
 
 The tests-only GitHub workflow covers pushes to this candidate and `main`, pull
 requests targeting `main`, and manual runs. It uses pinned official actions,
@@ -40,18 +42,20 @@ GitHub/Linux run for `90b6a15` completed successfully:
 This includes a clean dependency install and is separate from local verification.
 The subsequent billing checkpoint `291be77` also passed its complete
 [GitHub/Linux run](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38603810280).
-The deployed source `5694bdb4b2a668e2f42297fe37a4a27fd34e000e` passed all checks in
+The earlier deployed source `5694bdb4b2a668e2f42297fe37a4a27fd34e000e` passed all checks in
 [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38612123785).
 The later operator-tooling checkpoint `e68f55d` also passed
 [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38616618364);
 that tooling was not redeployed as application code.
 The purchase-only evidence checkpoint `76d5031` also passed
 [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38620047237).
+The current deployed source `72a0e29eb6cf23f8f7fbf58835959af6f24d4c28` passed its
+complete [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38647251032).
 
 Latest hosted billing evidence: the core sandbox purchase → Companion unlock →
-Portal period-end cancellation → access revocation flow **passed** on the current
-private Preview. Signed events reached the real hosted handler through the local
-relay; persisted Pro/Free state was verified before each app return. The same
+Portal period-end cancellation → access revocation flow **passed** on the
+October 14 private Preview at `5694bdb`. Signed events reached the real hosted
+handler through the local relay; persisted Pro/Free state was verified before each app return. The same
 open installed Companion panel/session unlocked, then showed its upgrade gate
 after expiry. The website ended on Restart Pro. This is not production-direct
 webhook, AI-answer, draft-preservation or public-launch certification.
@@ -74,7 +78,7 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [x] Remove the vulnerable development dependency chain and verify both build targets (October 14)
 - [ ] Complete production-origin, legal, support, and Chrome Web Store gates
 
-### Source safety follow-up — October 14 (not yet deployed)
+### Source safety follow-up — October 14 (website deployed October 15)
 
 Ask UniMate binds each outbound question and history to its originating account
 before fetching. A deferred session lookup that resolves as another account or
@@ -96,7 +100,9 @@ and reactivation, without extra AI requests or replacement history reads. Earlie
 consent, capture, cross-tab sign-out, persistence, keyboard/zoom and worker-recovery
 checks also pass. Artifact directory: `unimate-companion-browser-VmhfWZ` in the
 host temporary directory; the lock and answer screenshots were visually reviewed.
-This does not update or certify the hosted Preview or the production Store ZIP.
+This synthetic run does not certify the hosted journey or the production Store
+ZIP. The website changes were deployed October 15 as recorded below; an installed
+Companion must still be rebuilt/configured from this source for hosted retesting.
 The full offline application suite, typecheck and secret scan pass locally;
 lint reports no errors and the same eight existing Fast Refresh warnings.
 
@@ -122,13 +128,17 @@ The separate
 AgentMail verification inbox is ready; it does not replace the sending service or
 `unimatesupport@gmail.com`. No account ownership or authentication protection was changed.
 
-Domain decision update — October 14: the owner cannot recover the Namecheap
-account and prefers considering a replacement domain through Vercel. Read-only
-availability/pricing checks were completed; no exact domain purchase, term or
-automatic-renewal preference has been approved. Leave `unimate.site`, its DNS,
-and the existing Resend domain untouched. Once a replacement is approved,
-request records for that exact sending domain; do not reuse the old DKIM records.
-The private Preview and test-only billing remain the approved environment.
+Domain decision update — October 15: the owner selected and purchased
+`askunimate.com` through Vercel. Authenticated inspection confirms registration
+under the existing ResumeJuice team, expiring October 15, 2027, with a current
+renewal quote of $11.25 USD/year. No duplicate purchase was made. Automatic
+renewal was not changed by this task. Registration is not public-launch approval:
+no UniMate project assignment, public canonical-origin change or email DNS change
+was performed. The new domain's DNS/TLS and registrant verification still need
+checking before launch. Leave `unimate.site` and its existing Resend domain
+untouched; obtain fresh provider records for the replacement sending domain
+instead of reusing the historical DKIM records. The private Preview and test-only
+billing remain the approved environment.
 
 ### Historical pending Resend DNS records — domain decision required
 
@@ -265,7 +275,34 @@ recorded and was not silently retried away. Prefer the scoped verified runtime
 when reproducing this candidate's tests. The temporary local server was stopped
 and the synthetic browser session signed out after verification.
 
-### Current protected Preview — October 14, 2026
+### Current protected Preview — October 15, 2026
+
+- URL: https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app/
+- Deployment: `dpl_E4Wf1fi7mKEYFd7pwPFMpRWVMt3A`, authenticated status **READY**,
+  target `null` (Preview), no aliases.
+- Source: `72a0e29eb6cf23f8f7fbf58835959af6f24d4c28`, matching deployment Git
+  metadata and the recorded source-upload audit. The exact uploader dry run
+  matched all 137 reviewed files (9,075,192 bytes); private configuration and
+  browser/test artifacts remained excluded.
+- Project/team remained `prj_5XZ4ulni13tNLCvNzdL1gUPvashI` /
+  `team_MwJPMKdnqu1z8dxbKYBqdJCY`. Vercel authentication is retained, automatic
+  custom-domain assignment is off, persistent bypass count is zero, and no
+  Production environment variables were configured.
+- Signed-out smoke passed using exact-origin, short-lived Vercel access held
+  only in memory: anonymous root redirects to Vercel (302); health is ready
+  (200, no-store); signup is disabled (200); uncredentialed operator readiness
+  stays hidden (404); unsigned Companion requests return `401 AUTH_REQUIRED`.
+  Home, pricing, sign-in, privacy, terms and support return HTML with headings
+  (200). The signed-out landing page also rendered correctly in the browser.
+- These checks made no AI-provider, database or payment calls. Health reports
+  configuration presence, not proof of a successful AI answer. No authenticated
+  billing/Companion journey was repeated; the October 14 proof below remains
+  scoped to that deployment and installed package.
+- Initial attempt `dpl_HFBKRhhimwwHKmky1coCxGmUwdKC` failed during `npm ci`
+  with Vercel-side `ECONNRESET`. A single retry of unchanged source completed;
+  no dependency, install-policy or security bypass was used.
+
+### Historical protected Preview — October 14, 2026
 
 - URL: https://unimate-fwcn4d8vz-resumejuice-s-projects.vercel.app/
 - Deployment: `dpl_8FeZgD36ucSFKxW2CAMRrvrh7pjp`, `READY`, Preview (`target:null`),
@@ -517,7 +554,7 @@ historical scripts. Final public-production configuration remains unverified.
 
 Draft evidence recorded August 12, 2026: `/privacy`, `/terms`, and `/support` exist in the release build; the Home footer links all three; the Companion consent screen links to `https://unimate.site/privacy`; production build, Companion Store-readiness tests, and secret scan pass. Publication boxes remain open until the production domain serves these pages and the owner/legal reviewer approves the wording.
 
-Contact update October 13, 2026: the owner created `unimatesupport@gmail.com` to replace the canceled domain mailbox. The three contact pages use this address in local source. Confirm incoming mail and replies before checking off email verification; account creation alone does not prove delivery. This contact-only change has not yet been deployed.
+Contact update October 13, 2026: the owner created `unimatesupport@gmail.com` to replace the canceled domain mailbox. The three contact pages use this address, now included in the October 15 private Preview. Confirm incoming mail and replies before checking off email verification; account creation alone does not prove delivery. Public publication and actual inbox/reply delivery remain unverified.
 
 Incident evidence recorded August 12, 2026: `LAUNCH_INCIDENT_RUNBOOK.md` defines
 severity, containment, communication, recovery, and privacy-safe incident records.
