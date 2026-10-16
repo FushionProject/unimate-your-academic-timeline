@@ -83,6 +83,39 @@ assert.match(
   /cut short.*kept here.*one part at a time/,
 );
 
+// Auth service outages preserve the signed-in session and question. The copy
+// must not contradict that behavior by claiming the student was signed out.
+for (const error of [
+  { code: "AUTH_TIMEOUT", phase: "auth" },
+  { code: "AUTH_TIMEOUT" },
+  { code: "NETWORK_ERROR", phase: "auth", message: "Failed to fetch" },
+  { code: "BACKEND_UNAVAILABLE", phase: "auth", message: "Temporary outage" },
+]) {
+  const message = content.api.studentFacingError(error);
+  assert.match(message, /couldn.t verify.*session/i);
+  assert.match(message, /Your question is kept here/);
+  assert.doesNotMatch(message, /ended|expired|sign in|password|upgrade/i);
+}
+assert.match(
+  content.api.studentFacingError({ code: "AUTH_REQUIRED", phase: "auth" }),
+  /session has ended.*Sign in again/,
+);
+await assert.rejects(
+  background.api.parseResponse(
+    new Response(JSON.stringify({ error: "Try later" }), {
+      status: 429,
+      headers: { "retry-after": "30" },
+    }),
+    "auth",
+  ),
+  (error) => {
+    const message = content.api.studentFacingError(error);
+    assert.match(message, /Your question is kept here.*30 seconds/);
+    assert.doesNotMatch(message, /ended|expired|sign in|password|upgrade/i);
+    return true;
+  },
+);
+
 let answer;
 let response;
 const web = loadFunctions("../../src/components/screen-assistant.tsx", ["handleAsk"], {
@@ -121,5 +154,5 @@ for (const [status, code, expectedMessage] of [
 }
 
 console.log(
-  "PASS extension and screen assistant typed 403 Pro/auth errors and generic forbidden errors",
+  "PASS extension and screen assistant typed access errors, temporary auth failures, rate limits and generic forbidden errors",
 );

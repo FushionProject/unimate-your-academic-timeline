@@ -1,7 +1,7 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-Readiness updated: October 16, 2026, from checkpoint `8e56762` plus the reviewed
-privacy-link changes on `codex/unimate-premium-revival`. The current protected
+Readiness updated: October 16, 2026, from checkpoint `0a68da2` plus the reviewed
+temporary-auth-error copy change on `codex/unimate-premium-revival`. The current protected
 Preview runs application commit `72a0e29`. Sandbox purchase → same-panel Pro
 unlock → period-end revocation passed on the earlier `5694bdb` deployment;
 that proof does not automatically certify the new deployment or extension.
@@ -11,7 +11,21 @@ and [Stripe sandbox manual tests](../STRIPE_SANDBOX_MANUAL_TESTS.md).
 No custom domain was assigned and nothing was submitted to or published in the
 Chrome Web Store.
 
-October 16 local follow-up: full Companion verification and five runtime repeats
+Latest October 16 local follow-up: temporary authentication outages no longer
+claim the student's session ended; only a definitive `AUTH_REQUIRED` rejection
+does. Production-function fixtures cover timeout/network/service-error copy and
+rate-limit timing; six Send/preflight cases confirm session and draft retention.
+Full Companion verification and five runtime repeats pass. The finalized runtime
+then passed 28 installed Chromium scenarios with ten simulated AI calls, artifact
+`unimate-companion-browser-8JUxqo` in the host temporary directory. The installed
+background/content/extractor/sign-in/manifest files match current source byte for
+byte; the before/after content SHA-256 is
+`a6ecd16e92348f18e3e0490438382efde984c127f319622c2c50bf71187796e2`.
+No real credentials, database, payment, or AI-provider calls were used. The
+installed auth-outage scenario exercises history refresh; exact Send error text
+is covered by the executed production-function fixtures, not a new hosted test.
+
+Earlier October 16 privacy-link follow-up: full Companion verification and five runtime repeats
 pass, followed by 28 installed Chromium scenarios and ten simulated AI calls.
 The installed runtime exactly matched the reviewed privacy-link source; no real
 credentials or provider/database/payment calls were used. Artifacts:
@@ -176,7 +190,7 @@ tests passed; these public-release gates remain:
   three and zero provider errors. Neither historical deployment contains the
   current working tree; the later historical snapshot's separate proof is recorded above.
 - Latest recorded synthetic installed-browser evidence: 28 scenarios and ten fake AI
-  calls, artifact `unimate-companion-browser-VmhfWZ` in the host temporary directory.
+  calls, artifact `unimate-companion-browser-8JUxqo` in the host temporary directory.
   Coverage includes transport recovery, private
   sign-in, Free/Pro gates, capture/save recovery, clipped/shadow/frame privacy,
   accessibility-tree and reduced-motion checks, scroll/disclosure preservation,

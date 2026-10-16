@@ -74,7 +74,8 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [x] Protected Preview period-end cancellation revokes the same open Companion panel/session (October 14)
 - [ ] Re-verify the current protected Preview's Companion study and billing flow end to end
 - [ ] Complete the remaining real Stripe sandbox lifecycle matrix
-- [ ] Configure and verify signup/confirmation/password-recovery email delivery
+- [x] Verify custom SMTP delivery and private-preview recovery-link landing (October 16)
+- [ ] Complete password-update submission and signup/email-confirmation verification
 - [x] Remove the vulnerable development dependency chain and verify both build targets (October 14)
 - [ ] Complete production-origin, legal, support, and Chrome Web Store gates
 
@@ -142,16 +143,33 @@ DMARC is an initial non-enforcing policy on the mail subdomain only, not a claim
 of delivered-mail authentication or mature reputation monitoring. Root mailbox
 and marketing settings were not changed.
 
-Supabase custom SMTP was disabled at inspection. The non-secret form was prepared
-for `accounts@mail.askunimate.com`, sender `UniMate`, host `smtp.resend.com`, port
-465 and username `resend`. A sending-only key restricted to this exact domain was
-prepared in Resend for the owner to create and paste privately into Supabase.
-The owner reported having the key; credential entry/save, actual delivery and
-confirmation/recovery callbacks are not yet verified. Never put the credential
-in this file or Git. URL Configuration still has Site URL `http://localhost:3000`
-and no allowed redirect URLs. Before testing hosted recovery, approve/configure
-the exact private Preview return URLs and verify the full return path; do not
-send users to the unlaunched custom domain or allow broad third-party wildcards.
+The owner created the domain-scoped sending key and saved it directly in
+Supabase. A fresh dashboard tab confirmed custom SMTP enabled with sender
+`accounts@mail.askunimate.com`, name `UniMate`, host `smtp.resend.com`, port 465
+and username `resend`. The credential was not read, copied into the repository,
+or exposed in logs. Resend's metadata confirms the `UniMate Auth SMTP` key exists.
+
+With explicit owner approval, Site URL was changed from localhost to the exact
+private Preview `https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app` and
+three exact callback paths were saved: `/dashboard`, `/companion`, and
+`/reset-password`. No wildcard, public custom domain or additional environment
+was enabled. Source inspection then identified that Pro signup actually returns
+to `/upgrade`, not `/companion`; approval to replace that unused entry is pending.
+
+One empty synthetic email-test account was created with an admin-owned test
+marker, a Free profile, no password and no Stripe customer. Its identity journal
+is private and ignored; it is separate from billing fixtures and owner accounts.
+One reset request was submitted through the actual current private Preview form.
+At 15:09 CDT on October 16, Resend reported delivery and the authorized test inbox
+received the matching message from the new sender. The direct, untracked
+Supabase verification link named the exact project, recovery type, and private
+`/reset-password` destination. Following it reached **Choose a new password**,
+with both password fields present and the authentication fragment removed from
+the address bar. No password was entered or changed by the agent; the final
+password-entry/submission step was handed to the owner. This verifies SMTP,
+delivery and the recovery callback, not completed credential change, new-student
+signup, confirmation enforcement, or Gmail inbox placement. No real student
+data, marketing mail, AI request, or Stripe operation was involved.
 
 The authentication-provider settings also exposed direct new-user registration
 despite the website's signup pause. **Allow new users to sign up** was switched
@@ -160,6 +178,7 @@ Existing-account sign-in remains
 enabled. **Confirm email** was found off and was not silently changed: enabling
 and verifying confirmation safely remains a launch gate after SMTP works.
 Anonymous sign-in and manual linking were already disabled and remain unchanged.
+Public signup was independently rechecked as disabled after the SMTP/URL setup.
 
 ### Companion source follow-up — October 16, 2026
 
@@ -174,6 +193,19 @@ provider/database/payment traffic. Exact evidence and remaining public-release
 gates are recorded in `browser-companion/CHROME_WEB_STORE_READINESS.md`.
 These extension/docs changes do not alter the current hosted web application
 or constitute a new authenticated hosted billing/recovery test.
+
+The next local follow-up fixes misleading temporary-authentication-error copy:
+only definitive `AUTH_REQUIRED` says the session ended. Temporary service,
+network and timeout failures retain the question and session; rate-limit timing
+remains accurate. Six executed Send/preflight cases plus production-function
+fixtures cover that distinction. Full offline tests, typecheck and secret scan
+pass; lint has zero errors and the same eight existing Fast Refresh warnings.
+The finalized extension passed 28 installed Chromium scenarios with ten fake AI
+requests, artifact `unimate-companion-browser-8JUxqo`. The installed runtime
+matches source; before/after content SHA-256 is
+`a6ecd16e92348f18e3e0490438382efde984c127f319622c2c50bf71187796e2` atop `0a68da2`.
+The installed auth-outage case exercises history refresh; exact Send copy and
+retention are covered by executable fixtures, not a new hosted study/billing run.
 
 Historical email evidence — October 14: the owner approved Resend's free plan
 and a sending subdomain of `unimate.site`. Resend was connected and
@@ -608,7 +640,7 @@ historical scripts. Final public-production configuration remains unverified.
 - [x] Subscription, cancellation, and refund language drafted for owner/legal review
 - [x] Student-data and screenshot disclosures drafted and linked in Companion consent
 - [ ] Support email receives and sends successfully
-- [ ] Password reset email verified
+- [x] Password reset email delivered and opens the private-preview reset form (October 16; password submission remains pending)
 - [ ] Email-confirmation flow verified
 - [ ] Public status or outage communication channel prepared
 - [x] Incident response runbook reviewed

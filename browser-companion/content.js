@@ -544,7 +544,7 @@
     ) {
       return "AI help is temporarily unavailable while UniMate restores service. Your question is kept here.";
     }
-    if (error?.code === "AUTH_REQUIRED" || error?.phase === "auth") {
+    if (error?.code === "AUTH_REQUIRED") {
       return "Your UniMate session has ended. Sign in again to continue.";
     }
     if (error?.code === "PRO_REQUIRED") {
@@ -560,6 +560,9 @@
       return error?.retryAfterMs > 0
         ? `UniMate is a little busy right now. Your question is kept here; try again in about ${Math.ceil(error.retryAfterMs / 1000)} seconds.`
         : "UniMate is a little busy right now. Your question is kept here; wait a moment, then try again.";
+    }
+    if (error?.code === "AUTH_TIMEOUT" || error?.phase === "auth") {
+      return "I couldn't verify your UniMate session just now. Your question is kept here; try again in a moment.";
     }
     if (/updated or reloaded|receiving end|message port|could not establish/i.test(raw)) {
       return "UniMate needs to reconnect to this page. Refresh once, then try again.";

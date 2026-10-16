@@ -255,6 +255,46 @@ for (const code of ["AUTH_TIMEOUT", "ENTITLEMENT_TIMEOUT", "NETWORK_ERROR"]) {
   );
 }
 
+// Exercise the real error formatter in the Send flow, not only a history-load
+// failure: an auth outage must keep both the question and the usable session.
+for (const rejectedRequest of ["AUTH_STATE", "SEND_CHAT"]) {
+  for (const code of ["AUTH_TIMEOUT", "BACKEND_UNAVAILABLE", "NETWORK_ERROR"]) {
+    const { state, events, context, api } = harness({
+      onSend: (request) =>
+        request.type === rejectedRequest
+          ? Promise.reject(
+              Object.assign(new Error("Temporary outage"), {
+                code,
+                phase: "auth",
+                backgroundResponded: true,
+              }),
+            )
+          : undefined,
+    });
+    vm.runInContext(functionSource("studentFacingError", "extractContext"), context);
+    await api.submitChat("Explain this");
+    assert.equal(state.auth.authenticated, true);
+    assert.equal(state.auth.userId, "student");
+    assert.equal(state.auth.isPro, true);
+    assert.equal(state.draft, "Explain this");
+    assert.equal(state.busy, false);
+    assert.equal(
+      events.some(([name]) => name === "auth" || name === "SIGN_OUT"),
+      false,
+    );
+    const message = events.filter(([name]) => name === "render").at(-1)?.[1];
+    assert.match(message, /couldn.t verify.*session/i);
+    assert.match(message, /Your question is kept here/);
+    assert.doesNotMatch(message, /ended|expired|sign in|password|upgrade/i);
+    if (rejectedRequest === "AUTH_STATE") {
+      assert.equal(
+        events.some(([name]) => name === "extract" || name === "SEND_CHAT"),
+        false,
+      );
+    }
+  }
+}
+
 for (const options of [{ consent: false }, { pro: false }]) {
   const { state, events, api } = harness(options);
   await api.submitChat("Explain this");

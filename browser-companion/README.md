@@ -1,16 +1,32 @@
 # UniMate Browser Companion
 
-Implementation notes updated October 14, 2026 against evidence checkpoint
-`2e16b0e`. The current protected Preview runs application commit `5694bdb`.
-Real sandbox purchase unlocked the same open Companion panel, and period-end
-cancellation revoked it using the same session. The hosted screenshot/AI/save
-proof is historical and has not been repeated on that deployment. No public
+Implementation notes updated October 16, 2026 against extension/source checkpoint
+`0a68da2`. The current protected Preview runs application commit `72a0e29` at
+`https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app/`. Its signed-out smoke
+checks passed; authenticated study and billing journeys have not been repeated
+on that exact deployment. Real sandbox purchase unlocked the same open Companion
+panel, and period-end cancellation revoked it, on the historical `5694bdb`
+deployment. The hosted screenshot/AI/save proof is also historical. No public
 production or Store release has occurred; see the scoped evidence below.
 
-Source-only follow-up (not redeployed): the installed-browser harness now passes
-28 synthetic scenarios, including Pro revocation/recovery while an answer is
-unsaved or a question needs retry. Current local evidence and the Ask account-
-switch fix are recorded in [LAUNCH.md](../LAUNCH.md#source-safety-follow-up--october-14-not-yet-deployed).
+The latest extension-only follow-up derives the consent Privacy Policy link from
+the validated configured origin instead of the old domain. It passed offline
+verification, five runtime repeats, and 28 installed Chromium scenarios with ten
+simulated AI calls. That installed run covers Pro revocation/recovery with an
+unsaved answer or a question awaiting retry, but not public policy navigation or
+a live hosted journey. Exact evidence is in [Store readiness](./CHROME_WEB_STORE_READINESS.md).
+
+October 16 local copy follow-up: temporary authentication failures no longer tell
+a signed-in student that their session ended. The question and session stay
+available, while a definitive `AUTH_REQUIRED` rejection still clears account
+data and opens secure sign-in. Executed production-function tests cover timeout,
+network, service-outage, and rate-limit messages; six Send/preflight scenarios
+also verify draft/session retention. Full Companion verification and the current
+installed Chromium harness pass: 28 scenarios and ten simulated AI calls,
+artifact `unimate-companion-browser-8JUxqo`. Installed runtime files match the
+reviewed source. This copy-only follow-up has not had a hosted run; the installed
+auth-outage scenario checks history refresh, while exact Send error copy is
+covered by the executable production-function tests.
 
 Contact update October 13, 2026: local Privacy, Terms, and Support pages now use
 the owner-created `unimatesupport@gmail.com` inbox. Those links are included in
@@ -208,7 +224,7 @@ and operational blockers that must be closed before submission.
 
 ## Release gates
 
-### Current candidate evidence — October 14, 2026
+### Current candidate evidence — October 16, 2026
 
 | Requirement                                                 | Evidence                                                                                                                                                                                                                                                              | Remaining boundary                                                                                                                      |
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -216,11 +232,11 @@ and operational blockers that must be closed before submission.
 | Safe failure and recovery                                   | Actual text/vision provider helpers reject truncation without partial success or hidden retries; auth outages fail closed without treating them as an invalid password/session. Installed transport recovery and deterministic ambiguous-request classification pass. | Real provider failures remain environment-dependent; no live outage was induced.                                                        |
 | Prompt and privacy fidelity                                 | Full 4,000-character question reaches analysis; transformed/zoomed iframe text is omitted conservatively; generator rejects privileged keys before writing public config.                                                                                             | Screenshots still contain intentionally shared visible pixels; this is not screenshot redaction. Existing credentials were not changed. |
 | Installed interaction and accessibility                     | Latest recorded synthetic run: 28 Chromium scenarios and ten fake AI calls; consent, secure sign-in, Free/Pro, pending-work revocation/recovery, capture, save/transport recovery, focus/keyboard, worker termination, reinjection and accessibility-tree checks. Same-URL mutation guards also have deterministic tests. | Manual spoken screen-reader verification remains outstanding. |
-| Hosted study flow and quotas                                | Historical protected screenshot → real answer → save/readback → reload proof; SQL/runtime/concurrency evidence is in `../AI_ENTITLEMENT_ROLLOUT.md`. | Repeat the study flow on the current `5694bdb` deployment; production and live quota exhaustion remain separate. |
-| Hosted billing and same-panel entitlement                    | October 14 protected Preview: genuine sandbox purchase → Pro composer → period-end cancellation → Free upgrade gate in the same open panel/session, with signed webhooks and persisted-state proof before app return. | Uses the existing focus handler, not passive push; zero AI requests/captures/extractions. Direct production webhooks and broader lifecycle tests remain open. |
+| Hosted study flow and quotas                                | Historical protected screenshot → real answer → save/readback → reload proof; SQL/runtime/concurrency evidence is in `../AI_ENTITLEMENT_ROLLOUT.md`. | Repeat the study flow on the current `72a0e29` deployment with the current extension; production and live quota exhaustion remain separate. |
+| Hosted billing and same-panel entitlement                    | October 14 protected Preview (`5694bdb`): genuine sandbox purchase → Pro composer → period-end cancellation → Free upgrade gate in the same open panel/session, with signed webhooks and persisted-state proof before app return. | Repeat on the current Preview using a separately scoped test run. Uses the existing focus handler, not passive push; zero AI requests/captures/extractions. Direct production webhooks remain open. |
 | Store packaging safety                                      | Isolated fixture tests reject private/placeholder origins, invalid Chrome versions, secret-like config, symbolic-link inputs and unexpected archive entries; root manifest and public config are verified. | Offline validation cannot prove public endpoint availability, privacy-policy publication, asset rights or Store acceptance. No production ZIP was generated in this audit. |
 
-Latest recorded synthetic browser artifact: `unimate-companion-browser-VmhfWZ`
+Latest recorded synthetic browser artifact: `unimate-companion-browser-8JUxqo`
 in the host temporary directory. The evidence checkpoint records passing full
 offline tests, typecheck, secret scan and lint (eight existing warnings); dual
 build and Linux checks are recorded in [LAUNCH.md](../LAUNCH.md). These are dated
@@ -234,7 +250,20 @@ small-text contrast. Trusted mouse-wheel tests cover small-window recovery witho
 scrolling the coursework. These automated checks are not a substitute for a person
 listening with a screen reader.
 
-### Current protected Preview proof
+### Current protected Preview — October 15
+
+- `https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app/`
+  (`dpl_E4Wf1fi7mKEYFd7pwPFMpRWVMt3A`) is the current `READY` Preview, with
+  application source `72a0e29`, no aliases, authentication protection enabled,
+  zero persistent bypass credentials, and zero Production environment variables.
+- Signed-out health, signup-disabled, Companion denial, public-page HTML, and
+  browser landing-page checks passed. These checks do not establish a current
+  authenticated answer/save/reload journey or purchase/cancellation lifecycle.
+- Extension-only commit `0a68da2` did not redeploy the website. Do not infer that
+  a previously loaded unpacked extension automatically uses the latest files;
+  resume it through the runner's mandatory reload or use a fresh isolated profile.
+
+### Historical protected billing proof — October 14
 
 - `https://unimate-fwcn4d8vz-resumejuice-s-projects.vercel.app/`
   (`dpl_8FeZgD36ucSFKxW2CAMRrvrh7pjp`) is `READY`, Preview, no aliases, with
@@ -343,6 +372,27 @@ listening with a screen reader.
   It runs bounded real-provider cases with synthetic coursework only and
   requires explicit owner approval, a configured provider budget, and
   `UNIMATE_LIVE_AI_EVAL=approved`. Never run it automatically in CI.
+
+For the current protected website, the owner-preview runner additionally needs
+`UNIMATE_COMPANION_PREVIEW_ORIGIN=https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app`
+and a fresh, project-scoped development OIDC token supplied only to its process.
+Use the existing authenticated Vercel environment runner from a fresh empty
+temporary working directory, selecting the exact UniMate project/team, so an
+old local env file cannot override that token. Keep the token out of commands,
+logs, saved configuration, and Git. The runner verifies the exact READY Preview
+and closes if its worker changes or its short-lived access expires; do not
+disable protection or generate a persistent bypass to continue a failed test.
+
+The prior hosted billing runner is intentionally **one-shot**, not a repeatable
+purchase button. `scripts/run-protected-billing-preview.mjs` requires exactly
+three canceled baseline subscriptions and no existing
+`protected-billing-checkout-v1.json` journal. The completed October 14 run ended
+with four canceled subscriptions and a retained journal, so a new invocation
+must stop at those guards. Do not delete that journal, weaken the baseline, or
+rerun the completed setup to retest a new Preview. Prepare a separately scoped,
+reviewed synthetic run with its own immutable record first. Offline
+`npm run preview:billing:test` remains safe to repeat; it does not make charges,
+write the database, or prove current hosted billing behavior.
 
 ### Production gates
 
