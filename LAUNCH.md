@@ -75,7 +75,8 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [ ] Re-verify the current protected Preview's Companion study and billing flow end to end
 - [ ] Complete the remaining real Stripe sandbox lifecycle matrix
 - [x] Verify custom SMTP delivery and private-preview recovery-link landing (October 16)
-- [ ] Complete password-update submission and signup/email-confirmation verification
+- [x] Owner completes isolated test-account password update; saved state and recovery cleanup verified (October 16)
+- [ ] Verify fresh password sign-in and new-student email-confirmation signup
 - [x] Remove the vulnerable development dependency chain and verify both build targets (October 14)
 - [ ] Complete production-origin, legal, support, and Chrome Web Store gates
 
@@ -151,10 +152,12 @@ or exposed in logs. Resend's metadata confirms the `UniMate Auth SMTP` key exist
 
 With explicit owner approval, Site URL was changed from localhost to the exact
 private Preview `https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app` and
-three exact callback paths were saved: `/dashboard`, `/companion`, and
-`/reset-password`. No wildcard, public custom domain or additional environment
-was enabled. Source inspection then identified that Pro signup actually returns
-to `/upgrade`, not `/companion`; approval to replace that unused entry is pending.
+the final exact callback paths are `/dashboard`, `/upgrade`, and
+`/reset-password`. With explicit owner approval, the unused `/companion` entry
+was removed and replaced with `/upgrade`; the saved list and success notice
+were observed in the dashboard. No wildcard, public custom domain or additional
+environment was enabled. This matches the source's named signup destinations;
+it is not yet proof of a new-student Pro signup confirmation journey.
 
 One empty synthetic email-test account was created with an admin-owned test
 marker, a Free profile, no password and no Stripe customer. Its identity journal
@@ -165,11 +168,27 @@ received the matching message from the new sender. The direct, untracked
 Supabase verification link named the exact project, recovery type, and private
 `/reset-password` destination. Following it reached **Choose a new password**,
 with both password fields present and the authentication fragment removed from
-the address bar. No password was entered or changed by the agent; the final
-password-entry/submission step was handed to the owner. This verifies SMTP,
-delivery and the recovery callback, not completed credential change, new-student
-signup, confirmation enforcement, or Gmail inbox placement. No real student
-data, marketing mail, AI request, or Stripe operation was involved.
+the address bar. No password was read, entered or changed by the agent; the final
+password-entry/submission step was completed by the owner. On return, the owner
+reported success, the browser had reached the empty dashboard, and a scoped
+read-only database check confirmed a password is set with the account updated
+at 15:15:27 CDT. The profile remained Free with no Stripe customer. The transient
+**Password updated** success screen was not independently captured. Revisiting
+`/reset-password` without a new recovery link showed **This reset link isn't
+valid** and no new-password inputs, confirming the completed recovery permission
+was cleared. The audit-log query returned no entries and is not additional proof.
+This verifies SMTP delivery, the recovery callback, owner-reported submission
+with saved-state corroboration, and recovery cleanup. Fresh password sign-in,
+old-password rejection (the fixture initially had no password), new-student
+signup, confirmation enforcement, and Gmail inbox placement remain separate.
+No real student data, marketing mail, AI request, or Stripe operation was involved.
+
+After recovery, the current Preview's Companion setup still showed **Pro access
+required** and **Installation locked until Pro is active** for this Free account.
+No Checkout was opened. The synthetic session was signed out through the normal
+website control and the browser returned to **Welcome back**. The account remains
+available for later tests; no user or data was deleted. `npm run auth:test`,
+`npm run secret:scan` (337 files) and the documentation diff check passed again.
 
 The authentication-provider settings also exposed direct new-user registration
 despite the website's signup pause. **Allow new users to sign up** was switched
@@ -640,7 +659,7 @@ historical scripts. Final public-production configuration remains unverified.
 - [x] Subscription, cancellation, and refund language drafted for owner/legal review
 - [x] Student-data and screenshot disclosures drafted and linked in Companion consent
 - [ ] Support email receives and sends successfully
-- [x] Password reset email delivered and opens the private-preview reset form (October 16; password submission remains pending)
+- [x] Password reset email delivered and recovery completed for the isolated private-preview fixture (October 16; owner submission plus saved-state/recovery-cleanup verification)
 - [ ] Email-confirmation flow verified
 - [ ] Public status or outage communication channel prepared
 - [x] Incident response runbook reviewed
