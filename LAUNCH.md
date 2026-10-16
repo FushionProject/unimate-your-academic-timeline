@@ -24,7 +24,7 @@ Preview billing-return origin), `5694bdb` (protected sandbox setup and test
 tooling), and `72a0e29` (account-boundary, pending-work access and packaging
 protections). GitHub
 `main` was not changed. This branch is still under verification, not frozen or
-approved for public release. The current protected Preview is the October 15
+approved for public release. The current protected Preview is the October 16
 deployment recorded below. The owner bought `askunimate.com` through Vercel;
 registration is separate from connecting or launching the website. Earlier
 protected-Preview records remain historical evidence. No public domain
@@ -53,6 +53,8 @@ The current deployed source `72a0e29eb6cf23f8f7fbf58835959af6f24d4c28` passed it
 complete [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38647251032).
 The email-confirmation recovery checkpoint `e0415b2` also passed its complete
 [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38963301478).
+The fresh hosted-billing checkpoint `076c427` passed its complete
+[GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38964427458).
 
 Latest hosted billing evidence: the core sandbox purchase → Companion unlock →
 Portal period-end cancellation → access revocation flow **passed again October
@@ -244,11 +246,23 @@ are preserved; no mail, account creation, checkout, or entitlement action happen
 automatically. Actual-function tests cover query/fragment cleanup, navigation
 races, safe provider errors, duplicate-click suppression, and both destinations.
 The local browser showed the corrected screen and then `/signin?next=upgrade`.
-The fix is not yet deployed to the hosted Preview at this checkpoint.
+The fix was deployed in the October 16 private Preview recorded below. After
+the owner renewed the browser's Vercel login and approved moving the same three
+callbacks, following a consumed real Supabase confirmation link to the new
+`/upgrade` displayed the corrected expired/used explanation. Error parameters
+were removed. An explicit resend click for the already-confirmed empty fixture
+displayed the conditional acknowledgement without exposing account existence;
+Sign in then preserved `/signin?next=upgrade`. This verifies the hosted resend UI
+and accepted request, not delivery of a second confirmation to that confirmed
+account. A new unconfirmed-fixture resend/delivery run was not added because the
+verification inbox service had reached its three-inbox free-plan limit; no inbox
+was deleted and no paid upgrade was enabled. The earlier two real delivery and
+confirmation checks remain valid at their recorded deployment.
 
-Remaining email gates: ordinary public signup (intentionally closed), hosted
-verification of the new expired-link/resend screen, the owner's recovery-password
-sign-in, and delivery/inbox placement at a real student mailbox such as Gmail.
+Remaining email gates: ordinary public signup (intentionally closed), a fresh
+unconfirmed-account resend/delivery run on the new deployment, the owner's
+recovery-password sign-in, and inbox placement at a real student mailbox such
+as Gmail.
 
 ### Companion source follow-up — October 16, 2026
 
@@ -439,7 +453,39 @@ recorded and was not silently retried away. Prefer the scoped verified runtime
 when reproducing this candidate's tests. The temporary local server was stopped
 and the synthetic browser session signed out after verification.
 
-### Current protected Preview — October 15, 2026
+### Current protected Preview — October 16, 2026
+
+- URL: https://unimate-mewctpqwm-resumejuice-s-projects.vercel.app/
+- Deployment: `dpl_8BxeAfPZ3acSefc5LDxGCeEXWtV5`, authenticated status **READY**,
+  target `null` (Preview), no aliases.
+- Source: `076c42777c37f89c2f989e008d11e7032f259844`, pushed to the existing
+  candidate branch and independently matched to deployment metadata. The exact
+  uploader dry run matched 139 reviewed files (9,083,821 bytes); all 139 SHA-256
+  values also matched their committed contents. The upload audit's conservative
+  dirty flag includes an excluded, globally ignored local editor-settings file;
+  it is not uploaded or altered. The ordinary Git working tree was clean.
+- Same exact UniMate project/team, Vercel authentication retained, no aliases,
+  automatic custom-domain assignment off, zero persistent protection bypasses,
+  zero Production environment variables, and `STRIPE_LIVE_MODE_ENABLED=false`.
+- No live billing, public signup or production deployment was enabled. The full
+  hosted billing journey above remains scoped to `72a0e29`; the newer build adds
+  email-link recovery UI without changing the billing server. That billing run
+  already used the latest installed Companion source, not its older package.
+- Read-only exact-origin, short-lived OIDC smoke passed: anonymous root 302 to
+  Vercel; protected health 200/no-store; signup disabled; operator readiness 404;
+  unsigned Companion endpoints 401/no-store; all eight checked pages returned
+  HTML. No AI, purchase, fixture write or persistent bypass was needed.
+- After explicit owner approval, Site URL and exactly `/dashboard`, `/upgrade`
+  and `/reset-password` were moved to this origin. All three old entries were
+  removed, the saved list reports three URLs, and no wildcard was added. The old
+  settings are recoverable by re-adding those recorded exact URLs. Confirmation
+  remains required and signup remains disabled, independently checked afterward.
+- Hosted browser verification passed for the new expired/consumed-link screen,
+  explicit resend acknowledgement, and preserved Pro sign-in destination. See
+  the email section for the narrower resend/delivery evidence scope. This is not
+  a repeat of the full purchase or successful-confirmation journey on this build.
+
+### Historical protected Preview — October 15, 2026
 
 - URL: https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app/
 - Deployment: `dpl_E4Wf1fi7mKEYFd7pwPFMpRWVMt3A`, authenticated status **READY**,
