@@ -10,7 +10,7 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - Every completed manual item must include a dated evidence note or link.
 - If a release-blocking check fails, stop promotion and record the response under **Launch incidents**.
 
-## Current candidate — October 15, 2026
+## Current candidate — October 16, 2026
 
 The active candidate is on `codex/unimate-premium-revival`. The product work was
 committed and pushed as `da82c64`, followed by tested billing checkpoints
@@ -111,10 +111,72 @@ Chrome-invalid versions, symlink/nonregular input files and unsafe archive
 replacement. The previous valid archive is preserved when validation fails.
 These checks do not establish DNS/TLS, public reachability or Store approval.
 
-Current email evidence: the restored project's SMTP Settings shows custom SMTP
-disabled. Supabase's default sender is restricted to project-team addresses, so
-ordinary-student email delivery cannot be signed off. The owner approved Resend's
-free plan and a sending subdomain of `unimate.site`. Resend is now connected and
+### Email setup — October 16, 2026
+
+The owner approved email setup on the purchased `askunimate.com` while keeping
+the application private and Stripe test-only. `mail.askunimate.com` was created
+in the connected Resend account (domain `6dd45b2b-a1d4-499f-a529-06643712f7d9`),
+with sending enabled, receiving disabled, open/click tracking disabled and
+enforced TLS requested. Resend reports **verified**, including all four required
+DNS records. Public DNS queries independently returned the expected records.
+The account had capacity for the new domain (one of three slots used before
+creation), with 0/100 daily and 0/3,000 monthly sends. No paid plan was enabled.
+
+Only these email-subdomain records were added in the authoritative Vercel zone;
+all pre-existing root/wildcard ALIAS and CAA records remain unchanged. No public
+website domain was assigned, old-domain records deleted, or support inbox moved.
+
+| Type | Name within `askunimate.com` | Value | Priority |
+| --- | --- | --- | --- |
+| TXT | `resend._domainkey.mail` | Public DKIM key below | — |
+| MX | `send.mail` | `feedback-smtp.us-east-1.amazonses.com` | 10 |
+| TXT | `send.mail` | `v=spf1 include:amazonses.com ~all` | — |
+| CNAME | `rsend.mail` | `send.forge.rmta.net` | — |
+| TXT | `_dmarc.mail` | `v=DMARC1; p=none` | — |
+
+```text
+p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCoxxTtaiNzaup/Zu3GS0sGwvk2s/qEn61Hp04mbkQ0jAF9dwS4fBkDqOnOcTAq97YkZzGg/UEMmHrPqu71Mn7sNWFqc3YM12V14oayYz+XnlNJypbQTd1+lDqJQ7fIB7LyerFUNK+XDpC5/EiRy4LvvCeRTTz/wGRmg94FCgXM6QIDAQAB
+```
+
+DMARC is an initial non-enforcing policy on the mail subdomain only, not a claim
+of delivered-mail authentication or mature reputation monitoring. Root mailbox
+and marketing settings were not changed.
+
+Supabase custom SMTP was disabled at inspection. The non-secret form was prepared
+for `accounts@mail.askunimate.com`, sender `UniMate`, host `smtp.resend.com`, port
+465 and username `resend`. A sending-only key restricted to this exact domain was
+prepared in Resend for the owner to create and paste privately into Supabase.
+The owner reported having the key; credential entry/save, actual delivery and
+confirmation/recovery callbacks are not yet verified. Never put the credential
+in this file or Git. URL Configuration still has Site URL `http://localhost:3000`
+and no allowed redirect URLs. Before testing hosted recovery, approve/configure
+the exact private Preview return URLs and verify the full return path; do not
+send users to the unlaunched custom domain or allow broad third-party wildcards.
+
+The authentication-provider settings also exposed direct new-user registration
+despite the website's signup pause. **Allow new users to sign up** was switched
+off, saved and confirmed after reloading to preserve the private beta.
+Existing-account sign-in remains
+enabled. **Confirm email** was found off and was not silently changed: enabling
+and verifying confirmation safely remains a launch gate after SMTP works.
+Anonymous sign-in and manual linking were already disabled and remain unchanged.
+
+### Companion source follow-up — October 16, 2026
+
+The consent policy link now uses `/privacy` on the extension worker's validated
+configured origin instead of the old hardcoded domain. Invalid configuration
+shows unavailable copy; page content cannot supply a destination. Production
+declaration tests cover valid Preview/public/local origins and malformed or
+unsafe inputs. Full `npm test` and typecheck passed; lint passed with eight
+existing Fast Refresh warnings and no errors. Independent installed Chromium
+verification passed 28 scenarios with ten simulated AI calls, with no real
+provider/database/payment traffic. Exact evidence and remaining public-release
+gates are recorded in `browser-companion/CHROME_WEB_STORE_READINESS.md`.
+These extension/docs changes do not alter the current hosted web application
+or constitute a new authenticated hosted billing/recovery test.
+
+Historical email evidence — October 14: the owner approved Resend's free plan
+and a sending subdomain of `unimate.site`. Resend was connected and
 `mail.unimate.site` was created October 13 local / October 14 UTC (domain ID
 `62fd2cb0-3de6-4bca-b89f-fa9051539421`), with sending enabled, receiving disabled,
 open/click tracking disabled, and enforced TLS requested. The account reports

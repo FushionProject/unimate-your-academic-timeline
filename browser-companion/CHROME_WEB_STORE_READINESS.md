@@ -1,18 +1,26 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-Readiness updated: October 14, 2026, against evidence checkpoint `2e16b0e` on
-`codex/unimate-premium-revival`. The current protected Preview runs application
-commit `5694bdb`; the later commits contain local verification tooling and evidence.
-Its sandbox purchase → same-panel Pro unlock → period-end revocation passed.
+Readiness updated: October 16, 2026, from checkpoint `8e56762` plus the reviewed
+privacy-link changes on `codex/unimate-premium-revival`. The current protected
+Preview runs application commit `72a0e29`. Sandbox purchase → same-panel Pro
+unlock → period-end revocation passed on the earlier `5694bdb` deployment;
+that proof does not automatically certify the new deployment or extension.
 Screenshot/AI/save/reload evidence belongs to the historical deployments below,
 not automatically to the current Preview. Full evidence: [LAUNCH.md](../LAUNCH.md)
 and [Stripe sandbox manual tests](../STRIPE_SANDBOX_MANUAL_TESTS.md).
 No custom domain was assigned and nothing was submitted to or published in the
 Chrome Web Store.
 
-Source-only follow-up (not redeployed): 28 installed Chromium scenarios now pass,
-including access checks while unsaved answers/failed questions are retained. See
-[the current local evidence](../LAUNCH.md#source-safety-follow-up--october-14-not-yet-deployed).
+October 16 local follow-up: full Companion verification and five runtime repeats
+pass, followed by 28 installed Chromium scenarios and ten simulated AI calls.
+The installed runtime exactly matched the reviewed privacy-link source; no real
+credentials or provider/database/payment calls were used. Artifacts:
+`unimate-companion-browser-xN92Is` in the host temporary directory. The before/after
+three-file source diff SHA-256 was
+`5328bf5c199fb698584e3260c9311222f7c61881e1d1baeb7b9eb76cec339e1f` atop `8e56762`.
+Privacy-origin validation and safe link rendering are covered by executed
+production-declaration fixtures; the installed harness covers consent behavior,
+not navigation to a publicly hosted policy. No Store package was published.
 
 ## Release decision
 
@@ -29,8 +37,9 @@ tests passed; these public-release gates remain:
    defaults to `http://localhost:8080`, which is blocked from Store packaging.
    No private configuration was read or production ZIP generated in this audit.
    URL syntax validation cannot establish public reachability or remove Preview
-   protection. The consent screen still links to `https://unimate.site/privacy`;
-   an alternative public domain requires a reviewed link update too.
+   protection. The consent screen now derives `/privacy` from the validated
+   configured origin. The owner bought `askunimate.com`, but its public website
+   and legal-page reachability remain launch gates.
 4. Create current 1280x800 store screenshots from the production-configured
    extension and provide a 440x280 promotional tile.
 5. Supply the approved listing URL as `VITE_COMPANION_STORE_URL`. The implemented
@@ -56,7 +65,15 @@ tests passed; these public-release gates remain:
 
 ## Protected hosted-test progress
 
-- **Current protected Preview — October 14:**
+- **Current protected Preview — October 15:**
+  `https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app/`, deployment
+  `dpl_E4Wf1fi7mKEYFd7pwPFMpRWVMt3A`, application source `72a0e29`, `READY`,
+  Preview (`target:null`), no aliases. Signed-out health, signup-disabled,
+  Companion denial and public-page HTML smoke checks passed, as did a browser
+  landing-page check. Authentication protection remained enabled; persistent
+  bypass count and Production environment-variable count remained zero. This
+  does not replace the authenticated study/billing journey or Store-package test.
+- **Historical protected Preview — October 14:**
   `https://unimate-fwcn4d8vz-resumejuice-s-projects.vercel.app/`, deployment
   `dpl_8FeZgD36ucSFKxW2CAMRrvrh7pjp`, application source `5694bdb`, `READY`,
   Preview (`target:null`) with no aliases. Protection remains enabled, bypass
@@ -322,8 +339,12 @@ which prevents a stale or modified content-script flow from bypassing the gate.
 Consent is checked again before capture and before transmission. Students can
 review the disclosure and pause page sharing from the panel.
 
-The consent screen links to `https://unimate.site/privacy`. Confirm that the
-production domain serves that page before packaging or submission.
+The consent screen links to `/privacy` on the worker-validated `UNIMATE_API_URL`
+origin. It accepts canonical public HTTPS origins (or canonical localhost HTTP
+for development), never page-provided URLs. Missing/invalid configuration shows
+unavailable copy rather than an unsafe link. Confirm the final production origin
+serves that policy before packaging or submission; a protected Preview is not a
+public legal page.
 
 ## Store listing draft
 

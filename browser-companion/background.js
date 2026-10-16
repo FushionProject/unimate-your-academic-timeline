@@ -161,12 +161,40 @@ function assertSessionEpoch(epoch) {
   }
 }
 
+function privacyPolicyUrl() {
+  try {
+    const value = config.UNIMATE_API_URL;
+    if (typeof value !== "string") return null;
+    const url = new URL(value);
+    // Configuration is extension-owned, never supplied by the current page.
+    // Accept only a canonical origin: no credentials, path, query or fragment.
+    if (value !== url.origin && value !== `${url.origin}/`) return null;
+    const host = url.hostname;
+    const development = url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(host);
+    const publicHttps =
+      url.protocol === "https:" &&
+      !url.port &&
+      host.length <= 253 &&
+      /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(host) &&
+      !/(?:^|\.)(?:localhost|local|internal|invalid|test|example|home|lan|onion|arpa)$/.test(
+        host,
+      ) &&
+      !/(?:^|\.)example\.(?:com|net|org)$/.test(host) &&
+      !/your_|placeholder/i.test(host);
+    if (!development && !publicHttps) return null;
+    return `${url.origin}/privacy`;
+  } catch {
+    return null;
+  }
+}
+
 async function privacyConsentState() {
   const result = await chrome.storage.local.get(PRIVACY_CONSENT_KEY);
   const record = result[PRIVACY_CONSENT_KEY];
   return {
     accepted: record?.accepted === true && record?.version === PRIVACY_CONSENT_VERSION,
     version: PRIVACY_CONSENT_VERSION,
+    privacyPolicyUrl: privacyPolicyUrl(),
   };
 }
 

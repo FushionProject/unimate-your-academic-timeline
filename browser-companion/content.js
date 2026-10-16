@@ -625,6 +625,7 @@
     state.view = "privacy";
     // A disclosure opened deliberately must supersede an older access/history load.
     state.historyLoadVersion += 1;
+    const privacyPolicyUrl = state.privacyConsent?.privacyPolicyUrl;
     body.innerHTML = `
       <div class="um-auth">
         <div class="um-mark" style="margin:0 auto 16px">✦</div>
@@ -637,8 +638,10 @@
         ${error ? `<div class="um-status error" role="alert">${escapeHtml(error)}</div>` : ""}
         <button class="um-primary um-consent-accept" type="button">Allow and continue</button>
         <button class="um-secondary um-consent-decline" type="button">${state.privacyConsent?.accepted ? "Pause page sharing" : "Not now"}</button>
-        <p><a href="https://unimate.site/privacy" target="_blank" rel="noreferrer">Read UniMate's Privacy Policy</a></p>
+        ${privacyPolicyUrl ? '<p><a class="um-privacy-policy" target="_blank" rel="noopener noreferrer">Read UniMate\'s Privacy Policy</a></p>' : "<p>Privacy Policy link unavailable. Check your Companion setup.</p>"}
       </div>`;
+    // Only worker-validated configuration supplies this URL, never host-page data.
+    if (privacyPolicyUrl) body.querySelector(".um-privacy-policy").href = privacyPolicyUrl;
     body.querySelector(".um-consent-accept").addEventListener("click", handlePrivacyConsent);
     body.querySelector(".um-consent-decline").addEventListener("click", async () => {
       try {

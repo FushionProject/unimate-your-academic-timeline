@@ -363,8 +363,9 @@ listening with a screen reader.
    No private config was inspected or production ZIP built in this audit. Reject
    protected Preview origins for public distribution even when syntax checks
    pass; DNS/TLS and public access require separate verification. The consent
-   link still uses `https://unimate.site/privacy`; a domain change needs a reviewed
-   update. Increment the manifest version for every public release.
+   link now uses `/privacy` on the worker-validated configured origin, not a
+   hardcoded domain. Invalid configuration shows an unavailable message instead
+   of navigating. Increment the manifest version for every public release.
 4. Test that exact release in real Chrome with synthetic coursework and isolated
    Free/Pro accounts. Cover consent decline/pause, paid unlock, active-tab
    capture, reload recovery, chat sync, sign-out, restricted pages, and a manual

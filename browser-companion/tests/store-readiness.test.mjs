@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import { getCompanionAccessState, getCompanionStoreUrl } from "../../src/lib/companion-store.ts";
@@ -70,7 +71,113 @@ assert.match(content, /one-time image of the visible tab/);
 assert.match(content, /It does not record continuously/);
 assert.match(content, /Allow and continue/);
 assert.match(content, /Not now/);
-assert.match(content, /https:\/\/unimate\.site\/privacy/);
+assert.doesNotMatch(content, /https:\/\/unimate\.site\/privacy/);
+// Execute the production config validator and consent response. No private
+// config, auth, API, navigation, capture or provider work is involved.
+const privacyFunctions = background.slice(
+  background.indexOf("function privacyPolicyUrl()"),
+  background.indexOf("async function requirePrivacyConsent("),
+);
+assert.ok(privacyFunctions.startsWith("function privacyPolicyUrl()"));
+const renderPrivacy = content.slice(
+  content.indexOf("  function renderPrivacyConsent("),
+  content.indexOf("  async function handlePrivacyConsent("),
+);
+assert.ok(renderPrivacy.startsWith("  function renderPrivacyConsent("));
+const privacyFixture = vm.createContext({
+  URL,
+  config: {},
+  PRIVACY_CONSENT_KEY: "synthetic-consent",
+  PRIVACY_CONSENT_VERSION: 1,
+  chrome: {
+    storage: {
+      local: {
+        get: async () => ({ "synthetic-consent": { accepted: true, version: 1 } }),
+      },
+    },
+  },
+  prepareRenderFocus: () => false,
+  rememberReadingPosition() {},
+  handlePrivacyConsent() {},
+});
+vm.runInContext(`${privacyFunctions}\n${renderPrivacy}`, privacyFixture);
+const privacyOrigins = [
+  ["https://study.unimate.app", "https://study.unimate.app/privacy"],
+  ["https://study.unimate.app/", "https://study.unimate.app/privacy"],
+  ["https://unimate-new-preview.vercel.app", "https://unimate-new-preview.vercel.app/privacy"],
+  ["http://localhost:8080", "http://localhost:8080/privacy"],
+  ["http://127.0.0.1:8080", "http://127.0.0.1:8080/privacy"],
+  ...[
+    undefined,
+    null,
+    42,
+    "",
+    ...invalidOrigins,
+    "javascript:alert(1)",
+    "data:text/html,fixture",
+    "//study.unimate.app",
+    "http://study.unimate.app",
+    "https://localhost",
+    "https://study.unimate.app:443",
+    "https://user:password@study.unimate.app",
+    "https://study.unimate.app/elsewhere",
+    "https://study.unimate.app?token=fixture",
+    "https://study.unimate.app#fixture",
+    "http://127.1:8080",
+    "http://2130706433:8080",
+    "http://0x7f000001:8080",
+    " https://study.unimate.app",
+    "https://study.unimate.app\n",
+    "https://study.uni\tmate.app",
+    "https://study.unimate.app/./",
+    "https://study.unimate.app/x/..",
+    "https:\\study.unimate.app",
+    'https://study.unimate.app/"><img src=x onerror=alert(1)>',
+  ].map((origin) => [origin, null]),
+];
+for (const [origin, expected] of privacyOrigins) {
+  privacyFixture.config.UNIMATE_API_URL = origin;
+  const consent = await privacyFixture.privacyConsentState();
+  assert.equal(consent.privacyPolicyUrl, expected);
+  assert.equal(consent.accepted, true, "Link configuration does not change consent semantics");
+  assert.deepEqual(Object.keys(consent).sort(), ["accepted", "privacyPolicyUrl", "version"]);
+  const link = {};
+  const control = { addEventListener() {} };
+  privacyFixture.state = { privacyConsent: consent, historyLoadVersion: 0 };
+  privacyFixture.body = {
+    innerHTML: "",
+    querySelector: (selector) => (selector === ".um-privacy-policy" ? link : control),
+  };
+  privacyFixture.renderPrivacyConsent();
+  assert.equal(link.href, expected ?? undefined);
+  assert.doesNotMatch(privacyFixture.body.innerHTML, /href=|onerror=|javascript:/);
+  if (expected) {
+    assert.match(privacyFixture.body.innerHTML, /class="um-privacy-policy"/);
+    assert.match(privacyFixture.body.innerHTML, /rel="noopener noreferrer"/);
+  } else {
+    assert.doesNotMatch(privacyFixture.body.innerHTML, /class="um-privacy-policy"/);
+    assert.match(privacyFixture.body.innerHTML, /Privacy Policy link unavailable/);
+  }
+}
+{
+  let savedConsent;
+  privacyFixture.config.UNIMATE_API_URL = "https://study.unimate.app";
+  privacyFixture.chrome.storage.local = {
+    get: async () => savedConsent ?? {},
+    set: async (record) => {
+      savedConsent = record;
+    },
+    remove: async (key) => {
+      assert.equal(key, "synthetic-consent");
+      savedConsent = undefined;
+    },
+  };
+  for (const accepted of [true, false]) {
+    const consent = await privacyFixture.setPrivacyConsent(accepted);
+    assert.equal(consent.accepted, accepted);
+    assert.equal(consent.privacyPolicyUrl, "https://study.unimate.app/privacy");
+  }
+}
 for (const route of ["privacy", "terms", "support"]) {
   const source = fs.readFileSync(new URL(`../../src/routes/${route}.tsx`, import.meta.url), "utf8");
   assert.match(
