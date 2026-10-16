@@ -11,7 +11,11 @@ purchase unlocked the same open latest Companion panel, and period-end
 cancellation revoked it, in the October 16 run against website `72a0e29`. No
 public production or Store release has occurred; see the scoped evidence below.
 Email-link recovery was verified on the preceding `076c427` (`mewctpqwm`)
-Preview; email return settings remain there pending owner approval to move them.
+Preview. With owner approval on October 16, the email Site URL and exactly three
+allowed paths (`/dashboard`, `/upgrade`, `/reset-password`) were moved to the
+current `rvrhmln07` Preview; the previous entries were removed and persistence
+verified after reload. Signup remains closed and confirmation required. This
+settings check is not a fresh email-delivery test on the current deployment.
 
 An extension-only follow-up derives the consent Privacy Policy link from
 the validated configured origin instead of the old domain. It passed offline

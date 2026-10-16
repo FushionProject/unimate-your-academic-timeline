@@ -107,9 +107,15 @@ on this exact updated build: real screenshot answer 200, saved exchange 201,
 readback 200, and conversation restored after reload. The fictional biology
 answer was correct and concise. The owned test browser/server exited cleanly.
 The complete [GitHub run, including both builds](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38968149059)
-also passed. Full billing and email journeys were not rerun on this deployment;
-email return settings remain on the previously approved `mewctpqwm` Preview
-pending separate owner approval. Nothing was made public or submitted to Chrome.
+also passed. Full billing and email journeys were not rerun on this deployment.
+After separate owner approval on October 16, Supabase Auth's Site URL was moved
+to this `rvrhmln07` origin with exactly three redirect entries: `/dashboard`,
+`/upgrade`, and `/reset-password`. The three old `mewctpqwm` entries were removed;
+a dashboard reload verified the persisted new origin and three-entry allowlist,
+with no wildcard. Signup and anonymous sign-ins remain disabled, and email
+confirmation remains required. Vercel protection and live-Stripe-off safeguards
+were independently rechecked. This is configuration verification, not a fresh
+email-delivery or full billing run. Nothing was made public or submitted to Chrome.
 
 On protected Preview `076c427` (`unimate-mewctpqwm-resumejuice-s-projects.vercel.app`),
 the existing owner Pro session completed the real installed-extension flow:

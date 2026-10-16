@@ -111,8 +111,12 @@ tests passed; these public-release gates remain:
   and specific recovery guidance for unsupported screenshot numbers; the live
   image-only measurement limitation remains recorded in `../LAUNCH.md`.
   No public signup, persistent bypass, Production keys, custom domain, or live
-  Stripe was enabled. Billing/email journeys were not repeated on this build;
-  email callbacks remain on the owner-approved previous Preview pending approval.
+  Stripe was enabled. Billing/email journeys were not repeated on this build.
+  With separate owner approval on October 16, the Auth Site URL and exactly three
+  email return paths (`/dashboard`, `/upgrade`, `/reset-password`) were moved to
+  this origin. The previous entries were removed and the new configuration
+  verified after reload. Signup/anonymous sign-ins remain disabled and email
+  confirmation required; this is not a new email-delivery test.
 - **Previous protected Preview — October 16:**
   `https://unimate-mewctpqwm-resumejuice-s-projects.vercel.app/`, deployment
   `dpl_8BxeAfPZ3acSefc5LDxGCeEXWtV5`, application source `076c427`, `READY`,
@@ -120,7 +124,8 @@ tests passed; these public-release gates remain:
   Vercel; protected health, signup-disabled, unsigned Companion denial, and
   page HTML smoke checks passed. Hosted expired/consumed-confirmation-link UI,
   explicit resend acknowledgement, and preserved Pro sign-in destination passed.
-  The three approved email callbacks now use this origin. Confirmation is
+  The three approved email callbacks used this origin at that checkpoint and
+  have since moved to the current Preview above. Confirmation is
   required and public signup remains closed. Persistent protection bypasses and
   Production environment variables remain zero, automatic custom-domain
   assignment is off, and live Stripe mode is false. A fresh installed Companion
