@@ -2,6 +2,11 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { authDestinationPath, type AuthDestination } from "./auth-destination";
+import {
+  confirmationResendError,
+  readConfirmationCallback,
+  type ConfirmationLinkError,
+} from "./auth-callback";
 import { readBrowserStorage, removeBrowserStorage, writeBrowserStorage } from "./browser-storage";
 
 interface AuthResult {
@@ -19,6 +24,9 @@ interface AuthContextType {
   requestPasswordReset: (email: string) => Promise<AuthResult>;
   updatePassword: (password: string) => Promise<AuthResult>;
   recoveryMode: boolean;
+  confirmationLinkError: ConfirmationLinkError | null;
+  dismissConfirmationLinkError: () => void;
+  resendConfirmation: (email: string, destination?: AuthDestination) => Promise<AuthResult>;
   signOut: () => Promise<AuthResult>;
 }
 
@@ -40,6 +48,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [recoveryMode, setRecoveryMode] = useState(false);
+  const [confirmationLinkError, setConfirmationLinkError] = useState<ConfirmationLinkError | null>(
+    null,
+  );
   const recoveryIdentity = useRef({ generation: 0, userId: null as string | null });
 
   useEffect(() => {
@@ -48,11 +59,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    const callbackHref = window.location.href;
+    const callback = readConfirmationCallback(callbackHref);
+    if (callback) setConfirmationLinkError(callback.error);
     supabase.auth
       .getSession()
       .then(({ data }) => setSession(data.session))
       .catch(() => setSession(null))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        // Let Supabase finish reading the URL before removing callback data.
+        // Never replace a newer navigation or sign out an existing session.
+        if (callback && window.location.href === callbackHref) {
+          try {
+            window.history.replaceState(window.history.state, "", callback.cleanUrl);
+          } catch {
+            // A restricted browser must still leave the student a usable
+            // error screen; callback text is never rendered or logged.
+          }
+        }
+        setLoading(false);
+      });
 
     setRecoveryMode(readBrowserStorage(() => sessionStorage, RECOVERY_SESSION_KEY) === "active");
 
@@ -137,6 +163,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const resendConfirmation = async (
+    email: string,
+    destination: AuthDestination = "dashboard",
+  ): Promise<AuthResult> => {
+    if (!supabase) return { error: confirmationResendError() };
+    try {
+      // Resend only an existing signup; never create an account or bypass the
+      // private-beta signup pause. Sending requires the student's explicit click.
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}${authDestinationPath(destination)}`,
+        },
+      });
+      return { error: error ? confirmationResendError(error.code) : null };
+    } catch {
+      return unavailableAuthResult();
+    }
+  };
+
   const updatePassword = async (password: string): Promise<AuthResult> => {
     if (!supabase) return { error: NOT_CONFIGURED_ERROR };
     if (
@@ -190,6 +237,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         loading,
         recoveryMode,
+        confirmationLinkError,
+        dismissConfirmationLinkError: () => setConfirmationLinkError(null),
+        resendConfirmation,
         signUp,
         signIn,
         requestPasswordReset,

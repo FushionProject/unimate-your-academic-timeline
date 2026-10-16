@@ -76,7 +76,8 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [ ] Complete the remaining real Stripe sandbox lifecycle matrix
 - [x] Verify custom SMTP delivery and private-preview recovery-link landing (October 16)
 - [x] Owner completes isolated test-account password update; saved state and recovery cleanup verified (October 16)
-- [ ] Verify fresh password sign-in and new-student email-confirmation signup
+- [x] Verify isolated confirmation delivery, both private callback destinations, and password sign-in enforcement (October 16)
+- [ ] Verify ordinary new-student signup when public registration is deliberately enabled
 - [x] Remove the vulnerable development dependency chain and verify both build targets (October 14)
 - [ ] Complete production-origin, legal, support, and Chrome Web Store gates
 
@@ -194,10 +195,54 @@ The authentication-provider settings also exposed direct new-user registration
 despite the website's signup pause. **Allow new users to sign up** was switched
 off, saved and confirmed after reloading to preserve the private beta.
 Existing-account sign-in remains
-enabled. **Confirm email** was found off and was not silently changed: enabling
-and verifying confirmation safely remains a launch gate after SMTP works.
+enabled. **Confirm email** was initially found off; the owner subsequently
+approved enabling it as recorded below.
 Anonymous sign-in and manual linking were already disabled and remain unchanged.
 Public signup was independently rechecked as disabled after the SMTP/URL setup.
+
+### Confirmation and sign-in verification — October 16, 2026
+
+Two new empty, admin-marked synthetic accounts were used; no existing account was
+unconfirmed, edited, or deleted. Their identity journals and any generated test
+credential stay in ignored, owner-only local files. Admin-created fixtures plus
+the existing-account `resend(type: "signup")` endpoint allowed testing without
+opening public registration. This is confirmation-mechanism evidence, not a
+claim that a public student can currently create an account.
+
+- At 15:27 CDT, a real **Confirm your email address** message arrived from
+  `accounts@mail.askunimate.com`; Resend independently reported delivered. Its
+  direct, untracked verification link confirmed the first account and landed on
+  the current private Preview's `/upgrade` review page. The account stayed Free
+  with no Stripe customer; checkout did not open automatically.
+- Before enabling enforcement, an aggregate check found one existing unconfirmed
+  non-test account. The owner explicitly approved requiring confirmation after
+  being informed of the next-password-sign-in impact. **Confirm email** was
+  enabled and the dashboard reported success. The public Auth settings endpoint
+  independently returned `disable_signup: true` and `mailer_autoconfirm: false`.
+  Anonymous sign-in and manual linking remain off.
+- A separate unconfirmed fixture with a privately generated test password was
+  rejected by password sign-in with `email_not_confirmed`. Its real confirmation
+  email arrived at 15:31 CDT. Following it opened the empty private `/dashboard`
+  and cleared the authentication fragment. A subsequent fresh password grant
+  succeeded for that exact account; it remained Free with no billing customer.
+  Test refresh sessions were revoked and the browser was signed out. This is a
+  fresh API password-sign-in check, not a test of the owner's recovery password.
+
+Reusing the first consumed link correctly failed at Supabase with `otp_expired`,
+but exposed a website UX defect: the old Preview silently showed ordinary Pro
+sign-in instead of explaining the failed confirmation. The source now adds a
+shared confirmation-error boundary with fixed, sanitized copy, explicit resend,
+sign-in and support actions, and preserved `/upgrade` intent. Callback details
+are removed only after the SDK finishes processing the URL. Existing sessions
+are preserved; no mail, account creation, checkout, or entitlement action happens
+automatically. Actual-function tests cover query/fragment cleanup, navigation
+races, safe provider errors, duplicate-click suppression, and both destinations.
+The local browser showed the corrected screen and then `/signin?next=upgrade`.
+The fix is not yet deployed to the hosted Preview at this checkpoint.
+
+Remaining email gates: ordinary public signup (intentionally closed), hosted
+verification of the new expired-link/resend screen, the owner's recovery-password
+sign-in, and delivery/inbox placement at a real student mailbox such as Gmail.
 
 ### Companion source follow-up — October 16, 2026
 
@@ -660,7 +705,7 @@ historical scripts. Final public-production configuration remains unverified.
 - [x] Student-data and screenshot disclosures drafted and linked in Companion consent
 - [ ] Support email receives and sends successfully
 - [x] Password reset email delivered and recovery completed for the isolated private-preview fixture (October 16; owner submission plus saved-state/recovery-cleanup verification)
-- [ ] Email-confirmation flow verified
+- [x] Isolated private email-confirmation flow and password sign-in enforcement verified (October 16; ordinary public signup remains closed)
 - [ ] Public status or outage communication channel prepared
 - [x] Incident response runbook reviewed
 - [ ] First support email handled and response time recorded

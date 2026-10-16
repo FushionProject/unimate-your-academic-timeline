@@ -12,6 +12,7 @@ import {
 import appCss from "../styles.css?url";
 import { ThemeProvider } from "../components/theme-provider";
 import { AuthProvider } from "../lib/auth-context";
+import { ConfirmationLinkBoundary } from "../components/confirmation-link-boundary";
 import { Sidebar } from "../components/sidebar";
 import { Navbar } from "../components/navbar";
 import { DateWidget } from "../components/date-widget";
@@ -183,7 +184,9 @@ function RootComponent() {
                   ) : (
                     <DateWidget />
                   ))}
-                <Outlet />
+                <ConfirmationLinkBoundary>
+                  <Outlet />
+                </ConfirmationLinkBoundary>
               </div>
             </div>
             {/* <ScreenAssistant /> — Hidden for now, future rollout */}
