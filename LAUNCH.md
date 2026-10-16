@@ -162,11 +162,28 @@ Full offline `npm test` passed with CI's Node 22.16.0 and
 `NODE_OPTIONS=--experimental-strip-types`, including five runtime repeats.
 Typecheck, secret scan, and lint (zero errors; eight pre-existing warnings) passed.
 These extension/package changes have not had a new installed-browser or hosted
-run; the website deployment is unchanged. Fresh new-account confirmation delivery
-is pending an approved reachable inbox: all three automated inboxes are occupied
+run; the website deployment is unchanged. All three automated inboxes are occupied
 by confirmed fixtures, and no inbox/account was deleted or paid plan enabled.
-The owner was asked whether to use the support Gmail for one empty Free test.
+The owner subsequently approved using the support Gmail for one empty Free test.
 Public signup, production services, Store submission, and live payments remain closed.
+
+### Owner-approved Gmail confirmation test — October 16, awaiting click
+
+A scoped read first confirmed that the approved support Gmail was not already a
+UniMate account. One new admin-marked, empty Free fixture was created without a
+password or billing customer. Exactly one signup-confirmation request was
+accepted with the current private `rvrhmln07` Preview's `/upgrade` as its return
+destination. Readback recorded `confirmation_sent_at` at 17:09:58 CDT; the account
+was still unconfirmed. The private, ignored identity journal prevents blindly
+recreating or resending the test after an uncertain result.
+
+The owner was asked to check Gmail (including Spam), click the confirmation link,
+and report the landing page. Request acceptance and the provider's sent timestamp
+are **not** proof of Gmail receipt, inbox placement, successful confirmation, or
+the hosted callback. Those results remain pending the owner's action and a fresh
+readback. No existing user was changed, no public signup was opened, and no
+Stripe/AI request or password operation was made. An independent check confirmed
+the exact protected Preview and all privacy/live-billing safeguards are unchanged.
 
 On protected Preview `076c427` (`unimate-mewctpqwm-resumejuice-s-projects.vercel.app`),
 the existing owner Pro session completed the real installed-extension flow:

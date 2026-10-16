@@ -132,7 +132,8 @@ tests passed; these public-release gates remain:
   landed on this Preview's password-choice form; no password was changed. Used
   reset/confirmation link errors, explicit resend acknowledgement, Pro-intent
   sign-in, and the Free Companion lock passed. Synthetic sessions were signed
-  out. Fresh unconfirmed-account delivery remains pending an approved inbox;
+  out. One fresh owner-approved support-Gmail confirmation request was accepted
+  at 17:09 CDT; receipt, the owner's click, and confirmation readback remain pending;
   ordinary public signup remains closed. See `../LAUNCH.md` for exact scope.
 - **Previous protected Preview — October 16:**
   `https://unimate-mewctpqwm-resumejuice-s-projects.vercel.app/`, deployment

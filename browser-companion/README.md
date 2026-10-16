@@ -14,8 +14,9 @@ Email-link recovery delivery and the reset-form landing were reverified on this
 current Preview at 16:59 CDT, without changing the test password. Used reset and
 confirmation links showed safe recovery actions; fresh browser sign-in preserved
 Pro-review intent but left the Free account's Companion locked. The test sessions
-were signed out. Fresh unconfirmed-account delivery remains pending a reachable
-approved inbox. With owner approval on October 16, the Site URL and exactly three
+were signed out. One owner-approved fresh confirmation request to the support
+Gmail was accepted at 17:09 CDT; Gmail receipt, the owner's click, and confirmation
+readback remain pending. With owner approval on October 16, the Site URL and exactly three
 allowed paths (`/dashboard`, `/upgrade`, `/reset-password`) were moved to the
 current `rvrhmln07` Preview; the previous entries were removed and persistence
 verified after reload. Signup remains closed and confirmation required.
