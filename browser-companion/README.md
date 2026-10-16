@@ -26,16 +26,22 @@ verified after reload. Signup remains closed and confirmation required.
 Post-`ffbae91` local configuration generation rejects unsafe file destinations
 and uses atomic replacement to preserve the prior config on failed writes.
 Synthetic tests cover links, special files, partial writes and rename failures.
-Two initial-auth outage scenarios were added to the installed harness, but their
-browser execution is pending explicit approval; its HTTP fixture passes offline.
+After explicit owner approval, the installed Chromium harness passed all 30
+scenarios and ten synthetic AI requests at `b89154f`, including both new
+initial-auth outages. Draft, history and session survived; access/history
+refresh recovered without sign-in, capture, extraction or AI work. Screenshots
+confirmed actionable retry guidance. Artifact: `unimate-companion-browser-nxIV6F`.
+This proves preserved composer/access recovery, not resubmission of the question
+or a fresh hosted-provider journey. The HTTP fixture also passes offline.
 Full offline tests, typecheck, lint (eight existing warnings) and secret scan
 passed. No real configuration, deployment, billing or database state was changed.
 
 Post-`437e7b3` extension-only hardening fixes initial session-validation outage
 classification and Store-package URL canonicalization. Full offline tests,
 five runtime repeats, typecheck, lint (eight existing warnings), and secret scan
-pass. A new installed-browser run of these two fixes has not yet been performed;
-the hosted website remains `561ecc2`. See [LAUNCH.md](../LAUNCH.md) for scope.
+pass. The later approved 30-scenario installed run above covers initial-session
+recovery; package validation remains offline. The hosted website remains
+`561ecc2`. See [LAUNCH.md](../LAUNCH.md) for scope.
 
 An extension-only follow-up derives the consent Privacy Policy link from
 the validated configured origin instead of the old domain. It passed offline
@@ -275,17 +281,17 @@ and operational blockers that must be closed before submission.
 | Warm, useful academic help without invented source evidence | Executable regressions cover hints, worked math, ordinary academic facts, labeled practice, detailed explanations, missing targets, fabricated statistics/quotes/keys, and source-attribution bypasses.                                                               | Heuristic provenance checks do not prove general answer correctness or independently read screenshot pixels.                            |
 | Safe failure and recovery                                   | Actual text/vision provider helpers reject truncation without partial success or hidden retries; auth outages fail closed without treating them as an invalid password/session. Installed transport recovery and deterministic ambiguous-request classification pass. | Real provider failures remain environment-dependent; no live outage was induced.                                                        |
 | Prompt and privacy fidelity                                 | Full 4,000-character question reaches analysis; transformed/zoomed iframe text is omitted conservatively; generator rejects privileged keys before writing public config.                                                                                             | Screenshots still contain intentionally shared visible pixels; this is not screenshot redaction. Existing credentials were not changed. |
-| Installed interaction and accessibility                     | Latest recorded synthetic run: 28 Chromium scenarios and ten fake AI calls; consent, secure sign-in, Free/Pro, pending-work revocation/recovery, capture, save/transport recovery, focus/keyboard, worker termination, reinjection and accessibility-tree checks. Same-URL mutation guards also have deterministic tests. | Manual spoken screen-reader verification remains outstanding. |
-| Hosted study flow and quotas                                | Historical protected screenshot → real answer → save/readback → reload proof; SQL/runtime/concurrency evidence is in `../AI_ENTITLEMENT_ROLLOUT.md`. | Repeat the study flow on the current `72a0e29` deployment with the current extension; production and live quota exhaustion remain separate. |
-| Hosted billing and same-panel entitlement                    | October 14 protected Preview (`5694bdb`): genuine sandbox purchase → Pro composer → period-end cancellation → Free upgrade gate in the same open panel/session, with signed webhooks and persisted-state proof before app return. | Repeat on the current Preview using a separately scoped test run. Uses the existing focus handler, not passive push; zero AI requests/captures/extractions. Direct production webhooks remain open. |
+| Installed interaction and accessibility                     | Latest recorded synthetic run: 30 Chromium scenarios and ten fake AI calls at `b89154f`; consent, secure sign-in, Free/Pro, pending-work revocation/recovery, capture, save/transport recovery, initial-session 429/503, focus/keyboard, worker termination, reinjection and accessibility-tree checks. Same-URL mutation guards also have deterministic tests. | Manual spoken screen-reader verification remains outstanding. |
+| Hosted study flow and quotas                                | October 16 protected screenshot → real answer → save/readback → reload passed on current website `561ecc2`; SQL/runtime/concurrency evidence is in `../AI_ENTITLEMENT_ROLLOUT.md`. | Subsequent extension-only hardening has synthetic installed proof, not a new hosted run. Production and live quota exhaustion remain separate. |
+| Hosted billing and same-panel entitlement                    | October 16 protected Preview (`72a0e29`): genuine sandbox purchase → Pro composer → period-end cancellation → Free upgrade gate in the same open panel/session, with signed webhooks and persisted-state proof before app return. | Not repeated on `561ecc2`; billing-critical source is unchanged. Hosted renewal/payment-recovery evidence and direct production webhooks remain open. |
 | Store packaging safety                                      | Isolated fixture tests reject private/placeholder origins, invalid Chrome versions, secret-like config, symbolic-link inputs and unexpected archive entries; root manifest and public config are verified. | Offline validation cannot prove public endpoint availability, privacy-policy publication, asset rights or Store acceptance. No production ZIP was generated in this audit. |
 
-Latest recorded synthetic browser artifact: `unimate-companion-browser-8JUxqo`
-in the host temporary directory. The evidence checkpoint records passing full
-offline tests, typecheck, secret scan and lint (eight existing warnings); dual
-build and Linux checks are recorded in [LAUNCH.md](../LAUNCH.md). These are dated
-results, not a new installed-browser or provider run. Synthetic requests do not
-contact the paid provider.
+Latest recorded synthetic browser artifact: `unimate-companion-browser-nxIV6F`
+in the host temporary directory, from the owner-approved 30-scenario run at
+`b89154f`. Full offline tests, typecheck, secret scan and lint (eight existing
+warnings), plus GitHub/Linux checks and both builds passed at this source.
+See [LAUNCH.md](../LAUNCH.md) for exact scope. Synthetic requests do not contact
+the paid provider, and this was not a fresh hosted test.
 
 Capture preserves the composer cursor unless the user has moved focus to the host
 page; async answers/history do not steal that focus. The non-modal panel supports
@@ -294,10 +300,10 @@ small-text contrast. Trusted mouse-wheel tests cover small-window recovery witho
 scrolling the coursework. These automated checks are not a substitute for a person
 listening with a screen reader.
 
-### Current protected Preview — October 15
+### Historical protected Preview — October 15
 
 - `https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app/`
-  (`dpl_E4Wf1fi7mKEYFd7pwPFMpRWVMt3A`) is the current `READY` Preview, with
+  (`dpl_E4Wf1fi7mKEYFd7pwPFMpRWVMt3A`) was the then-current `READY` Preview, with
   application source `72a0e29`, no aliases, authentication protection enabled,
   zero persistent bypass credentials, and zero Production environment variables.
 - Signed-out health, signup-disabled, Companion denial, public-page HTML, and

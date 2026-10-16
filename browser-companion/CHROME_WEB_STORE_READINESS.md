@@ -15,9 +15,14 @@ Latest source-only follow-up: configuration generation now rejects linked or
 special-file destinations and linked extension directories. Atomic replacement
 preserves the last working config on partial-write/rename failures and avoids
 overwriting unrelated hardlinked files. All new cases use synthetic fixtures.
-Two installed initial-auth 429/503 recovery scenarios are prepared but not yet
-executed; their HTTP fixture passes offline. Full offline tests, five runtime
-repeats, typecheck, lint and secret scan passed. Publisher-dashboard inspection
+After owner approval, all 30 installed Chromium scenarios passed at `b89154f`,
+including the two new initial-auth 429/503 cases; ten AI requests were synthetic.
+The saved draft/history/session, retry guidance, zero capture/extraction/token
+grants/AI during the outages, and recovered access/history refresh were verified.
+This does not claim resubmission of that question or a new hosted-provider run.
+Artifact: `unimate-companion-browser-nxIV6F`. The browser and server exited
+normally. Full offline tests, five runtime repeats, typecheck, lint, secret scan,
+and GitHub's both-build verification passed. Publisher-dashboard inspection
 reached Google sign-in, so publisher registration remains unverified. No terms,
 fees, account creation, upload, submission or public release was performed.
 
@@ -39,8 +44,8 @@ Initial `/auth/v1/user` 429/503 errors now preserve their auth phase and retry
 timing, with regression proof of session retention, no capture/AI/refresh, and
 successful recovery on the next explicit check. Full offline tests (CI Node and
 type-stripping setting), five runtime repeats, typecheck, lint and secret scan
-passed. No production ZIP, new installed-browser run, deployment, or submission
-was performed for these two fixes.
+passed. The later owner-approved 30-scenario installed run above now covers
+initial-session recovery. No production ZIP, deployment or submission occurred.
 
 Earlier October 16 local follow-up: temporary authentication outages no longer
 claim the student's session ended; only a definitive `AUTH_REQUIRED` rejection
@@ -285,13 +290,14 @@ tests passed; these public-release gates remain:
   biology answer, save/readback, and history reload, with aggregate usage then
   three and zero provider errors. Neither historical deployment contains the
   current working tree; the later historical snapshot's separate proof is recorded above.
-- Latest recorded synthetic installed-browser evidence: 28 scenarios and ten fake AI
-  calls, artifact `unimate-companion-browser-8JUxqo` in the host temporary directory.
+- Latest recorded synthetic installed-browser evidence: 30 scenarios and ten fake AI
+  calls at `b89154f`, artifact `unimate-companion-browser-nxIV6F` in the host temporary directory.
   Coverage includes transport recovery, private
   sign-in, Free/Pro gates, capture/save recovery, clipped/shadow/frame privacy,
   accessibility-tree and reduced-motion checks, scroll/disclosure preservation,
   worker death during capture, compatible duplicate injection, and temporary
-  versus rejected session refresh while an answer is pending. Same-URL
+  versus rejected session refresh while an answer is pending, plus initial
+  user-validation 429/503 draft/history/session retention and access recovery. Same-URL
   document-mutation guards remain deterministic offline checks, not claimed as
   installed-browser scenarios.
 - Full application tests, protected-preview tests, typecheck, build, Vercel build

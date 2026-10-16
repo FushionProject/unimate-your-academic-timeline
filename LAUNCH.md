@@ -89,7 +89,7 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [x] Remove the vulnerable development dependency chain and verify both build targets (October 14)
 - [ ] Complete production-origin, legal, support, and Chrome Web Store gates
 
-### Latest source-only checks — October 16
+### Latest source and installed-browser checks — October 16
 
 The owner confirmed that the fresh confirmation message reached Gmail's Inbox,
 not Spam. The existing confirmation/activation evidence below is now complete
@@ -105,14 +105,26 @@ The installed-browser harness now contains two additional Send/preflight
 scenarios for initial user-validation 429/503 errors, including retry timing,
 draft/history/session retention, and no capture, extraction, token grant or AI
 request. Its synthetic HTTP fixture is separately exercised without starting a
-browser. These two installed scenarios have not yet been executed; explicit
-approval for the separate automated Chromium run is pending.
+browser. After explicit owner approval, the installed Chromium suite passed all
+30 scenarios with ten synthetic AI requests at clean source `b89154f`. Both new
+outage scenarios passed against the actual installed extension; captured screens
+show the retained draft and history, the 429 retry time, and helpful 503 guidance.
+The fixture server and disposable browser exited normally. Artifacts:
+`unimate-companion-browser-nxIV6F` in the host temporary directory. No real
+credentials, personal browsing, database, payment or AI-provider calls were used.
+Independent review confirmed all 15 copied runtime/asset files match `b89154f`
+byte-for-byte, no matching test process remains, and answer, small-window and
+200%-zoom screenshots show no actionable visual defect. The generated client
+configuration was intentionally synthetic and excluded from source parity.
+The initial restricted attempt was blocked from opening its loopback listener
+before browser startup; the approved elevated run completed successfully.
 
 Full offline `npm test` passed with CI's Node 22 and type-stripping setting,
 including five runtime repeats. Typecheck, lint (zero errors; eight existing
 warnings), and the 341-file secret scan passed. Independent review found no
 actionable issue in the new installed-test assertions; their recovery scope is
 access/history refresh with a preserved composer, not resubmitting the question.
+Source `b89154f` also passed [GitHub verification and both builds](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38975171912).
 
 A read-only source comparison from proven hosted-billing source `72a0e29` to
 current Preview `561ecc2` found no changes to Checkout, Portal, webhook processing,
@@ -199,8 +211,9 @@ Two additional Companion fixes were verified offline after `437e7b3`:
 Full offline `npm test` passed with CI's Node 22.16.0 and
 `NODE_OPTIONS=--experimental-strip-types`, including five runtime repeats.
 Typecheck, secret scan, and lint (zero errors; eight pre-existing warnings) passed.
-These extension/package changes have not had a new installed-browser or hosted
-run; the website deployment is unchanged. All three automated inboxes are occupied
+At that checkpoint these changes had only offline proof; the later approved
+30-scenario installed run above now covers the initial auth outages. There has
+been no new hosted run, and the website deployment is unchanged. All three automated inboxes are occupied
 by confirmed fixtures, and no inbox/account was deleted or paid plan enabled.
 The owner subsequently approved using the support Gmail for one empty Free test.
 Public signup, production services, Store submission, and live payments remain closed.
