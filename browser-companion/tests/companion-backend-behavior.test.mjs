@@ -685,6 +685,18 @@ console.log(
       "Answer: 144π cm², approximately 452.39 cm².",
       false,
     ],
+    [
+      "Photosynthesis converts light energy into chemical energy stored in sugars.",
+      "Quote the supplied sentence exactly.",
+      'The passage reads: "Photosynthesis converts light energy into chemical energy stored in sugars."',
+      false,
+    ],
+    [
+      "Photosynthesis converts light energy into chemical energy stored in sugars.",
+      "Quote the supplied sentence exactly.",
+      'The passage reads: "Photosynthesis converts light energy into chemical energy stored in sugars."\nThe passage reads: "An invented course requirement."',
+      true,
+    ],
     ["Photosynthesis produces oxygen.", "Explain this.", "87% of students agree.", true],
     [
       "Photosynthesis produces oxygen.",

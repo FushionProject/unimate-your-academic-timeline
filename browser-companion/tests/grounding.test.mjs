@@ -416,6 +416,61 @@ assert.equal(
   false,
 );
 const quoted = "Photosynthesis converts light energy into chemical energy stored in sugars.";
+for (const field of ["selectedText", "matchedPageText", "visiblePageText"]) {
+  for (const answer of [
+    `The passage reads: "${quoted}"`,
+    `The excerpt states: “${quoted}”.`,
+    `The paragraph says "${quoted}"\nThat is a useful starting point.`,
+  ]) {
+    assert.equal(
+      detectHallucination(answer, normalizeProvenance({ [field]: quoted }), "Quote this").flagged,
+      false,
+      `A complete literal quotation report is grounded in ${field}: ${answer}`,
+    );
+  }
+}
+const quoteProvenance = normalizeProvenance({ selectedText: quoted });
+for (const answer of [
+  `The passage reads: "${quoted}"\nThe passage reads: "A fabricated unseen passage."`,
+  `The passage reads: "${quoted}" The source text says a fabricated unseen claim.`,
+  `The passage reads: "${quoted}" and also says a fabricated unseen claim.`,
+  `The passage reads: "${quoted}"\nHere is the full text: A fabricated unseen passage.`,
+  `The passage reads: "${quoted}"\nThis is the passage usually cited by the instructor.`,
+  `The complete passage reads: "${quoted}"`,
+  `The passage reads: "${quoted.replace("chemical", "electrical")}"`,
+  `The passage reads: "${quoted.replace("converts", "does not convert")}"`,
+  `The passage reads: "${quoted.replace("sugars.", "sugars!")}"`,
+]) {
+  assert.ok(
+    detectHallucination(answer, quoteProvenance, "Quote this").reasons.includes(
+      "reconstruction_language",
+    ),
+    `A verified quote cannot authorize additional or changed source text: ${answer}`,
+  );
+}
+for (const provenance of [
+  normalizeProvenance({ pageTitle: quoted }),
+  normalizeProvenance({ pageUrl: quoted }),
+  normalizeProvenance({}, true),
+  normalizeProvenance({ selectedText: quoted.slice(0, 25), visiblePageText: quoted.slice(25) }),
+]) {
+  assert.ok(
+    detectHallucination(
+      `The passage reads: "${quoted}"`,
+      provenance,
+      "Quote this",
+    ).reasons.includes("reconstruction_language"),
+    "Only a literal quotation within one content field can exempt a reconstruction claim",
+  );
+}
+assert.ok(
+  detectHallucination(
+    "Temperature change: -1.25 degrees. Survey response: 12.5%.",
+    normalizeProvenance({}, true),
+    "Summarize these measurements exactly.",
+  ).reasons.includes("unsupported_number"),
+  "An image without text evidence must not bypass source-number verification",
+);
 assert.equal(
   detectHallucination(
     '"' + quoted + '"',

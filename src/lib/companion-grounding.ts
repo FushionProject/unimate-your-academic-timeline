@@ -442,6 +442,31 @@ const RECONSTRUCTION_PATTERNS: RegExp[] = [
   /\bthe\s+passage\s+(that\s+is\s+)?(usually|typically|commonly|often)\b/i,
 ];
 
+/** Exempt only a complete, plainly attributed quotation line whose literal text
+ * occurs in one supplied content field. A real quote elsewhere in the answer
+ * must never authorize an invented passage or additional unquoted claims. */
+function withoutVerifiedQuoteReports(answer: string, provenance: CompanionProvenance): string {
+  const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
+  const contentSources = [
+    provenance.selectedText,
+    provenance.matchedPageText,
+    provenance.visiblePageText,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .map(normalizeWhitespace);
+  return answer
+    .split("\n")
+    .map((line) => {
+      const report = line.match(
+        /^\s*the (?:passage|excerpt|paragraph|source text) (?:reads|states|says)\s*:?\s*(?:"([^"\n]+)"|“([^”\n]+)”)\s*[.!?]?\s*$/i,
+      );
+      if (!report) return line;
+      const quotation = normalizeWhitespace(report[1] ?? report[2]);
+      return quotation && contentSources.some((source) => source.includes(quotation)) ? "" : line;
+    })
+    .join("\n");
+}
+
 const UNSEEN_SOURCE_PATTERNS: Array<{ re: RegExp; noun: string }> = [
   { re: /\baccording to the (textbook|book)\b/i, noun: "textbook" },
   { re: /\baccording to the (lecture|professor)\b/i, noun: "lecture" },
@@ -518,7 +543,8 @@ export function detectHallucination(
   }
 
   // (b) Reconstruction language ("the passage reads…", "usually cited…").
-  if (RECONSTRUCTION_PATTERNS.some((re) => re.test(answer))) {
+  const reconstructionText = withoutVerifiedQuoteReports(answer, provenance);
+  if (RECONSTRUCTION_PATTERNS.some((re) => re.test(reconstructionText))) {
     reasons.push("reconstruction_language");
   }
   if (
@@ -541,6 +567,8 @@ export function detectHallucination(
   // (d) Reporting source facts requires exact numeric evidence. Authored
   // teaching, including hints, practice, and calculations, is not source text.
   // Check every reported number, but not a list item's formatting ordinal.
+  // Screenshot-only measurements remain unverified here: this detector cannot
+  // OCR pixels, and the presence of an image must not waive numeric evidence.
   for (const sentence of reportingSentences) {
     const content = sentence.replace(/^\s*\d+[.)]\s+/, "");
     if (numberTokens(content).some((token) => !sourceNumbers.has(canonicalNumber(token)))) {
