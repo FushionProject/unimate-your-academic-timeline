@@ -8,11 +8,41 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { TARGET, assertIgnored } from "./prepare-stripe-sandbox.mjs";
 import { validateRecord, saveFixtureScreenshot } from "./verify-companion-sandbox-browser.mjs";
 import { attachPreviewAccess, validatePreviewAccess } from "./protected-companion-preview.mjs";
+import { assertRecoveryProof } from "./protected-billing-recovery-policy.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const fail = (code) => {
   throw new Error(code);
 };
+
+// Optional fixed recovery sequence; ordinary purchase/cancel runs keep their
+// original three checkpoints. A caller cannot substitute a UI observation for
+// the independently sealed pre-return provider/persisted-state proof.
+export function protectedRecoveryCompanionCheckpoint({
+  baseline,
+  proof,
+  phase,
+  origin,
+  userId,
+  lastRevision,
+} = {}) {
+  assertRecoveryProof(baseline, "baseline");
+  if (!["purchased", "past-due", "recovered", "revoked"].includes(phase))
+    fail("COMPANION_RECOVERY_PHASE_REQUIRED");
+  assertRecoveryProof(proof, phase);
+  if (
+    proof.baselineSha256 !== baseline.evidenceSha256 ||
+    proof.userId !== baseline.userId ||
+    proof.clockId !== baseline.clockId ||
+    origin !== baseline.origin ||
+    userId !== baseline.userId ||
+    !Number.isSafeInteger(lastRevision) ||
+    lastRevision < baseline.billingRevision ||
+    proof.billingRevision <= lastRevision
+  )
+    fail("COMPANION_RECOVERY_PROOF_MISMATCH");
+  return proof.billingRevision;
+}
 
 // Serialized into the actual worker. The Preview decorator must be installed
 // first: this outer policy authorizes a request before the inner transport adds
@@ -185,12 +215,18 @@ export async function startProtectedCompanionBillingHarness({
   deployment,
   privateDirectory,
   modulePath,
+  recoveryBaseline = null,
 } = {}) {
   validateRecord(record);
   validatePublicKey(publicKey);
   if (process.env.DEBUG || process.env.PWDEBUG) fail("PROTOCOL_LOGGING_MUST_BE_DISABLED");
   const verified = validatePreviewAccess(access?.origin, access?.token, project, deployment);
   const app = verified.origin;
+  if (recoveryBaseline !== null) {
+    assertRecoveryProof(recoveryBaseline, "baseline");
+    if (recoveryBaseline.origin !== app || recoveryBaseline.userId !== record.userId)
+      fail("COMPANION_RECOVERY_BASELINE_MISMATCH");
+  }
   assertIgnored(ROOT);
   const privateRoot = path.join(ROOT, ".stripe-sandbox.local");
   if (typeof privateDirectory !== "string" || !path.isAbsolute(privateDirectory))
@@ -431,10 +467,21 @@ export async function startProtectedCompanionBillingHarness({
     let phase = "created";
     let lastRevision;
     let checking = false;
-    async function expect(action, previous, isPro) {
+    async function expect(action, previous, isPro, recoveryProof, recoveryPhase) {
       if (checking || phase !== previous || closed) fail("COMPANION_EXPECTATION_ORDER_INVALID");
       checking = true;
       try {
+        const proofRevision =
+          recoveryBaseline && previous !== "created"
+            ? protectedRecoveryCompanionCheckpoint({
+                baseline: recoveryBaseline,
+                proof: recoveryProof,
+                phase: recoveryPhase,
+                origin: app,
+                userId: record.userId,
+                lastRevision,
+              })
+            : null;
         let persisted;
         await until(async () => {
           persisted = await worker.evaluate(
@@ -467,7 +514,11 @@ export async function startProtectedCompanionBillingHarness({
             },
             { userId: record.userId, publicKey, supabase: TARGET.supabase },
           );
-          return persisted.isPro === isPro && persisted.apiPro === isPro;
+          return (
+            persisted.isPro === isPro &&
+            persisted.apiPro === isPro &&
+            (proofRevision === null || persisted.revision >= proofRevision)
+          );
         });
         if (lastRevision !== undefined && persisted.revision <= lastRevision)
           fail("BILLING_REVISION_DID_NOT_ADVANCE");
@@ -530,8 +581,19 @@ export async function startProtectedCompanionBillingHarness({
     }
     return {
       expectFree: () => expect("expect-free", "created", false),
-      expectPro: () => expect("expect-pro", "expect-free", true),
-      expectRevoked: () => expect("expect-revoked", "expect-pro", false),
+      expectPro: (proof) => expect("expect-pro", "expect-free", true, proof, "purchased"),
+      expectRecoveryPro: (proof) => {
+        if (!recoveryBaseline) fail("COMPANION_RECOVERY_BASELINE_REQUIRED");
+        return expect("expect-recovery-pro", "expect-pro", true, proof, "past-due");
+      },
+      expectRecoveredPro: (proof) => {
+        if (!recoveryBaseline) fail("COMPANION_RECOVERY_BASELINE_REQUIRED");
+        return expect("expect-recovered-pro", "expect-recovery-pro", true, proof, "recovered");
+      },
+      expectRevoked: (proof) =>
+        recoveryBaseline
+          ? expect("expect-revoked", "expect-recovered-pro", false, proof, "revoked")
+          : expect("expect-revoked", "expect-pro", false),
       close,
       get screenshotPaths() {
         return [...screenshots];

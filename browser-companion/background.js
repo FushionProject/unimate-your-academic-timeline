@@ -1017,10 +1017,13 @@ async function captureSenderTab(sender, epoch, deadline) {
     });
   }
   if (tabUrl && !/^(https?|file):/i.test(tabUrl)) {
-    throw new CompanionError("Chrome does not allow screen capture on this restricted page.", {
-      code: "CAPTURE_RESTRICTED_PAGE",
-      phase: "capture",
-    });
+    throw new CompanionError(
+      "Your browser does not allow screen capture on this restricted page.",
+      {
+        code: "CAPTURE_RESTRICTED_PAGE",
+        phase: "capture",
+      },
+    );
   }
   if (typeof chrome.tabs?.captureVisibleTab !== "function") {
     throw new CompanionError("Screen capture is unavailable in this extension runtime.", {
@@ -1132,7 +1135,7 @@ async function captureSenderTab(sender, epoch, deadline) {
     );
     await assertStillActive();
     if (typeof image !== "string" || !image.startsWith("data:image/")) {
-      throw new Error("Chrome returned an invalid capture.");
+      throw new Error("The browser returned an invalid capture.");
     }
     if (image.length > 2_400_000) {
       await assertStillActive();
@@ -1145,7 +1148,7 @@ async function captureSenderTab(sender, epoch, deadline) {
       );
       await assertStillActive();
       if (typeof image !== "string" || !image.startsWith("data:image/")) {
-        throw new Error("Chrome returned an invalid capture.");
+        throw new Error("The browser returned an invalid capture.");
       }
     }
     if (image.length > 2_500_000) {
@@ -1156,12 +1159,11 @@ async function captureSenderTab(sender, epoch, deadline) {
     }
   } catch (error) {
     if (error instanceof CompanionError) throw error;
-    const detail = String(error?.message || "");
-    const permissionDenied = /permission|not allowed|cannot access|restricted/i.test(detail);
+    const permissionDenied = isRestrictedPageError(error);
     throw new CompanionError(
       permissionDenied
-        ? "Chrome denied screen capture on this page."
-        : "Chrome could not capture the visible tab. Keep this tab active and retry.",
+        ? "Your browser denied screen capture on this page."
+        : "Your browser could not capture the visible tab. Keep this tab active and retry.",
       {
         code: permissionDenied ? "CAPTURE_PERMISSION_DENIED" : "CAPTURE_FAILED",
         phase: "capture",
@@ -1583,6 +1585,13 @@ function isInjectablePage(url) {
   return /^(https?|file):/i.test(String(url || ""));
 }
 
+function isRestrictedPageError(error) {
+  // Error classification only: this never broadens the injection allowlist.
+  return /(?:^|[\s"'(<])(?:chrome(?:-extension)?|edge(?:-extension)?|brave|opera|about|moz-extension|safari-web-extension):|web store|edge add-ons|opera addons|extensions gallery|permission|not allowed|cannot access|restricted/i.test(
+    String(error?.message || ""),
+  );
+}
+
 async function showActionFailure(tab, title) {
   await chrome.action.setBadgeBackgroundColor({ color: "#9a3429", tabId: tab.id });
   await chrome.action.setBadgeText({ text: "!", tabId: tab.id });
@@ -1624,7 +1633,7 @@ async function hasCompatibleContentScript(tab) {
 
 async function recoverContentScript(tab, { preserveCompatible = false } = {}) {
   if (!Number.isInteger(tab.id) || !isInjectablePage(tab.url)) {
-    throw new CompanionError("UniMate cannot run on this Chrome-restricted page.", {
+    throw new CompanionError("UniMate cannot run on this browser-restricted page.", {
       code: "CONTENT_SCRIPT_RESTRICTED_PAGE",
       phase: "injection",
     });
@@ -1682,7 +1691,7 @@ chrome.runtime.onInstalled?.addListener(() => {
   // Manifest content scripts do not retroactively appear in tabs that were
   // already open when an unpacked extension was installed or reloaded.
   // Rehydrate eligible existing tabs once per install/update so users do not
-  // need to refresh every tab. Failures are expected for pages Chrome protects.
+  // need to refresh every tab. Failures are expected for browser-protected pages.
   chrome.tabs
     .query({})
     .then((tabs) =>
@@ -1704,11 +1713,11 @@ chrome.action.onClicked.addListener(async (tab) => {
       await recoverContentScript(tab);
       await chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_COMPANION" });
     } catch (error) {
-      const restricted = !isInjectablePage(tab.url);
+      const restricted = !isInjectablePage(tab.url) || isRestrictedPageError(error);
       await showActionFailure(
         tab,
         restricted
-          ? "UniMate cannot access this Chrome-restricted page. Open a regular web page."
+          ? "UniMate cannot access this browser-restricted page. Open a regular web page."
           : "UniMate could not reconnect to this tab. Reload the extension or refresh the page.",
       );
     }

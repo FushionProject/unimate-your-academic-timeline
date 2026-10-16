@@ -567,10 +567,19 @@
     if (/updated or reloaded|receiving end|message port|could not establish/i.test(raw)) {
       return "UniMate needs to reconnect to this page. Refresh once, then try again.";
     }
-    if (/chrome:|web store|cannot access contents|permission/i.test(raw)) {
+    if (
+      [
+        "CAPTURE_RESTRICTED_PAGE",
+        "CAPTURE_PERMISSION_DENIED",
+        "CONTENT_SCRIPT_RESTRICTED_PAGE",
+      ].includes(error?.code) ||
+      /(?:^|[\s"'(<])(?:chrome(?:-extension)?|edge(?:-extension)?|brave|opera|about|moz-extension|safari-web-extension):|web store|edge add-ons|opera addons|extensions gallery|cannot access contents|permission|not allowed|restricted/i.test(
+        raw,
+      )
+    ) {
       return captureAttempted
-        ? "Chrome won't allow screen access on this page. Try UniMate on a regular website."
-        : "Chrome restricts access to this page.";
+        ? "Your browser won't allow screen access on this page. Try UniMate on a regular website."
+        : "Your browser restricts access to this page.";
     }
     if (/capture|active tab|screenshot/i.test(raw)) {
       return "I couldn't capture the visible page. Keep this tab active and try again.";
@@ -1192,7 +1201,7 @@
       state.runtime.lastErrorPhase = failureDetails.phase;
       const isCaptureFailure =
         error?.phase === "capture" ||
-        /capture|cannot access contents|active tab|permission|chrome:|web store/i.test(
+        /capture|cannot access contents|active tab|permission|not allowed|restricted|(?:^|[\s"'(<])(?:chrome(?:-extension)?|edge(?:-extension)?|brave|opera|about|moz-extension|safari-web-extension):|web store|edge add-ons|opera addons|extensions gallery/i.test(
           error.message,
         );
       const messageText = uncertain

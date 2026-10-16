@@ -91,6 +91,46 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 
 ### Latest source and installed-browser checks — October 16
 
+Cross-browser follow-up: browser-restricted-page copy and error classification
+now cover Chromium-family browsers without changing permissions or weakening
+the injection/capture allowlist. The full isolated installed suite passed all
+30 scenarios in both Chromium (`unimate-companion-browser-RKqhtO`) and Opera GX
+136.0 / Chromium 152.0.7977.120 (`unimate-companion-browser-qS5r3D`), with ten
+synthetic AI responses per run. Opera's runtime/source match and visual evidence
+are documented in [browser compatibility](browser-companion/BROWSER_COMPATIBILITY.md).
+This does not certify real hosted billing/AI in Opera, other browsers, or Store
+installation. Firefox/Safari require separate security-preserving ports.
+The owner-approved Brave installation completed, but its installed synthetic run
+stopped after 12 passes at coursework-scroll isolation in a small window
+(`scrollY` 0 → 237; artifact `unimate-companion-browser-y5Npf2`). Root cause is
+not yet established, and Brave is not marked passing. Edge installation failed
+for lack of disk space; it was not tested. The owner then requested no further
+browser tests. Cross-browser expansion is deferred; no personal browsing data,
+default-browser settings or security protections were changed.
+
+Hosted recovery testing on `561ecc2` is in progress, not passed: the marked
+fixture remains Free at revision 62 with five canceled subscriptions, zero active
+subscriptions, and one verified unpaid sandbox Checkout. The saved-card guard
+stopped before payment because Stripe's card selector was collapsed; no payment
+was submitted. The one-shot recovery journal and existing Checkout are retained
+for a strictly verified continuation, not a duplicate purchase. All prior
+billing journals remain unchanged. A strictly unpaid-only continuation is
+implemented and offline-tested but has not been run: about 700 MiB of free disk
+space remains, so the multi-process hosted recovery test is held before payment.
+Public launch and live charges remain closed.
+
+The recovery verifier now requires a fresh persisted billing revision after each
+renewal or Portal action; a prior website refresh cannot satisfy that evidence.
+Outstanding or failed reconciliation requests block the action boundary. The
+Portal payment-update helper is intentionally not implemented until its actual
+sandbox controls are inspected; that command currently stops safely rather than
+claiming the whole recovery journey works. Full offline tests (including these
+regressions), typecheck, lint (zero errors/eight existing warnings), secret scan
+(349 repository files) and diff checks passed. These are not a hosted recovery
+pass. A final read-only check confirmed Free revision 62, five canceled
+subscriptions, zero active subscriptions and the same one unpaid Checkout;
+neither payment nor resume was attempted, and earlier journals are unchanged.
+
 The owner confirmed that the fresh confirmation message reached Gmail's Inbox,
 not Spam. The existing confirmation/activation evidence below is now complete
 for that isolated account; public signup stays closed.

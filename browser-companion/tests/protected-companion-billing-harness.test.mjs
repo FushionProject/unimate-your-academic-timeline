@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import fs from "node:fs/promises";
+import { createHash } from "node:crypto";
 import {
   installProtectedBillingGuard,
   startProtectedCompanionBillingHarness,
+  protectedRecoveryCompanionCheckpoint,
 } from "../../scripts/protected-companion-billing-harness.mjs";
 import { installPreviewFetch } from "../../scripts/protected-companion-preview.mjs";
 import { TARGET } from "../../scripts/prepare-stripe-sandbox.mjs";
+import { PROTECTED_BILLING_RECOVERY as RECOVERY } from "../../scripts/protected-billing-recovery-policy.mjs";
 
 const app = "https://unimate-synthetic.vercel.app";
 const record = {
@@ -210,13 +213,81 @@ assert.ok(
     source.indexOf("worker.evaluate(installProtectedBillingGuard"),
 );
 assert.match(source, /COMPANION_PANEL_WAS_REPLACED/);
-assert.match(source, /expect\("expect-pro", "expect-free", true\)/);
+assert.match(source, /expect\("expect-pro", "expect-free", true, proof, "purchased"\)/);
 assert.match(source, /expect\("expect-revoked", "expect-pro", false\)/);
+assert.match(source, /expect\("expect-recovery-pro", "expect-pro", true, proof, "past-due"\)/);
+assert.match(
+  source,
+  /expect\("expect-recovered-pro", "expect-recovery-pro", true, proof, "recovered"\)/,
+);
+assert.match(source, /expect\("expect-revoked", "expect-recovered-pro", false, proof, "revoked"\)/);
+assert.match(source, /persisted\.revision >= proofRevision/);
+assert.match(source, /COMPANION_RECOVERY_BASELINE_REQUIRED/);
 assert.match(source, /saveFixtureScreenshot\(page, fixtureOrigin, directory\)/);
 assert.doesNotMatch(
   source,
   /process\.env\.(?:OPENAI_API_KEY|STRIPE_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY)/,
 );
+// Only pure checkpoint gating runs here; policy tests separately establish each
+// proof from provider-shaped snapshots. No browser, filesystem or API fixture.
+const seal = (body) => ({
+  ...body,
+  evidenceSha256: createHash("sha256").update(JSON.stringify(body)).digest("hex"),
+});
+const recoveryBaseline = seal({
+  kind: RECOVERY.kind,
+  origin: RECOVERY.origin,
+  source: RECOVERY.source,
+  account: RECOVERY.account,
+  customerId: RECOVERY.customer,
+  userId: record.userId,
+  clockId: "clock_fixture",
+  billingRevision: 62,
+  observedAt: 1800000000000,
+  v1Sha256: RECOVERY.journalHashes.v1,
+  v2Sha256: RECOVERY.journalHashes.v2,
+  phase: "baseline",
+});
+let previousRevision = 62;
+for (const phase of ["purchased", "past-due", "recovered", "revoked"]) {
+  const { evidenceSha256: _digest, ...body } = recoveryBaseline;
+  const proof = seal({
+    ...body,
+    phase,
+    baselineSha256: recoveryBaseline.evidenceSha256,
+    billingRevision: previousRevision + 3,
+  });
+  const input = {
+    baseline: recoveryBaseline,
+    proof,
+    phase,
+    origin: RECOVERY.origin,
+    userId: record.userId,
+    lastRevision: previousRevision,
+  };
+  assert.equal(protectedRecoveryCompanionCheckpoint(input), previousRevision + 3);
+  for (const altered of [
+    { ...input, baseline: null },
+    { ...input, phase: "unpaid" },
+    { ...input, phase: phase === "purchased" ? "past-due" : "purchased" },
+    { ...input, origin: app },
+    { ...input, userId: "owner" },
+    { ...input, lastRevision: proof.billingRevision },
+    { ...input, lastRevision: 61 },
+    { ...input, proof: { ...proof, billingRevision: 999 } },
+    {
+      ...input,
+      proof: seal({
+        ...body,
+        phase,
+        baselineSha256: "0".repeat(64),
+        billingRevision: previousRevision + 3,
+      }),
+    },
+  ])
+    assert.throws(() => protectedRecoveryCompanionCheckpoint(altered));
+  previousRevision += 3;
+}
 console.log(
   "PASS continuous protected companion boundary: composed transport, synthetic identity, read-only scope, no AI/capture, ordered same-panel evidence (offline)",
 );

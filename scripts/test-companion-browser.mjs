@@ -4,14 +4,17 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { resolveCompanionTestBrowser } from "./companion-test-browser-policy.mjs";
 
-// Installs the unmodified MV3 runtime into a disposable Chromium profile.
+// Installs the unmodified MV3 runtime into a disposable Chromium-family profile.
 // All accounts, coursework, provider replies and REST services are synthetic.
 // No .env files, production credentials, student records or paid APIs are used.
+const browserChoice = resolveCompanionTestBrowser(process.env, process.argv.slice(2));
 const modulePath = process.env.PLAYWRIGHT_MODULE_PATH;
 const { chromium } = await import(modulePath ? pathToFileURL(modulePath).href : "playwright");
 const root = path.resolve(import.meta.dirname, "..");
 const artifacts = await fs.mkdtemp(path.join(os.tmpdir(), "unimate-companion-browser-"));
+const profile = await fs.mkdtemp(path.join(artifacts, "profile-"));
 const extensionDir = path.join(artifacts, "extension");
 await fs.mkdir(extensionDir);
 for (const file of [
@@ -147,14 +150,15 @@ await fs.writeFile(
 );
 
 let context;
+let browserRuntime;
 const checks = [];
 const pass = (name) => {
   checks.push(name);
   console.log(`PASS ${name}`);
 };
 try {
-  context = await chromium.launchPersistentContext(path.join(artifacts, "profile"), {
-    channel: "chromium",
+  context = await chromium.launchPersistentContext(profile, {
+    ...browserChoice.launchOptions,
     headless: process.env.COMPANION_HEADED !== "true",
     viewport: { width: 1280, height: 900 },
     args: [`--disable-extensions-except=${extensionDir}`, `--load-extension=${extensionDir}`],
@@ -165,10 +169,20 @@ try {
   const page = context.pages()[0] || (await context.newPage());
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  const cdp = await context.newCDPSession(page);
+  const version = await cdp.send("Browser.getVersion");
+  assert.ok(version.product && version.userAgent, "Browser runtime version must be recorded");
+  browserRuntime = {
+    selected: browserChoice.id,
+    product: version.product,
+    userAgent: version.userAgent,
+    jsVersion: version.jsVersion,
+  };
+  await fs.writeFile(path.join(artifacts, "browser.json"), JSON.stringify(browserRuntime, null, 2));
+  console.log(`Browser runtime: ${JSON.stringify(browserRuntime)}`);
   let worker = context.serviceWorkers()[0];
   if (!worker) worker = await context.waitForEvent("serviceworker");
   assert.match(worker.url(), /^chrome-extension:\/\/[^/]+\/background\.js$/);
-  const cdp = await context.newCDPSession(page);
 
   // CDP can inspect a closed shadow tree without weakening the production
   // isolation boundary or exposing a test bridge to the host page.
@@ -1297,7 +1311,7 @@ try {
   pass("Real content-script reinjection preserves sign-in, consent, and saved history");
 
   const restrictedPage = await context.newPage();
-  await restrictedPage.goto("chrome://version/");
+  await restrictedPage.goto(browserChoice.restrictedPage);
   await restrictedPage.bringToFront();
   assert.equal(await restrictedPage.locator("#unimate-companion-host").count(), 0);
   const restrictedResult = await worker.evaluate(async () => {
@@ -1312,7 +1326,7 @@ try {
   assert.equal(restrictedResult, "CONTENT_SCRIPT_RESTRICTED_PAGE");
   await restrictedPage.close();
   await page.bringToFront();
-  pass("Chrome-restricted pages reject injection with an actionable typed error");
+  pass("Browser-restricted pages reject injection with an actionable typed error");
 
   await shadowCall(".um-privacy-settings", "click");
   await waitFor(".um-consent-decline");
@@ -1333,6 +1347,7 @@ try {
         checks: checks.length,
         aiRequests: aiRequests.length,
         synthetic: true,
+        browser: browserRuntime,
         artifacts,
       },
       null,

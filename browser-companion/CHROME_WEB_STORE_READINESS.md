@@ -464,6 +464,63 @@ public legal page.
 
 ## Store listing draft
 
+### Submission handoff — owner decisions still pending
+
+This is a preparation worksheet, not a submitted listing or authorization to
+register, pay, upload, publish, change DNS, or remove Preview protection. Current
+publisher-account state must be checked in the owner's dashboard; reaching a
+Google sign-in page did not establish registration or ownership.
+
+| Deliverable | Prepared value or next action | Completion gate |
+| --- | --- | --- |
+| Listing title, summary, detailed description | Use the draft immediately below; keep the paid-Pro requirement visible. | Owner approves the exact name and subscription wording. No fixed price or unlimited-use claim is invented. |
+| Category and language | Education; English. | Confirm those selections in the actual listing form. |
+| Single purpose and permissions | Use the Single purpose section and permission inventory above. | Reconcile against the exact submitted manifest; broad host access is not preapproved. |
+| Remote-code answer | Draft: no remotely executed extension code; AI/API replies are data, not downloaded extension logic. | Reconfirm against the exact release ZIP before certifying the dashboard field. |
+| Homepage, privacy and support links | Proposed `https://askunimate.com/`, `/privacy`, and `/support`. | Not verified public release URLs; approve the policies and verify unauthenticated reachability before entering them. A Vercel-login page is not a public policy. |
+| Contact email | Owner-provided `unimatesupport@gmail.com`. | Verify it in the publisher dashboard and confirm support messages can be received and answered. App confirmation delivery alone does not prove the support workflow. |
+| Images | Existing 128px icon; prepare one to five 1280x800 screenshots and one 440x280 tile. | Confirm logo rights, use the release UI with authorized synthetic coursework, inspect final images. Video and marquee artwork are optional, not launch blockers. |
+| Reviewer access | Use the walkthrough below plus a dedicated, empty, email-confirmed Pro account. | Approve an externally reachable review environment, bounded access and support route; no reviewer charge or owner/Vercel credentials. |
+| Distribution | Keep the current local/hosted testing private. | A future Store Private release requires separately approved Google-account testers or group and upload/submission approval. Unlisted is not private. |
+
+The data map above is evidence for the Privacy practices form, not a completed
+checkbox submission. Do not answer "no data collected" or automatically mark
+incidental sensitive categories absent: screenshots and deliberately selected
+text can contain them. The owner must approve accurate declarations and Limited
+Use commitments before certification.
+
+**Decisions to obtain from the owner, in order:**
+
+1. Choose the long-term Google publisher account and confirm any existing
+   registration. Google documents a one-time registration fee; if payment is
+   required, stop for the displayed amount and explicit approval. Its registration
+   email cannot simply be edited later. Enable the required 2-Step Verification
+   on that account; credentials and recovery codes stay with the owner.
+2. Choose the public publisher name and actual operator (individual or business).
+   Confirm the operator address appropriate for this paid-subscription product.
+   Google requires every publisher to declare Trader or Non-Trader status; the
+   owner must determine this truthfully. Trader legal name, contact address and
+   phone are displayed publicly. Enter sensitive verification details directly
+   in Google's form, not in this repository or chat. Do not choose Non-Trader
+   merely to avoid disclosure.
+3. Supply the logo/mascot creator and license or ownership evidence described
+   below. Approve commercial redistribution and any attribution before creating
+   Store artwork from those assets.
+4. Approve real operator/provider/retention/deletion practices and the legal
+   effective date, then approve the corresponding public policy. This worksheet
+   does not make those business commitments on the owner's behalf.
+5. Approve the review environment and dedicated reviewer entitlement; separately
+   approve the exact Store item, tester list/regions, and submission when the
+   release gates are complete. No paid checkout is needed for reviewers.
+
+Account requirements: [registration](https://developer.chrome.com/docs/webstore/register),
+[publisher details](https://developer.chrome.com/docs/webstore/set-up-account),
+[2-Step Verification](https://developer.chrome.com/docs/webstore/program-policies/two-step-verification),
+and [trader verification](https://developer.chrome.com/docs/webstore/program-policies/trader-verification-faq).
+Dashboard fields and artwork: [listing](https://developer.chrome.com/docs/webstore/cws-dashboard-listing/),
+[privacy fields](https://developer.chrome.com/docs/webstore/cws-dashboard-privacy),
+and [required images](https://developer.chrome.com/docs/webstore/images).
+
 ### Title
 
 UniMate Browser Companion
@@ -511,7 +568,7 @@ student-identifying or copyrighted course content. Chrome also accepts 640x400;
 the separate required 440x280 promotional image. Synthetic installed-test proof
 is not automatically approved production Store artwork.
 
-1. An ordinary study page with the closed mascot and open Companion panel.
+1. An ordinary study page showing the mascot and open Companion panel.
 2. A legible practice problem with a concise answer-first response.
 3. Highlighted notes with a short explanation.
 4. The chat selected in Ask UniMate and the same conversation in the extension.
@@ -552,6 +609,17 @@ reachable by an external reviewer; resolve that access separately without
 removing its protection or launching the public site during this readiness work.
 
 Proposed walkthrough, to verify against the exact submitted ZIP:
+
+Prepare this non-secret handoff header before copying the walkthrough into the
+private Test instructions field. All values remain pending until verified:
+
+- submitted extension version and ZIP SHA-256;
+- approved backend/web-app origin and an exact, reachable synthetic lesson URL;
+- confirmation that the separately supplied reviewer account is email-confirmed,
+  has Pro access for the review period, and needs no payment or manual owner login;
+- private credential-delivery location (never the credentials themselves in Git);
+- reviewer support contact, access expiry/revocation plan, and last successful
+  end-to-end walkthrough date.
 
 1. Install the review version and open an ordinary HTTPS page containing a
    harmless synthetic study example, such as `3x + 5 = 20`. Do not use Chrome's
@@ -644,9 +712,9 @@ included in the extension ZIP. Preserve the audio attribution file with the web
 release and verify that every attribution and source URL matches the exact binary
 shipped.
 
-The extension icon files are mechanically derived from UniMate's current logo and
-are declared at 16, 32, 48, and 128 pixels. Confirm brand ownership before store
-submission.
+The extension icon files are documented as derived from UniMate's current logo
+and are declared at 16, 32, 48, and 128 pixels. Confirm brand ownership before
+store submission; a derivation claim is not an ownership record.
 
 | Packaged asset | Repository evidence | Owner approval still required |
 | --- | --- | --- |
@@ -656,6 +724,24 @@ submission.
 Git history and successful PNG checks establish which files ship, not licensing
 rights. No rights were inferred or new assets generated in this audit. Store
 screenshots/tile are still pending and must use synthetic, authorized coursework.
+
+October 16 repository provenance check: the logo source, packaged mascot, and
+all four icons first appear in commit
+`72d31d68730e0376c96bb376cc69101edeee60e9` (August 2, 2026,
+"Add UniMate companion and daily student workflow"). The reviewed tracked
+Markdown/license records and inspected asset histories did not provide a
+visual-asset creator, source license, commission/assignment, or commercial
+redistribution grant. The tracked
+`public/audio/ATTRIBUTION.md` covers audio only, not these images. This is a gap
+in repository evidence, not a conclusion that the owner lacks rights.
+
+For each source image, retain a private record of the creator/source, creation or
+purchase date, license/assignment or applicable generation terms, commercial-use
+and modification/redistribution rights, any required credit, and the exact asset
+file/hash approved for release. If created by the owner, record that confirmation
+and any third-party source elements. Do not put private invoices, identity
+documents or unrelated personal details in Git. No asset replacement is needed
+unless the evidence identifies a rights problem.
 
 ### Owner privacy sign-off before upload
 
