@@ -18,6 +18,7 @@ import {
 import { readPrivate } from "./verify-stripe-sandbox-lifecycle.mjs";
 import { sandboxClock } from "./stripe-sandbox-clock.mjs";
 import { validateRecord } from "./verify-companion-sandbox-browser.mjs";
+import { PROTECTED_BILLING_V2, matchesProtectedV2Baseline } from "./protected-billing-run-v2.mjs";
 import {
   verifyDiagnosticCheckout,
   diagnosticFrameScope,
@@ -124,8 +125,8 @@ export function classifyContinuationFailure(error) {
   return "unknown";
 }
 
-export function verifyContinuationScope(record, journal, state) {
-  const url = verifyDiagnosticCheckout(record, journal, state.session, state.items);
+export function verifyContinuationScope(record, journal, state, runVersion = 1) {
+  const url = verifyDiagnosticCheckout(record, journal, state.session, state.items, runVersion);
   let baseline;
   try {
     baseline = JSON.parse(journal.baseline);
@@ -134,7 +135,7 @@ export function verifyContinuationScope(record, journal, state) {
   }
   if (
     !Array.isArray(baseline) ||
-    baseline.length !== 3 ||
+    baseline.length !== (runVersion === 2 ? 4 : 3) ||
     baseline.some(
       (row) =>
         !Array.isArray(row) ||
@@ -142,7 +143,8 @@ export function verifyContinuationScope(record, journal, state) {
         !/^sub_[A-Za-z0-9]+$/.test(row[0]) ||
         row[1] !== "canceled",
     ) ||
-    new Set(baseline.map((row) => row[0])).size !== 3 ||
+    new Set(baseline.map((row) => row[0])).size !== (runVersion === 2 ? 4 : 3) ||
+    (runVersion === 2 && !matchesProtectedV2Baseline(baseline)) ||
     state.scope?.account !== TARGET.account ||
     state.scope.userId !== record.userId ||
     state.scope.customerId !== CUSTOMER ||
@@ -280,10 +282,16 @@ export async function continueProtectedSandboxCheckout({
   approved = false,
   resumeSelection = false,
   resumeSelectionReady = false,
+  runVersion = 1,
 } = {}) {
   if (resumeSelectionReady) resumeSelection = true;
   if (!approved || process.env.DEBUG || process.env.PWDEBUG || process.env.NODE_OPTIONS)
     fail("EXPLICIT_CHECKOUT_CONTINUATION_APPROVAL_REQUIRED");
+  if (
+    ![1, 2].includes(runVersion) ||
+    (runVersion === 2 && (resumeSelection || resumeSelectionReady))
+  )
+    fail("V2_CONTINUATION_DOES_NOT_ALLOW_RECOVERY");
   let browser,
     input,
     handle,
@@ -307,12 +315,20 @@ export async function continueProtectedSandboxCheckout({
       stat.mode & 0o077
     )
       fail("PRIVATE_DIRECTORY_REQUIRED");
-    const originalPath = path.join(directory, "protected-billing-checkout-v1.json");
+    const originalPath = path.join(
+      directory,
+      runVersion === 2 ? PROTECTED_BILLING_V2.journal : "protected-billing-checkout-v1.json",
+    );
     const original = await readPrivate(originalPath);
     const journal = JSON.parse(original);
     const record = JSON.parse(await readPrivate(path.join(ROOT, ARTIFACT)));
     validateRecord(record);
-    const continuationPath = path.join(directory, "protected-checkout-card-continuation-v1.json");
+    const continuationPath = path.join(
+      directory,
+      runVersion === 2
+        ? "protected-checkout-card-continuation-v2.json"
+        : "protected-checkout-card-continuation-v1.json",
+    );
     const failedSelectionText = resumeSelection ? await readPrivate(continuationPath) : null;
     const failedSelection = failedSelectionText ? JSON.parse(failedSelectionText) : null;
     if (resumeSelection) assertSelectionRecovery(failedSelection, record, journal);
@@ -351,7 +367,7 @@ export async function continueProtectedSandboxCheckout({
       );
       return { session, items, scope, profiles, open };
     };
-    const url = verifyContinuationScope(record, journal, await read());
+    const url = verifyContinuationScope(record, journal, await read(), runVersion);
     const attemptPath = resumeSelection
       ? path.join(directory, "protected-checkout-card-selection-recovery-v1.json")
       : continuationPath;
@@ -376,7 +392,7 @@ export async function continueProtectedSandboxCheckout({
       assertReadySelectionRestart(restarted, failedSelection, record, journal);
     } else handle = await fs.open(attemptPath, "wx", 0o600);
     let attempt = {
-      version: 1,
+      version: runVersion,
       account: TARGET.account,
       userId: record.userId,
       customerId: CUSTOMER,
@@ -484,7 +500,7 @@ export async function continueProtectedSandboxCheckout({
           report(await inspectCheckoutCardStructure(page));
         } else {
           assertContinuationAction(command, attempt.phase);
-          verifyContinuationScope(record, journal, await read());
+          verifyContinuationScope(record, journal, await read(), runVersion);
           assertPage();
           let action;
           if (command === "SELECT_CARD") {
@@ -548,15 +564,17 @@ export async function continueProtectedSandboxCheckout({
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const runVersion = process.argv.length === 3 && process.argv[2] === "--run-v2" ? 2 : 1;
   const resumeSelection = process.argv.length === 3 && process.argv[2] === "--resume-selection";
   const resumeSelectionReady =
     process.argv.length === 3 && process.argv[2] === "--resume-selection-ready";
   continueProtectedSandboxCheckout({
     approved:
-      (process.argv.length === 2 || resumeSelection || resumeSelectionReady) &&
+      (process.argv.length === 2 || resumeSelection || resumeSelectionReady || runVersion === 2) &&
       process.env.UNIMATE_CHECKOUT_CONTINUATION === "approved",
     resumeSelection,
     resumeSelectionReady,
+    runVersion,
   }).catch((error) => {
     console.error(
       JSON.stringify({

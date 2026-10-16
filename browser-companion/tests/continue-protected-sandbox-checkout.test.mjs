@@ -13,6 +13,7 @@ import {
   assertReadySelectionRestart,
 } from "../../scripts/continue-protected-sandbox-checkout.mjs";
 import { TARGET } from "../../scripts/prepare-stripe-sandbox.mjs";
+import { PROTECTED_BILLING_V2 } from "../../scripts/protected-billing-run-v2.mjs";
 
 const customer = "cus_VRAVJnKW1RGQzr";
 const user = "10000000-0000-4000-8000-000000000001";
@@ -105,6 +106,106 @@ const f = fixture();
   }
 }
 assert.equal(verifyContinuationScope(f.record, f.journal, f.state), f.state.session.url);
+function fixtureV2() {
+  const value = fixture();
+  const baseline = PROTECTED_BILLING_V2.baseline.map((id) => [id, "canceled"]);
+  Object.assign(value.journal, {
+    version: 2,
+    origin: PROTECTED_BILLING_V2.origin,
+    previousJournalSha256: "a".repeat(64),
+    previousFinalRevision: 53,
+    baselineRevision: 53,
+    baseline: JSON.stringify(baseline),
+  });
+  delete value.journal.paymentAttempted;
+  value.state.scope.subscriptions = baseline.map(([id, status]) => ({ id, status }));
+  value.state.profiles[0].billing_revision = 53;
+  return value;
+}
+{
+  const v2 = fixtureV2();
+  assert.equal(verifyContinuationScope(v2.record, v2.journal, v2.state, 2), v2.state.session.url);
+  assert.throws(() => verifyContinuationScope(v2.record, v2.journal, v2.state));
+  assert.throws(() => verifyContinuationScope(f.record, f.journal, f.state, 2));
+  assert.throws(() => verifyContinuationScope(v2.record, v2.journal, v2.state, 3));
+  for (const mutate of [
+    (value) => {
+      value.journal.paymentAttempted = "false";
+    },
+    (value) => {
+      value.journal.previousFinalRevision = -1;
+    },
+    (value) => {
+      value.journal.baselineRevision = 52;
+    },
+    (value) => {
+      value.journal.paymentAttempted = true;
+    },
+    (value) => {
+      value.journal.version = 1;
+    },
+    (value) => {
+      value.journal.origin = PROTECTED_BILLING_V2.previousOrigin;
+    },
+    (value) => {
+      delete value.journal.previousJournalSha256;
+    },
+    (value) => {
+      value.journal.previousJournalSha256 = "not a digest";
+    },
+    (value) => {
+      delete value.journal.previousFinalRevision;
+    },
+    (value) => {
+      value.journal.previousFinalRevision = "53";
+    },
+    (value) => {
+      value.journal.baseline = JSON.stringify(
+        PROTECTED_BILLING_V2.baseline.slice(0, 3).map((id) => [id, "canceled"]),
+      );
+    },
+    (value) => {
+      const baseline = JSON.parse(value.journal.baseline);
+      baseline[3][0] = "sub_foreign";
+      value.journal.baseline = JSON.stringify(baseline);
+      value.state.scope.subscriptions[3].id = "sub_foreign";
+    },
+    (value) => {
+      value.state.scope.subscriptions[3].status = "active";
+    },
+    (value) => {
+      value.state.scope.subscriptions.push({ id: "sub_extra", status: "canceled" });
+    },
+    (value) => {
+      value.state.session.livemode = true;
+    },
+    (value) => {
+      value.state.session.status = "complete";
+    },
+    (value) => {
+      value.state.session.payment_status = "paid";
+    },
+    (value) => {
+      value.state.session.payment_intent = "pi_uncertain";
+    },
+    (value) => {
+      value.state.session.setup_intent = "seti_uncertain";
+    },
+    (value) => {
+      value.state.session.subscription = "sub_uncertain";
+    },
+    (value) => {
+      value.state.profiles[0].is_pro = true;
+    },
+    (value) => {
+      value.state.open.data.push({ ...value.state.open.data[0], id: "cs_test_second" });
+    },
+  ]) {
+    const input = fixtureV2();
+    mutate(input);
+    assert.throws(() => verifyContinuationScope(input.record, input.journal, input.state, 2));
+  }
+}
 const previousSelection = {
   version: 1,
   account: TARGET.account,
@@ -329,14 +430,27 @@ for (const url of [
   assert.equal(policy(url), "block");
 assert.equal(policy("https://js.stripe.com/v3/"), "continue");
 const previous = globalThis.fetch;
+const previousNodeOptions = process.env.NODE_OPTIONS;
 globalThis.fetch = () => assert.fail("offline tests must never reach a provider");
 try {
   await assert.rejects(
     continueProtectedSandboxCheckout(),
     /EXPLICIT_CHECKOUT_CONTINUATION_APPROVAL_REQUIRED/,
   );
+  delete process.env.NODE_OPTIONS;
+  for (const options of [
+    { runVersion: 2, resumeSelection: true },
+    { runVersion: 2, resumeSelectionReady: true },
+    { runVersion: 3 },
+  ])
+    await assert.rejects(
+      continueProtectedSandboxCheckout({ approved: true, ...options }),
+      /V2_CONTINUATION_DOES_NOT_ALLOW_RECOVERY/,
+    );
 } finally {
   globalThis.fetch = previous;
+  if (previousNodeOptions === undefined) delete process.env.NODE_OPTIONS;
+  else process.env.NODE_OPTIONS = previousNodeOptions;
 }
 
 // Wiring safeguards supplement the executable scope/phase policies above.

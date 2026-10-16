@@ -15,6 +15,7 @@ import {
   protectedBillingStartupError,
 } from "../../scripts/run-protected-billing-preview.mjs";
 import { SetupError } from "../../scripts/prepare-stripe-sandbox.mjs";
+import { PROTECTED_BILLING_V2 } from "../../scripts/protected-billing-run-v2.mjs";
 
 for (const stage of [
   "CONFIG",
@@ -227,6 +228,41 @@ for (const mutate of [
   const input = revokedFixture();
   mutate(input);
   assert.equal(protectedBillingReturnProof(input).verified, false);
+}
+// v2 is a separate fixed four-subscription baseline, never a relaxation of v1.
+function v2ProofFixture(revoked = false) {
+  const input = revoked ? revokedFixture() : proofFixture();
+  input.runVersion = 2;
+  input.journal.version = 2;
+  input.journal.origin = PROTECTED_BILLING_V2.origin;
+  input.journal.baseline = JSON.stringify(
+    PROTECTED_BILLING_V2.baseline.map((id) => [id, "canceled"]),
+  );
+  input.subscriptions = [
+    ...PROTECTED_BILLING_V2.baseline.map((id) => ({ id, status: "canceled" })),
+    { id: "sub_new", status: revoked ? "canceled" : "active" },
+  ];
+  return input;
+}
+for (const revoked of [false, true]) {
+  assert.equal(protectedBillingReturnProof(v2ProofFixture(revoked)).verified, true);
+  for (const mutate of [
+    (f) => (f.runVersion = 1),
+    (f) => (f.runVersion = 3),
+    (f) => (f.journal.version = 1),
+    (f) => (f.journal.origin = "https://wrong.vercel.app"),
+    (f) => {
+      const rows = JSON.parse(f.journal.baseline);
+      rows[0][0] = "sub_other";
+      f.journal.baseline = JSON.stringify(rows);
+      f.subscriptions[0].id = "sub_other";
+    },
+    (f) => f.subscriptions.push({ id: "sub_extra", status: "canceled" }),
+  ]) {
+    const input = v2ProofFixture(revoked);
+    mutate(input);
+    assert.equal(protectedBillingReturnProof(input).verified, false);
+  }
 }
 // RETURN re-evaluates current evidence; a previous purchased proof cannot make a
 // subsequently canceled/no-deletion-event snapshot pass its gate.

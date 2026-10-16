@@ -25,6 +25,11 @@ import {
 } from "./protected-companion-preview.mjs";
 import { createProtectedStripePreviewRelay } from "./protected-stripe-preview-relay.mjs";
 import { attachProtectedPreviewBrowser } from "./protected-preview-browser.mjs";
+import {
+  PROTECTED_BILLING_V2,
+  matchesProtectedV2Baseline,
+  verifyProtectedV2PriorRun,
+} from "./protected-billing-run-v2.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const PROJECT = "prj_5XZ4ulni13tNLCvNzdL1gUPvashI";
@@ -167,9 +172,11 @@ export function protectedBillingReturnProof({
   session,
   events,
   purchaseRevision,
+  runVersion = 1,
 } = {}) {
   const no = { verified: false };
   if (
+    ![1, 2].includes(runVersion) ||
     !journal ||
     journal.customerId !== CUSTOMER ||
     !/^cs_test_[A-Za-z0-9]+$/.test(journal.sessionId || "") ||
@@ -192,9 +199,13 @@ export function protectedBillingReturnProof({
   }
   if (
     !Array.isArray(baseline) ||
-    baseline.length !== 3 ||
+    baseline.length !== (runVersion === 2 ? 4 : 3) ||
     baseline.some((row) => !Array.isArray(row) || row.length !== 2 || row[1] !== "canceled") ||
-    new Set(baseline.map((row) => row[0])).size !== 3 ||
+    new Set(baseline.map((row) => row[0])).size !== (runVersion === 2 ? 4 : 3) ||
+    (runVersion === 2 &&
+      (journal.version !== 2 ||
+        journal.origin !== PROTECTED_BILLING_V2.origin ||
+        !matchesProtectedV2Baseline(baseline))) ||
     new Set(subscriptions.map((sub) => sub.id)).size !== subscriptions.length
   )
     return no;
@@ -333,9 +344,15 @@ export async function recentProtectedPortalEvents(stripe, attemptedAt) {
   fail("COMPLETE_PORTAL_EVENT_LIST_REQUIRED");
 }
 
-export async function runProtectedBillingPreview({ origin, approved = false } = {}) {
+export async function runProtectedBillingPreview({
+  origin,
+  approved = false,
+  runVersion = 1,
+} = {}) {
   if (!approved || process.env.DEBUG || process.env.PWDEBUG || process.env.NODE_OPTIONS)
     fail("EXPLICIT_PRIVATE_RUN_APPROVAL_REQUIRED");
+  if (![1, 2].includes(runVersion) || (runVersion === 2 && origin !== PROTECTED_BILLING_V2.origin))
+    fail("EXACT_VERSIONED_PRIVATE_RUN_REQUIRED");
   const report = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
   const baseEnv = Object.fromEntries(
     ["PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG"]
@@ -493,17 +510,34 @@ export async function runProtectedBillingPreview({ origin, approved = false } = 
     };
     stage("BASELINE");
     const initial = await inspect();
+    let priorRunProof;
+    if (runVersion === 2) {
+      const previousText = await readPrivate(
+        path.join(directory, "protected-billing-checkout-v1.json"),
+      );
+      const session = await stripe(`/checkout/sessions/${PROTECTED_BILLING_V2.previousSession}`);
+      priorRunProof = verifyProtectedV2PriorRun({
+        origin,
+        record,
+        previousText,
+        state: initial,
+        session,
+      });
+    }
     if (
       initial.profile.is_pro ||
       initial.open.length ||
-      initial.scope.subscriptions.length !== 3 ||
+      initial.scope.subscriptions.length !== (runVersion === 2 ? 4 : 3) ||
       initial.scope.subscriptions.some((s) => s.status !== "canceled")
     )
       fail("EXPECTED_FREE_THREE_CANCELED_BASELINE_REQUIRED");
     const baseline = JSON.stringify(
       initial.scope.subscriptions.map((s) => [s.id, s.status]).sort(),
     );
-    const journalPath = path.join(directory, "protected-billing-checkout-v1.json");
+    const journalPath = path.join(
+      directory,
+      runVersion === 2 ? PROTECTED_BILLING_V2.journal : "protected-billing-checkout-v1.json",
+    );
     try {
       await readPrivate(journalPath);
       fail("PROTECTED_CHECKOUT_ALREADY_JOURNALED");
@@ -771,6 +805,7 @@ export async function runProtectedBillingPreview({ origin, approved = false } = 
         session,
         events,
         purchaseRevision: purchaseVerifiedRevision,
+        runVersion,
       });
       if (proof.verified && proof.phase === "purchased") {
         if (purchaseVerifiedRevision === null) purchaseVerifiedRevision = proof.billingRevision;
@@ -894,7 +929,30 @@ export async function runProtectedBillingPreview({ origin, approved = false } = 
             EXPECT_PRO: "expectPro",
             EXPECT_REVOKED: "expectRevoked",
           }[command];
-          report({ kind: "companion", ...(await companion[method]()) });
+          let proof;
+          if (runVersion === 2 && command !== "EXPECT_FREE") {
+            ({ proof } = await readReturnProof());
+            if (
+              !proof.verified ||
+              proof.phase !== (command === "EXPECT_PRO" ? "purchased" : "revoked")
+            )
+              fail("CURRENT_HOSTED_ENTITLEMENT_PROOF_REQUIRED");
+          }
+          const evidence = await companion[method]();
+          if (runVersion === 2 && proof) {
+            await save({
+              ...journal,
+              [command === "EXPECT_PRO" ? "companionPurchase" : "companionRevocation"]: evidence,
+              ...(command === "EXPECT_REVOKED"
+                ? {
+                    phase: "completed",
+                    finalRevision: proof.billingRevision,
+                    completedAt: Date.now(),
+                  }
+                : {}),
+            });
+          }
+          report({ kind: "companion", ...evidence });
         } else if (command === "CHECKOUT") {
           if (journal) fail("CHECKOUT_ALREADY_ATTEMPTED_NO_RETRY");
           const state = await inspect();
@@ -912,7 +970,7 @@ export async function runProtectedBillingPreview({ origin, approved = false } = 
             /^(Restart Pro|Upgrade to Pro)$/,
           );
           journal = {
-            version: 1,
+            version: runVersion,
             account: TARGET.account,
             userId: record.userId,
             customerId: CUSTOMER,
@@ -921,6 +979,7 @@ export async function runProtectedBillingPreview({ origin, approved = false } = 
             baselineRevision: state.profile.billing_revision,
             phase: "checkout-pending",
             checkoutAttemptedAt: Date.now(),
+            ...(priorRunProof || {}),
           };
           const handle = await fs.open(journalPath, "wx", 0o600);
           try {
@@ -1037,10 +1096,13 @@ export async function runProtectedBillingPreview({ origin, approved = false } = 
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const valid = process.argv.length === 4 && process.argv[2] === "--origin";
+  const runVersion = process.argv[4] === "--run-v2" ? 2 : 1;
+  const valid =
+    process.argv.length === (runVersion === 2 ? 5 : 4) && process.argv[2] === "--origin";
   runProtectedBillingPreview({
     origin: valid ? process.argv[3] : undefined,
     approved: valid && process.env.UNIMATE_PROTECTED_BILLING_RUN === "approved",
+    runVersion,
   }).catch((error) => {
     console.error(
       JSON.stringify({

@@ -62,8 +62,16 @@ await fillVerifiedTestCard({ page: sample.page, sessionId });
 assert.equal(sample.clicks(), 0);
 sample.values.set("#cardNumber", "4242 4242 4242 4242");
 sample.values.set("#cardExpiry", "12 / 34");
-await submitVerifiedCardCheckout({ page: sample.page, sessionId });
+let claims = 0;
+await submitVerifiedCardCheckout({
+  page: sample.page,
+  sessionId,
+  claimPayment: async () => {
+    claims++;
+  },
+});
 assert.equal(sample.clicks(), 1);
+assert.equal(claims, 1);
 sample.setLink();
 await assert.rejects(
   submitVerifiedCardCheckout({ page: sample.page, sessionId }),

@@ -13,6 +13,7 @@ import {
 } from "./prepare-stripe-sandbox.mjs";
 import { readPrivate } from "./verify-stripe-sandbox-lifecycle.mjs";
 import { validateRecord } from "./verify-companion-sandbox-browser.mjs";
+import { PROTECTED_BILLING_V2 } from "./protected-billing-run-v2.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const CUSTOMER = "cus_VRAVJnKW1RGQzr";
@@ -22,15 +23,24 @@ const fail = (code) => {
 };
 const id = (value) => (typeof value === "string" ? value : value?.id);
 
-export function verifyDiagnosticCheckout(record, journal, session, items) {
+export function verifyDiagnosticCheckout(record, journal, session, items, runVersion = 1) {
   validateRecord(record);
   if (
-    journal?.version !== 1 ||
+    ![1, 2].includes(runVersion) ||
+    journal?.version !== runVersion ||
     journal.account !== TARGET.account ||
     journal.userId !== record.userId ||
     journal.customerId !== CUSTOMER ||
     journal.phase !== "checkout-verified" ||
-    journal.paymentAttempted !== true ||
+    (runVersion === 1
+      ? journal.paymentAttempted !== true
+      : ![undefined, false].includes(journal.paymentAttempted) ||
+        journal.origin !== PROTECTED_BILLING_V2.origin ||
+        !/^[a-f0-9]{64}$/.test(journal.previousJournalSha256 || "") ||
+        !Number.isSafeInteger(journal.previousFinalRevision) ||
+        journal.previousFinalRevision < 0 ||
+        !Number.isSafeInteger(journal.baselineRevision) ||
+        journal.baselineRevision < journal.previousFinalRevision) ||
     !/^cs_test_[A-Za-z0-9]+$/.test(journal.sessionId || "") ||
     session?.id !== journal.sessionId ||
     session.livemode !== false ||

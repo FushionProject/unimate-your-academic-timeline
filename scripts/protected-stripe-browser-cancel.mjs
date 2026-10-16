@@ -37,11 +37,11 @@ async function assertConfirmationPage(page) {
 }
 
 export async function chooseVerifiedCancellationReason({ page }) {
-  await assertConfirmationPage(page);
   // Stripe's aria-labelledby names the anchor from the Reason label, not its
   // visible placeholder. The exact visible span receives pointer hits natively.
   const choice = page.getByText("Choose an option", { exact: true });
   await choice.waitFor({ state: "visible", timeout: 15000 });
+  await assertConfirmationPage(page);
   if ((await choice.count()) !== 1 || !(await choice.isEnabled())) fail();
   await choice.click();
   const other = page.getByRole("option", { name: "Other reason", exact: true });
@@ -62,10 +62,10 @@ export async function chooseVerifiedCancellationReason({ page }) {
 }
 
 export async function confirmVerifiedCancellation({ page }) {
-  await assertConfirmationPage(page);
   // Stripe includes its hidden busy label in this button's accessible name.
   const button = page.getByRole("button", { name: /^Cancel subscription/ });
   await button.waitFor({ state: "visible", timeout: 15000 });
+  await assertConfirmationPage(page);
   if ((await button.count()) !== 1) fail();
   const next = page.getByRole("button", { name: "Continue to cancellation", exact: true });
   if ((await next.count()) && (await next.isVisible())) fail();

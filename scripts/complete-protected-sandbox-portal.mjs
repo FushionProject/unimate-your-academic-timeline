@@ -15,6 +15,7 @@ import {
 import { readPrivate } from "./verify-stripe-sandbox-lifecycle.mjs";
 import { validateRecord } from "./verify-companion-sandbox-browser.mjs";
 import { sandboxClock } from "./stripe-sandbox-clock.mjs";
+import { PROTECTED_BILLING_V2, matchesProtectedV2Baseline } from "./protected-billing-run-v2.mjs";
 import { recentProtectedPortalEvents } from "./run-protected-billing-preview.mjs";
 import { inspectStripeSurface } from "./protected-stripe-browser-actions.mjs";
 import {
@@ -37,11 +38,14 @@ export function verifyPortalCompletionScope(
   journal,
   { scope, profiles, events },
   now = Date.now(),
+  runVersion = 1,
 ) {
   validateRecord(record);
   const origin = new URL(journal?.origin);
   if (
-    journal.version !== 1 ||
+    ![1, 2].includes(runVersion) ||
+    journal.version !== runVersion ||
+    (runVersion === 2 && journal.origin !== PROTECTED_BILLING_V2.origin) ||
     journal.account !== TARGET.account ||
     journal.userId !== record.userId ||
     journal.customerId !== CUSTOMER ||
@@ -68,8 +72,9 @@ export function verifyPortalCompletionScope(
   const active = scope?.subscriptions?.filter((sub) => sub.id === journal.subscriptionId);
   if (
     !Array.isArray(baseline) ||
-    baseline.length !== 3 ||
-    new Set(baseline.map((row) => row?.[0])).size !== 3 ||
+    baseline.length !== (runVersion === 2 ? 4 : 3) ||
+    new Set(baseline.map((row) => row?.[0])).size !== (runVersion === 2 ? 4 : 3) ||
+    (runVersion === 2 && !matchesProtectedV2Baseline(baseline)) ||
     baseline.some(
       (row) =>
         !Array.isArray(row) ||
@@ -81,8 +86,8 @@ export function verifyPortalCompletionScope(
     scope.userId !== record.userId ||
     scope.customerId !== CUSTOMER ||
     scope.clockStatus !== "ready" ||
-    scope.subscriptions?.length !== 4 ||
-    new Set(scope.subscriptions.map((sub) => sub.id)).size !== 4 ||
+    scope.subscriptions?.length !== (runVersion === 2 ? 5 : 4) ||
+    new Set(scope.subscriptions.map((sub) => sub.id)).size !== (runVersion === 2 ? 5 : 4) ||
     baseline.some(
       ([old]) => !scope.subscriptions.some((sub) => sub.id === old && sub.status === "canceled"),
     ) ||
@@ -230,10 +235,13 @@ export async function completeProtectedSandboxPortal({
   approved = false,
   resumeOpen = false,
   resumeFeedback = false,
+  runVersion = 1,
 } = {}) {
   if (resumeFeedback) resumeOpen = true;
   if (!approved || process.env.DEBUG || process.env.PWDEBUG || process.env.NODE_OPTIONS)
     fail("EXPLICIT_PORTAL_COMPLETION_APPROVAL_REQUIRED");
+  if (![1, 2].includes(runVersion) || (runVersion === 2 && (resumeOpen || resumeFeedback)))
+    fail("V2_PORTAL_COMPLETION_DOES_NOT_ALLOW_RECOVERY");
   let browser,
     input,
     handle,
@@ -257,12 +265,20 @@ export async function completeProtectedSandboxPortal({
       stat.mode & 0o077
     )
       fail("PRIVATE_DIRECTORY_REQUIRED");
-    const originalPath = path.join(directory, "protected-billing-checkout-v1.json"),
+    const originalPath = path.join(
+        directory,
+        runVersion === 2 ? PROTECTED_BILLING_V2.journal : "protected-billing-checkout-v1.json",
+      ),
       original = await readPrivate(originalPath);
     const journal = JSON.parse(original),
       record = JSON.parse(await readPrivate(path.join(ROOT, ARTIFACT)));
     validateRecord(record);
-    const completionPath = path.join(directory, "protected-portal-cancellation-completion-v1.json");
+    const completionPath = path.join(
+      directory,
+      runVersion === 2
+        ? "protected-portal-cancellation-completion-v2.json"
+        : "protected-portal-cancellation-completion-v1.json",
+    );
     const priorText = resumeOpen ? await readPrivate(completionPath) : null;
     const priorAttempt = priorText ? JSON.parse(priorText) : null;
     if (resumeOpen) assertPortalOpenRecovery(priorAttempt, record, journal);
@@ -301,7 +317,13 @@ export async function completeProtectedSandboxPortal({
       const events = await recentProtectedPortalEvents(stripe, journal.portalAttemptedAt);
       return { scope, profiles, events };
     };
-    const portalUrl = verifyPortalCompletionScope(record, journal, await read());
+    const portalUrl = verifyPortalCompletionScope(
+      record,
+      journal,
+      await read(),
+      Date.now(),
+      runVersion,
+    );
     handle = await fs.open(
       resumeFeedback
         ? path.join(directory, "protected-portal-feedback-recovery-v1.json")
@@ -312,7 +334,7 @@ export async function completeProtectedSandboxPortal({
       0o600,
     );
     let attempt = {
-      version: 1,
+      version: runVersion,
       account: TARGET.account,
       userId: record.userId,
       customerId: CUSTOMER,
@@ -383,7 +405,7 @@ export async function completeProtectedSandboxPortal({
     const { openVerifiedCancellation } =
       await import("./protected-stripe-browser-cancel.mjs?phase=open");
     if (typeof openVerifiedCancellation !== "function") fail("REVIEWED_PORTAL_HELPER_REQUIRED");
-    verifyPortalCompletionScope(record, journal, await read());
+    verifyPortalCompletionScope(record, journal, await read(), Date.now(), runVersion);
     if (stopped) fail("PORTAL_COMPLETION_STOPPED");
     await performPortalCompletion("OPEN", attempt.phase, {
       save,
@@ -428,7 +450,10 @@ export async function completeProtectedSandboxPortal({
               ? helper.chooseVerifiedCancellationReason
               : helper.confirmVerifiedCancellation;
           if (typeof action !== "function") fail("REVIEWED_PORTAL_HELPER_REQUIRED");
-          if (verifyPortalCompletionScope(record, journal, await read()) !== portalUrl)
+          if (
+            verifyPortalCompletionScope(record, journal, await read(), Date.now(), runVersion) !==
+            portalUrl
+          )
             fail("ORIGINAL_PORTAL_EVENT_CHANGED");
           assertPage();
           if (stopped) fail("PORTAL_COMPLETION_STOPPED");
@@ -461,14 +486,16 @@ export async function completeProtectedSandboxPortal({
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const runVersion = process.argv.length === 3 && process.argv[2] === "--run-v2" ? 2 : 1;
   const resumeOpen = process.argv.length === 3 && process.argv[2] === "--resume-open";
   const resumeFeedback = process.argv.length === 3 && process.argv[2] === "--resume-feedback";
   completeProtectedSandboxPortal({
     approved:
-      (process.argv.length === 2 || resumeOpen || resumeFeedback) &&
+      (process.argv.length === 2 || resumeOpen || resumeFeedback || runVersion === 2) &&
       process.env.UNIMATE_PORTAL_COMPLETION === "approved",
     resumeOpen,
     resumeFeedback,
+    runVersion,
   }).catch((error) => {
     console.error(
       JSON.stringify({

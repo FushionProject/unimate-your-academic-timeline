@@ -51,14 +51,20 @@ The purchase-only evidence checkpoint `76d5031` also passed
 [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38620047237).
 The current deployed source `72a0e29eb6cf23f8f7fbf58835959af6f24d4c28` passed its
 complete [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38647251032).
+The email-confirmation recovery checkpoint `e0415b2` also passed its complete
+[GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38963301478).
 
 Latest hosted billing evidence: the core sandbox purchase → Companion unlock →
-Portal period-end cancellation → access revocation flow **passed** on the
-October 14 private Preview at `5694bdb`. Signed events reached the real hosted
-handler through the local relay; persisted Pro/Free state was verified before each app return. The same
-open installed Companion panel/session unlocked, then showed its upgrade gate
-after expiry. The website ended on Restart Pro. This is not production-direct
-webhook, AI-answer, draft-preservation or public-launch certification.
+Portal period-end cancellation → access revocation flow **passed again October
+16** on the private Preview at `72a0e29`, using the latest installed Companion.
+Signed events reached the real hosted handler through the local relay; persisted
+Pro/Free state was verified before each app return. The same continuously open
+Companion panel/session unlocked, then showed its upgrade gate after expiry.
+Cancellation preserved access until the paid period ended. The website ended on
+Restart Pro, with Free revision 62, no active subscription and no open Checkout.
+No AI request, capture or extraction occurred. This is not production-direct
+webhook, AI-answer, draft-preservation or public-launch certification; see
+`STRIPE_SANDBOX_MANUAL_TESTS.md` for the exact deployment and evidence scope.
 
 Previous local billing evidence: real cross-account portal attempts returned 409, unsigned
 requests returned 401, and the valid portal's Stripe event matched the exact
@@ -70,9 +76,9 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 `STRIPE_SANDBOX_MANUAL_TESTS.md`. These checks do not authorize live billing.
 
 - [ ] Freeze and record the exact new release commit and rollback point
-- [x] Protected Preview purchase unlocks the same open Companion panel/session (October 14)
-- [x] Protected Preview period-end cancellation revokes the same open Companion panel/session (October 14)
-- [ ] Re-verify the current protected Preview's Companion study and billing flow end to end
+- [x] Protected Preview purchase unlocks the same open Companion panel/session (reverified October 16)
+- [x] Protected Preview period-end cancellation revokes the same open Companion panel/session (reverified October 16)
+- [ ] Verify the current protected Preview's live Companion study flow end to end
 - [ ] Complete the remaining real Stripe sandbox lifecycle matrix
 - [x] Verify custom SMTP delivery and private-preview recovery-link landing (October 16)
 - [x] Owner completes isolated test-account password update; saved state and recovery cleanup verified (October 16)

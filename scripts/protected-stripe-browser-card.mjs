@@ -44,7 +44,7 @@ export async function fillVerifiedTestCard({ page, sessionId }) {
   for (const [id, value] of Object.entries(VALUES)) await fields[id].fill(value);
 }
 
-export async function submitVerifiedCardCheckout({ page, sessionId }) {
+export async function submitVerifiedCardCheckout({ page, sessionId, claimPayment }) {
   const fields = await fieldsFor(page, sessionId);
   if (
     (await fields.enableStripePass.isChecked()) ||
@@ -60,5 +60,5 @@ export async function submitVerifiedCardCheckout({ page, sessionId }) {
   }
   // The surrounding continuation has freshly reconciled API/DB scope and
   // persisted its one-shot pending journal before entering this helper.
-  await submitVerifiedTestPayment({ page, sessionId });
+  await submitVerifiedTestPayment({ page, sessionId, claimPayment });
 }

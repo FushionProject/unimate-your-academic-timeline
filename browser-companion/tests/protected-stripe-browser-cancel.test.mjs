@@ -16,6 +16,7 @@ function fixture({
   comments = 1,
   modalStillPresent = false,
   delayedHydration = false,
+  hydrationControl = "link",
   overrides = {},
 } = {}) {
   const actions = [];
@@ -37,7 +38,7 @@ function fixture({
         assert.equal(options.timeout, 15000);
         assert.ok(options.state === "visible" || (key === "other" && options.state === "hidden"));
         waiters.push(options.state === "hidden" ? `${key}:hidden` : key);
-        if (key === "link") hydrated = true;
+        if (key === hydrationControl) hydrated = true;
       },
       click: async () => {
         actions.push(key);
@@ -146,6 +147,29 @@ for (const comments of [1]) {
   await openVerifiedCancellation({ page: x.page });
   assert.deepEqual(x.waiters, ["link"]);
   assert.deepEqual(x.actions, ["link"], "identity is checked only after the exact link hydrates");
+}
+
+for (const [action, phase, hydrationControl, expectedActions] of [
+  [chooseVerifiedCancellationReason, "reason", "choice", ["choice", "other", "comment", "next"]],
+  [confirmVerifiedCancellation, "confirm", "confirm", ["confirm"]],
+]) {
+  const x = fixture({ delayedHydration: true, phase, hydrationControl });
+  await action({ page: x.page });
+  assert.equal(x.waiters[0], hydrationControl);
+  assert.deepEqual(
+    x.actions,
+    expectedActions,
+    "each stage waits for hydration before identity proof",
+  );
+
+  const wrongIdentity = fixture({
+    delayedHydration: true,
+    phase,
+    hydrationControl,
+    product: "Another product",
+  });
+  await assert.rejects(action({ page: wrongIdentity.page }), refused);
+  assert.deepEqual(wrongIdentity.actions, [], "hydration never bypasses identity validation");
 }
 
 for (const [action, phase] of [

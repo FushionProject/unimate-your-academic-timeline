@@ -2,9 +2,83 @@
 
 Status: **test mode only**. Do not use live keys, enable `STRIPE_LIVE_MODE_ENABLED`, or make live charges while following this checklist.
 
+## Fresh protected Preview billing → installed Companion — passed October 16, 2026
+
+Tested the exact private deployment
+https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app/
+(`dpl_E4Wf1fi7mKEYFd7pwPFMpRWVMt3A`, website source
+`72a0e29eb6cf23f8f7fbf58835959af6f24d4c28`) and the latest installed Companion
+including the October 16 temporary-auth-error copy fix. This is distinct from
+the older run below and does not automatically certify later website deployments.
+Exact project/team ownership, `READY`, and Preview (`target:null`) were checked
+before obtaining short-lived origin-scoped test access. Public access and live
+Stripe payments were not enabled.
+
+- **Free → Pro:** the existing marked empty synthetic account started Free at
+  billing revision 53, with the Companion upgrade gate visible. One real browser
+  Checkout used the published Stripe sandbox card for the exact USD 599-cent
+  monthly test Price. Real signed `invoice.paid`, `checkout.session.completed`
+  and `customer.subscription.created` events each returned 200 from the hosted
+  handler. Direct database proof showed Pro at revision 56, one active
+  subscription, and zero open Checkouts **before any app return**.
+- **Companion unlocked:** the same continuously open installed panel and session
+  changed from its Free gate to the Pro composer. No panel replacement, sign-in,
+  or reload was used to make the transition pass. The existing return-to-page
+  focus listener was exercised; this is not a passive-push claim.
+- **Cancellation preserves paid time:** the real Manage billing button opened
+  the Portal for the verified synthetic customer. One Portal cancellation was
+  submitted. Both signed subscription-updated events returned 200. Stripe kept
+  the subscription active with `cancel_at:1807674311` equal to period end and
+  `cancel_at_period_end:false` (flexible billing); the profile correctly remained
+  Pro at revision 60.
+- **Expiry revokes access:** only this synthetic customer's test clock advanced
+  to `1807674312` (the verified period end plus one second). Subscription
+  `sub_1URHqOIxB8W4eFUh6AvhlN7u` became canceled; signed deletion event
+  `evt_1URHv2IxB8W4eFUhImGrHJkA` returned 200. Before app return, direct database
+  proof showed Free at revision 61, zero active subscriptions and zero open
+  Checkouts. The same open Companion session/panel removed its composer and
+  showed “Your Pro access is not active.”
+- **Final state:** after the proof-gated website return, the page displayed
+  Restart Pro and the profile was Free at revision 62. All five historical
+  synthetic subscriptions were canceled and the test clock was ready. Owned
+  browser runners and the relay exited successfully; their run lock was removed.
+
+Free, Pro and revoked screenshots were inspected. Across the entire sequence
+there were **zero AI requests, captures or page extractions**. This certifies
+entitlement and installed UI transitions, not live AI answers or draft retention.
+The installed Companion source hash remained
+`fd6fecc67d322cf683f21c59a37901587571ecb610fafdabf337578aded89fef`.
+Private screenshots and credentials remain excluded from Git.
+
+### One-shot v2 test safety
+
+`--run-v2` is pinned to the exact October 16 Preview and an immutable baseline of
+the four previously canceled synthetic subscriptions. Startup verifies the prior
+paid Checkout and completed cancellation against Stripe and persisted Free state.
+The original v1 journal was checked byte-for-byte unchanged via its saved SHA-256;
+v2 uses separate create-exclusive journals and records the installed Pro/revoked
+evidence. Neither version is a general-purpose replay or reset mechanism.
+
+Stripe's collapsed Card control required a separately journaled v2 browser
+continuation using the existing fixed test-card helper. An atomic per-Checkout
+payment claim now fences both submission paths before any payment click;
+concurrency tests prove ten competing claims permit exactly one winner. A Portal
+hydration timing check stopped before selecting a cancellation reason; after
+read-only verification that cancellation was still unscheduled, a distinct v2
+completion journal finished that same Portal session. The helper now waits for
+the observed reason/confirmation control before reading identity text. It still
+checks the sandbox/product identity before any click. No uncertain payment or
+cancellation submission was retried, and no old recovery journal was replaced.
+
+The v2 prior-run, Checkout and Portal policies have independent negative tests;
+the full private-preview billing suite passed. These are real sandbox events
+through the signed local relay to the private hosted handler, **not direct
+production webhook proof**. No real charge, production deployment, public
+signup, or Chrome Web Store submission was performed.
+
 ## Protected Preview core billing flow — passed October 14, 2026
 
-The current private test deployment is
+The October 14 private test deployment was
 https://unimate-fwcn4d8vz-resumejuice-s-projects.vercel.app/
 (`dpl_8FeZgD36ucSFKxW2CAMRrvrh7pjp`), `READY`, Preview (`target:null`) with no aliases.
 Its source is `5694bdb4b2a668e2f42297fe37a4a27fd34e000e`, including the guarded
