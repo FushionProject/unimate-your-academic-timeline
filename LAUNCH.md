@@ -107,8 +107,8 @@ on this exact updated build: real screenshot answer 200, saved exchange 201,
 readback 200, and conversation restored after reload. The fictional biology
 answer was correct and concise. The owned test browser/server exited cleanly.
 The complete [GitHub run, including both builds](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38968149059)
-also passed. Full billing and fresh new-account confirmation journeys were not
-rerun on this deployment; the subsequent scoped email recheck is recorded below.
+also passed. At that checkpoint, full billing and fresh new-account confirmation
+journeys had not been rerun; subsequent scoped email checks are recorded below.
 After separate owner approval on October 16, Supabase Auth's Site URL was moved
 to this `rvrhmln07` origin with exactly three redirect entries: `/dashboard`,
 `/upgrade`, and `/reset-password`. The three old `mewctpqwm` entries were removed;
@@ -167,7 +167,7 @@ by confirmed fixtures, and no inbox/account was deleted or paid plan enabled.
 The owner subsequently approved using the support Gmail for one empty Free test.
 Public signup, production services, Store submission, and live payments remain closed.
 
-### Owner-approved Gmail confirmation test — October 16, awaiting click
+### Owner-approved Gmail confirmation test — October 16, confirmed
 
 A scoped read first confirmed that the approved support Gmail was not already a
 UniMate account. One new admin-marked, empty Free fixture was created without a
@@ -177,13 +177,17 @@ destination. Readback recorded `confirmation_sent_at` at 17:09:58 CDT; the accou
 was still unconfirmed. The private, ignored identity journal prevents blindly
 recreating or resending the test after an uncertain result.
 
-The owner was asked to check Gmail (including Spam), click the confirmation link,
-and report the landing page. Request acceptance and the provider's sent timestamp
-are **not** proof of Gmail receipt, inbox placement, successful confirmation, or
-the hosted callback. Those results remain pending the owner's action and a fresh
-readback. No existing user was changed, no public signup was opened, and no
-Stripe/AI request or password operation was made. An independent check confirmed
-the exact protected Preview and all privacy/live-billing safeguards are unchanged.
+The owner reported receiving the email, clicking its confirmation link, and
+reaching the UniMate Pro page. Independent Auth readback then confirmed
+`email_confirmed_at` at 17:10:35 CDT for that exact admin-marked fixture. Its
+profile remained Free with no Stripe customer; signup stayed disabled and email
+confirmation required. This combines owner-observed Gmail/callback evidence with
+server-confirmed activation, not an independently captured browser landing or a
+new password-sign-in test. Inbox versus Spam placement was not reported.
+No existing user was changed, no public signup was opened, and no Stripe/AI
+request or password operation was made. An independent check confirmed the exact
+protected Preview and all privacy/live-billing safeguards are unchanged. The
+empty confirmed test account is retained; no user data was deleted.
 
 On protected Preview `076c427` (`unimate-mewctpqwm-resumejuice-s-projects.vercel.app`),
 the existing owner Pro session completed the real installed-extension flow:
@@ -411,10 +415,11 @@ verification inbox service had reached its three-inbox free-plan limit; no inbox
 was deleted and no paid upgrade was enabled. The earlier two real delivery and
 confirmation checks remain valid at their recorded deployment.
 
-Remaining email gates: ordinary public signup (intentionally closed), a fresh
-unconfirmed-account resend/delivery run on the new deployment, the owner's
-recovery-password sign-in, and inbox placement at a real student mailbox such
-as Gmail.
+The later owner-approved Gmail test above verified a fresh unconfirmed-account
+send/activation on the current deployment. Remaining email checks: ordinary
+public signup (intentionally closed), the owner's recovery-password sign-in,
+and whether the Gmail message reached Inbox rather than Spam. The fresh test
+used an admin-created fixture, not an enabled public-registration flow.
 
 ### Companion source follow-up — October 16, 2026
 

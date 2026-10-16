@@ -132,9 +132,11 @@ tests passed; these public-release gates remain:
   landed on this Preview's password-choice form; no password was changed. Used
   reset/confirmation link errors, explicit resend acknowledgement, Pro-intent
   sign-in, and the Free Companion lock passed. Synthetic sessions were signed
-  out. One fresh owner-approved support-Gmail confirmation request was accepted
-  at 17:09 CDT; receipt, the owner's click, and confirmation readback remain pending;
-  ordinary public signup remains closed. See `../LAUNCH.md` for exact scope.
+  out. The fresh owner-approved support-Gmail confirmation passed at 17:10 CDT:
+  owner-reported receipt and Pro-review landing were corroborated by server
+  confirmation readback. The account stayed Free with no billing customer.
+  Inbox versus Spam placement was not reported; ordinary public signup remains
+  closed. See `../LAUNCH.md` for exact scope.
 - **Previous protected Preview — October 16:**
   `https://unimate-mewctpqwm-resumejuice-s-projects.vercel.app/`, deployment
   `dpl_8BxeAfPZ3acSefc5LDxGCeEXWtV5`, application source `076c427`, `READY`,
