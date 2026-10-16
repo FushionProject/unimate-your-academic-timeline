@@ -822,6 +822,56 @@ assert.doesNotMatch(
   await signout;
 }
 
+// The initial user-validation request must classify outages just like the
+// post-refresh request. Preserve the session and Retry-After so the UI can
+// offer recovery instead of suggesting expired credentials or losing work.
+for (const [status, code, retryAfter] of [
+  [429, "AI_RATE_LIMITED", 30_000],
+  [503, "BACKEND_UNAVAILABLE", 0],
+]) {
+  const { listeners, state } = createHarness();
+  const originalSession = structuredClone(state.storedSession);
+  state.fetchOverride = async (href) =>
+    href.endsWith("/auth/v1/user")
+      ? new Response(JSON.stringify({ error: "Temporary auth outage" }), {
+          status,
+          headers: status === 429 ? { "retry-after": "30" } : {},
+        })
+      : undefined;
+  const sender = { documentId: "document-11", tab: { id: 11, windowId: 1 } };
+  const failed = await dispatch(listeners.runtime, { type: "AUTH_STATE" }, sender);
+  assert.equal(failed.ok, false);
+  assert.equal(failed.errorCode, code);
+  assert.equal(failed.errorPhase, "auth");
+  assert.equal(failed.retryAfterMs, retryAfter);
+  assert.deepEqual(state.storedSession, originalSession);
+  assert.equal(state.requests.length, 1, "An auth outage must not trigger a refresh or paid work");
+  assert.equal(state.captures.length, 0);
+  assert.equal(
+    state.sent.some(({ request }) => request.type === "SESSION_CHANGED"),
+    false,
+  );
+
+  state.fetchOverride = null;
+  const recovered = await dispatch(listeners.runtime, { type: "AUTH_STATE" }, sender);
+  assert.equal(recovered.ok, true);
+  assert.equal(recovered.data.authenticated, true);
+  assert.equal(recovered.data.isPro, true);
+  assert.equal(state.storedSession.refresh_token, originalSession.refresh_token);
+  assert.equal(
+    state.requests.some(({ href }) => href.includes("grant_type=")),
+    false,
+  );
+  assert.equal(
+    state.requests.some(({ href }) => href.includes("/api/analyze-screenshot")),
+    false,
+  );
+  assert.equal(
+    state.requests.some(({ href }) => href.includes("/api/dashboard-ai")),
+    false,
+  );
+}
+
 // Concurrent status/chat callers share refresh rotation, and transient auth
 // outages retain the refresh token so the next attempt can recover.
 {

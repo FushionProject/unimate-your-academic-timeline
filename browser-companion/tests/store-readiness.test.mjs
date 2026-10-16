@@ -372,10 +372,13 @@ try {
         "Never echo rejected configuration values",
       );
   }
-  // Equivalent escaped literals must be decoded before checks and canonical output.
+  // Equivalent escaped literals must be decoded before checks. Allowed trailing
+  // slashes must be removed before the runtime appends its API paths.
   fs.writeFileSync(
     configFile,
-    generatedConfig.replace("https://unimate.site", "https://\\u0075nimate.site"),
+    generatedConfig
+      .replace("https://project.supabase.co", "https://project.supabase.co/")
+      .replace("https://unimate.site", "https://\\u0075nimate.site/"),
   );
   execFileSync(process.execPath, [script], { cwd: fixture, stdio: "pipe" });
   const zip = path.join(
@@ -411,8 +414,11 @@ try {
     JSON.parse(execFileSync("unzip", ["-p", zip, "manifest.json"], { encoding: "utf8" })).version,
     manifest.version,
   );
+  const archivedConfig = execFileSync("unzip", ["-p", zip, "config.local.js"], {
+    encoding: "utf8",
+  });
   assert.equal(
-    execFileSync("unzip", ["-p", zip, "config.local.js"], { encoding: "utf8" }),
+    archivedConfig,
     `self.UNIMATE_COMPANION_CONFIG = ${JSON.stringify(
       {
         SUPABASE_URL: "https://project.supabase.co",
@@ -424,6 +430,14 @@ try {
       2,
     )};\n`,
     "Archive contains canonical validated values, not raw configuration source",
+  );
+  const archivedConfigFixture = vm.createContext({ self: {} });
+  vm.runInContext(archivedConfig, archivedConfigFixture);
+  privacyFixture.config = archivedConfigFixture.self.UNIMATE_COMPANION_CONFIG;
+  assert.equal(
+    privacyFixture.privacyPolicyUrl(),
+    "https://unimate.site/privacy",
+    "Packaged configuration must retain the installed Companion's privacy link",
   );
   // Approved filenames must not smuggle unrelated bytes through symlinks.
   const sentinel = path.join(fixture, "outside-sentinel.txt");
@@ -478,6 +492,19 @@ try {
     { UNIMATE_API_URL: "https://[::1]" },
     { UNIMATE_API_URL: "https://user:password@unimate.site" },
     { UNIMATE_API_URL: "https://unimate.site/api?token=fixture" },
+    // URL parsing can normalize these, but the installed privacy-link guard
+    // deliberately rejects the original values. Do not ship that mismatch.
+    ...[
+      "https://unimate.site:443",
+      "HTTPS://unimate.site",
+      "https://UNIMATE.site",
+      " https://unimate.site",
+      "https://unimate.site\n",
+      "https://uni\tmate.site",
+      "https://unimate.site/.",
+      "https://unimate.site/path/..",
+      "https:\\unimate.site",
+    ].flatMap((origin) => [{ UNIMATE_API_URL: origin }, { SUPABASE_URL: origin }]),
     { COMPANION_DEBUG: true },
     { SUPABASE_ANON_KEY: "YOUR_SUPABASE_ANON_KEY" },
     { SUPABASE_ANON_KEY: "sb_publishable_" },

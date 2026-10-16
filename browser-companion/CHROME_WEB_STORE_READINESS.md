@@ -1,6 +1,6 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-Readiness updated: October 16, 2026, from checkpoint `561ecc2` on
+Readiness updated: October 16, 2026, including post-`437e7b3` hardening on
 `codex/unimate-premium-revival`. The current protected Preview runs application
 commit `561ecc2`. Sandbox purchase → same-panel Pro unlock → period-end
 revocation was reverified October 16 on `72a0e29` with the latest installed
@@ -20,14 +20,26 @@ production-configured ZIP, Store upload, or developer account was created.
 Current official requirements were rechecked for privacy, minimum permissions,
 Manifest V3 code, images, reviewer instructions, and distribution visibility.
 
-Latest October 16 local follow-up: temporary authentication outages no longer
+Latest October 16 post-`437e7b3` follow-up: Store packaging now rejects
+noncanonical URL forms that the installed privacy-link guard rejects, rather
+than shipping a package with no Privacy Policy link. A permitted trailing slash
+is normalized. Eighteen added malformed-origin cases preserve the previous ZIP;
+the synthetic archived config is checked through the actual privacy validator.
+Initial `/auth/v1/user` 429/503 errors now preserve their auth phase and retry
+timing, with regression proof of session retention, no capture/AI/refresh, and
+successful recovery on the next explicit check. Full offline tests (CI Node and
+type-stripping setting), five runtime repeats, typecheck, lint and secret scan
+passed. No production ZIP, new installed-browser run, deployment, or submission
+was performed for these two fixes.
+
+Earlier October 16 local follow-up: temporary authentication outages no longer
 claim the student's session ended; only a definitive `AUTH_REQUIRED` rejection
 does. Production-function fixtures cover timeout/network/service-error copy and
 rate-limit timing; six Send/preflight cases confirm session and draft retention.
 Full Companion verification and five runtime repeats pass. The finalized runtime
 then passed 28 installed Chromium scenarios with ten simulated AI calls, artifact
 `unimate-companion-browser-8JUxqo` in the host temporary directory. The installed
-background/content/extractor/sign-in/manifest files match current source byte for
+background/content/extractor/sign-in/manifest files matched that checkpoint byte for
 byte; the before/after content SHA-256 is
 `a6ecd16e92348f18e3e0490438382efde984c127f319622c2c50bf71187796e2`.
 No real credentials, database, payment, or AI-provider calls were used. The
@@ -111,12 +123,17 @@ tests passed; these public-release gates remain:
   and specific recovery guidance for unsupported screenshot numbers; the live
   image-only measurement limitation remains recorded in `../LAUNCH.md`.
   No public signup, persistent bypass, Production keys, custom domain, or live
-  Stripe was enabled. Billing/email journeys were not repeated on this build.
+  Stripe was enabled. A full billing journey was not repeated on this build.
   With separate owner approval on October 16, the Auth Site URL and exactly three
   email return paths (`/dashboard`, `/upgrade`, `/reset-password`) were moved to
   this origin. The previous entries were removed and the new configuration
   verified after reload. Signup/anonymous sign-ins remain disabled and email
-  confirmation required; this is not a new email-delivery test.
+  confirmation required. A subsequent real reset email arrived at 16:59 CDT and
+  landed on this Preview's password-choice form; no password was changed. Used
+  reset/confirmation link errors, explicit resend acknowledgement, Pro-intent
+  sign-in, and the Free Companion lock passed. Synthetic sessions were signed
+  out. Fresh unconfirmed-account delivery remains pending an approved inbox;
+  ordinary public signup remains closed. See `../LAUNCH.md` for exact scope.
 - **Previous protected Preview — October 16:**
   `https://unimate-mewctpqwm-resumejuice-s-projects.vercel.app/`, deployment
   `dpl_8BxeAfPZ3acSefc5LDxGCeEXWtV5`, application source `076c427`, `READY`,

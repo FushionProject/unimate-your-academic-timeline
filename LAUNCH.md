@@ -107,7 +107,8 @@ on this exact updated build: real screenshot answer 200, saved exchange 201,
 readback 200, and conversation restored after reload. The fictional biology
 answer was correct and concise. The owned test browser/server exited cleanly.
 The complete [GitHub run, including both builds](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38968149059)
-also passed. Full billing and email journeys were not rerun on this deployment.
+also passed. Full billing and fresh new-account confirmation journeys were not
+rerun on this deployment; the subsequent scoped email recheck is recorded below.
 After separate owner approval on October 16, Supabase Auth's Site URL was moved
 to this `rvrhmln07` origin with exactly three redirect entries: `/dashboard`,
 `/upgrade`, and `/reset-password`. The three old `mewctpqwm` entries were removed;
@@ -116,6 +117,56 @@ with no wildcard. Signup and anonymous sign-ins remain disabled, and email
 confirmation remains required. Vercel protection and live-Stripe-off safeguards
 were independently rechecked. This is configuration verification, not a fresh
 email-delivery or full billing run. Nothing was made public or submitted to Chrome.
+
+### Updated-Preview email and Companion hardening recheck — October 16
+
+On the same protected `561ecc2` / `rvrhmln07` Preview, one reset request through
+the real `/forgot-password` form reached the existing isolated verification
+inbox at 16:59 CDT. Its direct Supabase verification link specified the exact
+project and current `/reset-password` destination. Following it displayed
+**Choose a new password** with both fields; authentication values were then
+cleared from the URL. No password was entered or changed. The test account was
+signed out normally, and replaying the consumed link displayed **This reset link
+isn't valid**, no password inputs, and explicit fresh-link/sign-in actions.
+
+A previously consumed confirmation link, deliberately retargeted to the
+approved current `/upgrade`, displayed the expired/used explanation and removed
+provider error parameters. An explicit resend request for the already-confirmed
+empty fixture displayed the conditional acknowledgement; this is not a fresh
+confirmation delivery. Its sign-in action preserved `/signin?next=upgrade`.
+Fresh browser password sign-in with the separate, already-confirmed synthetic
+fixture reached `/upgrade` without opening Checkout. `/companion-setup` still
+showed **Pro access required** and **Installation locked until Pro is active**.
+The fixture was signed out. Both accounts were verified as admin-marked test
+fixtures, Free, and without Stripe customers; no real student account was edited.
+
+Independent safeguards recheck: exact deployment/project/source, no aliases,
+Vercel protection enabled, zero persistent bypasses/Production environment
+variables, automatic domain assignment off, live Stripe false; anonymous root
+302 to Vercel, health 200, signup-disabled 200, operator readiness 404, unsigned
+Companion 401. Public Auth settings still require confirmation and disable signup.
+No Stripe operation or AI generation was performed in this recheck.
+
+Two additional Companion fixes were verified offline after `437e7b3`:
+
+- Initial session-validation 429/503 responses now use the existing typed auth
+  classifier, preserving retry timing and the session. Regression tests prove
+  there is no capture, AI request, refresh, or sign-out broadcast; the next
+  explicit check recovers without re-sign-in.
+- Store packaging now rejects URL forms that the runtime privacy-link guard
+  rejects, and normalizes an accepted trailing slash. Eighteen added rejection
+  cases preserve the previous ZIP; the archived configuration is executed through
+  the real privacy-link validator. Only synthetic configuration was packaged.
+
+Full offline `npm test` passed with CI's Node 22.16.0 and
+`NODE_OPTIONS=--experimental-strip-types`, including five runtime repeats.
+Typecheck, secret scan, and lint (zero errors; eight pre-existing warnings) passed.
+These extension/package changes have not had a new installed-browser or hosted
+run; the website deployment is unchanged. Fresh new-account confirmation delivery
+is pending an approved reachable inbox: all three automated inboxes are occupied
+by confirmed fixtures, and no inbox/account was deleted or paid plan enabled.
+The owner was asked whether to use the support Gmail for one empty Free test.
+Public signup, production services, Store submission, and live payments remain closed.
 
 On protected Preview `076c427` (`unimate-mewctpqwm-resumejuice-s-projects.vercel.app`),
 the existing owner Pro session completed the real installed-extension flow:

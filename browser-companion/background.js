@@ -454,7 +454,9 @@ async function validateSession(epoch) {
     session.user = await response.json();
     await writeSession(session, epoch);
   } else {
-    throw new Error("Could not validate your UniMate session.");
+    // Keep auth outages and Retry-After typed on the initial request too;
+    // only a definitive rejection should send the student back to sign-in.
+    await parseResponse(response, "auth");
   }
   assertSessionEpoch(epoch);
   return session;

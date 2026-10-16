@@ -1,6 +1,6 @@
 # UniMate Browser Companion
 
-Implementation notes updated October 16, 2026 against checkpoint `561ecc2`.
+Implementation notes updated October 16, 2026, including post-`437e7b3` hardening.
 The current protected Preview runs application commit `561ecc2` at
 `https://unimate-rvrhmln07-resumejuice-s-projects.vercel.app/`. Protected smoke
 checks passed. The live installed study
@@ -10,12 +10,21 @@ billing journey has not been repeated on that exact deployment. Real sandbox
 purchase unlocked the same open latest Companion panel, and period-end
 cancellation revoked it, in the October 16 run against website `72a0e29`. No
 public production or Store release has occurred; see the scoped evidence below.
-Email-link recovery was verified on the preceding `076c427` (`mewctpqwm`)
-Preview. With owner approval on October 16, the email Site URL and exactly three
+Email-link recovery delivery and the reset-form landing were reverified on this
+current Preview at 16:59 CDT, without changing the test password. Used reset and
+confirmation links showed safe recovery actions; fresh browser sign-in preserved
+Pro-review intent but left the Free account's Companion locked. The test sessions
+were signed out. Fresh unconfirmed-account delivery remains pending a reachable
+approved inbox. With owner approval on October 16, the Site URL and exactly three
 allowed paths (`/dashboard`, `/upgrade`, `/reset-password`) were moved to the
 current `rvrhmln07` Preview; the previous entries were removed and persistence
-verified after reload. Signup remains closed and confirmation required. This
-settings check is not a fresh email-delivery test on the current deployment.
+verified after reload. Signup remains closed and confirmation required.
+
+Post-`437e7b3` extension-only hardening fixes initial session-validation outage
+classification and Store-package URL canonicalization. Full offline tests,
+five runtime repeats, typecheck, lint (eight existing warnings), and secret scan
+pass. A new installed-browser run of these two fixes has not yet been performed;
+the hosted website remains `561ecc2`. See [LAUNCH.md](../LAUNCH.md) for scope.
 
 An extension-only follow-up derives the consent Privacy Policy link from
 the validated configured origin instead of the old domain. It passed offline
@@ -29,10 +38,10 @@ a signed-in student that their session ended. The question and session stay
 available, while a definitive `AUTH_REQUIRED` rejection still clears account
 data and opens secure sign-in. Executed production-function tests cover timeout,
 network, service-outage, and rate-limit messages; six Send/preflight scenarios
-also verify draft/session retention. Full Companion verification and the current
+also verify draft/session retention. Full Companion verification and that checkpoint's
 installed Chromium harness pass: 28 scenarios and ten simulated AI calls,
-artifact `unimate-companion-browser-8JUxqo`. Installed runtime files match the
-reviewed source. This copy-only follow-up has not had a hosted run; the installed
+artifact `unimate-companion-browser-8JUxqo`. Installed runtime files matched the
+reviewed checkpoint. This copy-only follow-up has not had a hosted run; the installed
 auth-outage scenario checks history refresh, while exact Send error copy is
 covered by the executable production-function tests.
 

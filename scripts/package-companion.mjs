@@ -65,16 +65,28 @@ const config = {
   UNIMATE_API_URL: JSON.parse(fields[3]),
   COMPANION_DEBUG: fields[4] === "true",
 };
-const validatedValues = JSON.stringify(config);
-for (const [label, value] of [
-  ["UniMate API", config.UNIMATE_API_URL],
-  ["Supabase", config.SUPABASE_URL],
+for (const [key, label] of [
+  ["UNIMATE_API_URL", "UniMate API"],
+  ["SUPABASE_URL", "Supabase"],
 ]) {
+  const value = config[key];
   if (!value) throw new Error(`${label} URL is missing from generated Companion configuration.`);
   if (!isPublicCompanionOrigin(value)) {
     throw new Error(`${label} must use a non-local HTTPS origin for Store packaging.`);
   }
+  const origin = new URL(value).origin;
+  // Match the installed privacy-link guard; URL parsing alone also accepts
+  // rewritten ports, whitespace, backslashes, and dot segments.
+  if (value !== origin && value !== `${origin}/`) {
+    throw new Error(
+      `${label} must use a canonical HTTPS origin for Store packaging. Regenerate with npm run companion:configure.`,
+    );
+  }
+  // The generator already does this. Keep manually supplied trailing slashes
+  // from creating double-slash API paths in the packaged runtime.
+  config[key] = origin;
 }
+const validatedValues = JSON.stringify(config);
 if (config.COMPANION_DEBUG) {
   throw new Error("Disable Companion debug mode before Store packaging.");
 }
