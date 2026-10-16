@@ -1,11 +1,11 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-Readiness updated: October 16, 2026, from checkpoint `8c1c0ac` on
+Readiness updated: October 16, 2026, from checkpoint `561ecc2` on
 `codex/unimate-premium-revival`. The current protected Preview runs application
-commit `076c427`. Sandbox purchase → same-panel Pro unlock → period-end
+commit `561ecc2`. Sandbox purchase → same-panel Pro unlock → period-end
 revocation was reverified October 16 on `72a0e29` with the latest installed
 Companion; that proof does not automatically certify the newer website deployment.
-Screenshot/AI/save/readback/reload passed October 16 on the current `076c427`
+Screenshot/AI/save/readback/reload passed October 16 on the current `561ecc2`
 Preview using the owner Pro session and fictional coursework. Full evidence: [LAUNCH.md](../LAUNCH.md)
 and [Stripe sandbox manual tests](../STRIPE_SANDBOX_MANUAL_TESTS.md).
 No custom domain was assigned and nothing was submitted to or published in the
@@ -101,6 +101,19 @@ tests passed; these public-release gates remain:
 ## Protected hosted-test progress
 
 - **Current protected Preview — October 16:**
+  `https://unimate-rvrhmln07-resumejuice-s-projects.vercel.app/`, deployment
+  `dpl_8vko5jDM9b6LonH8bSdtJjqJQ2Mq`, source `561ecc2`, `READY`, Preview,
+  no aliases. Actual upload matched the reviewed 139-file allowlist. Anonymous
+  access remains locked; protected health/signup/readiness/auth-denial checks
+  passed. Installed Companion consent/Pro access → fictional-page screenshot →
+  real AI answer → save/readback → reload passed on this exact build. GitHub's
+  full checks and both builds passed. This includes the verified-quotation fix
+  and specific recovery guidance for unsupported screenshot numbers; the live
+  image-only measurement limitation remains recorded in `../LAUNCH.md`.
+  No public signup, persistent bypass, Production keys, custom domain, or live
+  Stripe was enabled. Billing/email journeys were not repeated on this build;
+  email callbacks remain on the owner-approved previous Preview pending approval.
+- **Previous protected Preview — October 16:**
   `https://unimate-mewctpqwm-resumejuice-s-projects.vercel.app/`, deployment
   `dpl_8BxeAfPZ3acSefc5LDxGCeEXWtV5`, application source `076c427`, `READY`,
   Preview (`target:null`), no aliases. Anonymous access still redirects to

@@ -1,15 +1,17 @@
 # UniMate Browser Companion
 
-Implementation notes updated October 16, 2026 against checkpoint `8c1c0ac`.
-The current protected Preview runs application commit `076c427` at
-`https://unimate-mewctpqwm-resumejuice-s-projects.vercel.app/`. Protected smoke
-and hosted expired-email-link recovery checks passed. The live installed study
+Implementation notes updated October 16, 2026 against checkpoint `561ecc2`.
+The current protected Preview runs application commit `561ecc2` at
+`https://unimate-rvrhmln07-resumejuice-s-projects.vercel.app/`. Protected smoke
+checks passed. The live installed study
 journey also passed on that exact deployment: consent/Pro access, fictional-page
 screenshot, real AI reply, save/readback, and history after reload. The full
 billing journey has not been repeated on that exact deployment. Real sandbox
 purchase unlocked the same open latest Companion panel, and period-end
 cancellation revoked it, in the October 16 run against website `72a0e29`. No
 public production or Store release has occurred; see the scoped evidence below.
+Email-link recovery was verified on the preceding `076c427` (`mewctpqwm`)
+Preview; email return settings remain there pending owner approval to move them.
 
 An extension-only follow-up derives the consent Privacy Policy link from
 the validated configured origin instead of the old domain. It passed offline

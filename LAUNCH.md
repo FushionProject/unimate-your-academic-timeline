@@ -80,7 +80,7 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [ ] Freeze and record the exact new release commit and rollback point
 - [x] Protected Preview purchase unlocks the same open Companion panel/session (reverified October 16)
 - [x] Protected Preview period-end cancellation revokes the same open Companion panel/session (reverified October 16)
-- [x] Verify protected Preview `076c427`'s live Companion study flow end to end (October 16)
+- [x] Verify latest protected Preview `561ecc2`'s live Companion study flow end to end (October 16)
 - [ ] Complete the remaining real Stripe sandbox lifecycle matrix
 - [x] Verify custom SMTP delivery and private-preview recovery-link landing (October 16)
 - [x] Owner completes isolated test-account password update; saved state and recovery cleanup verified (October 16)
@@ -90,6 +90,26 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [ ] Complete production-origin, legal, support, and Chrome Web Store gates
 
 ### Live tutor and installed Companion recheck — October 16
+
+Latest protected build: `561ecc27764debc97f9c96f3a7fb93410b40f717`, deployment
+`dpl_8vko5jDM9b6LonH8bSdtJjqJQ2Mq`,
+`https://unimate-rvrhmln07-resumejuice-s-projects.vercel.app/`. It is `READY`,
+Preview (`target:null`), with no aliases. Exact uploader audit matched 139 files
+and 9,086,138 bytes from a clean, pushed checkout; private files/test profiles
+were excluded. Project protection remains `all_except_custom_domains`, with
+zero persistent bypasses, zero Production environment variables, automatic
+custom-domain assignment off, and live Stripe mode false. Anonymous root returns
+302 to Vercel; short-lived exact-origin checks passed health 200/no-store,
+signup-disabled 200, operator readiness 404, and unsigned Companion 401.
+
+The same installed live study flow described below was then repeated successfully
+on this exact updated build: real screenshot answer 200, saved exchange 201,
+readback 200, and conversation restored after reload. The fictional biology
+answer was correct and concise. The owned test browser/server exited cleanly.
+The complete [GitHub run, including both builds](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38968149059)
+also passed. Full billing and email journeys were not rerun on this deployment;
+email return settings remain on the previously approved `mewctpqwm` Preview
+pending separate owner approval. Nothing was made public or submitted to Chrome.
 
 On protected Preview `076c427` (`unimate-mewctpqwm-resumejuice-s-projects.vercel.app`),
 the existing owner Pro session completed the real installed-extension flow:
