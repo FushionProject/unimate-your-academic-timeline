@@ -238,6 +238,16 @@ try {
     }
     throw new Error(`Timed out: ${label}; panel=${await shadowCall(".um-body")}`);
   }
+  async function savePanelScreenshot(filename) {
+    // The production panel uses a closed shadow root. Do not rely on screenshot
+    // animation handling alone to fast-forward its opening/closing transition.
+    await until(async () => {
+      const visibility = await shadowCall(".um-panel", "style", "visibility");
+      const opacity = await shadowCall(".um-panel", "style", "opacity");
+      return visibility === "hidden" ? opacity === "0" : opacity === "1";
+    }, "panel transition settled before screenshot");
+    await page.screenshot({ path: path.join(artifacts, filename), animations: "disabled" });
+  }
   const waitFor = (selector) => until(() => shadowCall(selector, "visible"), selector);
   async function signIn(email, exerciseFailures = false) {
     await waitFor(".um-signin");
@@ -259,7 +269,10 @@ try {
     await shadowCall(".um-signin", "click");
     const popup = await popupPromise;
     await popup.waitForURL(/^chrome-extension:\/\/[^/]+\/signin\.html$/);
-    await popup.screenshot({ path: path.join(artifacts, "05-secure-signin.png") });
+    await popup.screenshot({
+      path: path.join(artifacts, "05-secure-signin.png"),
+      animations: "disabled",
+    });
     await popup.locator("#email").fill(email);
     await popup.locator("#password").pressSequentially("synthetic-password-not-a-real-credential");
     assert.equal(
@@ -317,9 +330,7 @@ try {
       else await page.evaluate(() => window.dispatchEvent(new Event("focus")));
       await waitFor(".um-upgrade");
       assert.equal(await shadowCall(".um-input"), null);
-      await page.screenshot({
-        path: path.join(artifacts, `pending-${label}-${trigger}-locked.png`),
-      });
+      await savePanelScreenshot(`pending-${label}-${trigger}-locked.png`);
       isPro = true;
       await shadowCall(".um-check-plan", "click");
       await waitFor(recoverySelector);
@@ -349,14 +360,14 @@ try {
     false,
     "The closed companion must not be exposed as an active dialog",
   );
-  await page.screenshot({ path: path.join(artifacts, "00-synthetic-coursework.png") });
+  await savePanelScreenshot("00-synthetic-coursework.png");
   assert.equal(
     await page.locator("#unimate-companion-host").evaluate((host) => host.shadowRoot),
     null,
   );
   await shadowCall(".um-mascot", "click");
   await waitFor(".um-consent-decline");
-  await page.screenshot({ path: path.join(artifacts, "01-consent.png") });
+  await savePanelScreenshot("01-consent.png");
   assert.equal(
     calls.some(({ path }) => path.startsWith("/auth/") || path.startsWith("/api/")),
     false,
@@ -374,7 +385,7 @@ try {
   await signIn("free@example.test", true);
   await waitFor(".um-upgrade");
   assert.equal(aiRequests.length, 0);
-  await page.screenshot({ path: path.join(artifacts, "02-free-pro-gate.png") });
+  await savePanelScreenshot("02-free-pro-gate.png");
   pass("Free account cannot open composer or call AI");
   const signInsBeforeUpgrade = calls.filter(({ path }) => path === "/auth/v1/token").length;
   isPro = true;
@@ -554,7 +565,7 @@ try {
   assert.equal(JSON.stringify(aiRequests[0].pageContext).includes("HIDDEN_FIXTURE"), false);
   assert.equal(await shadowCall(".um-announcer", "backend-id"), announcerNode);
   assert.match(await shadowCall(".um-announcer"), /UniMate:.*Mitochondria/s);
-  await page.screenshot({ path: path.join(artifacts, "03-pro-answer.png") });
+  await savePanelScreenshot("03-pro-answer.png");
   pass("Real active-tab screenshot, sanitized page context, rendered and saved reply");
 
   replyBarrier = new Promise((resolve) => {
@@ -745,7 +756,7 @@ try {
     hostScrollBefore,
     "Companion scrolling must not move coursework",
   );
-  await page.screenshot({ path: path.join(artifacts, "06-small-window-save-recovery.png") });
+  await savePanelScreenshot("06-small-window-save-recovery.png");
   const recoveryBodyBounds = await shadowCall(".um-body", "bounds");
   await page.mouse.move(
     (recoveryBodyBounds.left + recoveryBodyBounds.right) / 2,
@@ -822,7 +833,7 @@ try {
   assert.equal(await shadowCall(".um-input", "focused"), true);
   assert.equal(await shadowCall(".um-input", "in-view"), true);
   assert.equal(await shadowCall(".um-input", "value"), "New draft B about ATP");
-  await page.screenshot({ path: path.join(artifacts, "11-failed-question-200-percent.png") });
+  await savePanelScreenshot("11-failed-question-200-percent.png");
   await worker.evaluate(async (url) => {
     const tab = (await chrome.tabs.query({})).find((item) => item.url === url);
     await chrome.tabs.setZoom(tab.id, 1);
@@ -840,7 +851,7 @@ try {
   await until(async () => !(await shadowCall(".um-retry-question")), "recovery resolved");
   assert.equal(await shadowCall(".um-input", "value"), "New draft B about ATP");
   assert.equal(await shadowCall(".um-input", "focused"), true);
-  await page.screenshot({ path: path.join(artifacts, "11-question-recovery.png") });
+  await savePanelScreenshot("11-question-recovery.png");
   pass(
     "Typing B during failed A preserves both, with keyboard retry that keeps B and restores focus",
   );
@@ -1175,7 +1186,7 @@ try {
   await page.setViewportSize({ width: 420, height: 460 });
   const bodyBounds = await shadowCall(".um-body", "bounds");
   assert.ok(bodyBounds.top >= 0 && bodyBounds.bottom <= 460);
-  await page.screenshot({ path: path.join(artifacts, "04-small-window-consent.png") });
+  await savePanelScreenshot("04-small-window-consent.png");
   await shadowCall(".um-consent-decline", "click");
   await shadowCall(".um-mascot", "click");
   await waitFor(".um-consent-accept");
@@ -1199,7 +1210,7 @@ try {
   if (context?.pages()[0])
     await context
       .pages()[0]
-      .screenshot({ path: path.join(artifacts, "failure.png") })
+      .screenshot({ path: path.join(artifacts, "failure.png"), animations: "disabled" })
       .catch(() => {});
   console.error(`Browser verification failed. Artifacts: ${artifacts}`);
   throw error;

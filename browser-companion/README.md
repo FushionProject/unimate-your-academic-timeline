@@ -1,15 +1,17 @@
 # UniMate Browser Companion
 
-Implementation notes updated October 16, 2026 against extension/source checkpoint
-`0a68da2`. The current protected Preview runs application commit `72a0e29` at
-`https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app/`. Its signed-out smoke
-checks passed; authenticated study and billing journeys have not been repeated
-on that exact deployment. Real sandbox purchase unlocked the same open Companion
-panel, and period-end cancellation revoked it, on the historical `5694bdb`
-deployment. The hosted screenshot/AI/save proof is also historical. No public
-production or Store release has occurred; see the scoped evidence below.
+Implementation notes updated October 16, 2026 against checkpoint `8c1c0ac`.
+The current protected Preview runs application commit `076c427` at
+`https://unimate-mewctpqwm-resumejuice-s-projects.vercel.app/`. Protected smoke
+and hosted expired-email-link recovery checks passed. The live installed study
+journey also passed on that exact deployment: consent/Pro access, fictional-page
+screenshot, real AI reply, save/readback, and history after reload. The full
+billing journey has not been repeated on that exact deployment. Real sandbox
+purchase unlocked the same open latest Companion panel, and period-end
+cancellation revoked it, in the October 16 run against website `72a0e29`. No
+public production or Store release has occurred; see the scoped evidence below.
 
-The latest extension-only follow-up derives the consent Privacy Policy link from
+An extension-only follow-up derives the consent Privacy Policy link from
 the validated configured origin instead of the old domain. It passed offline
 verification, five runtime repeats, and 28 installed Chromium scenarios with ten
 simulated AI calls. That installed run covers Pro revocation/recovery with an
@@ -27,6 +29,22 @@ artifact `unimate-companion-browser-8JUxqo`. Installed runtime files match the
 reviewed source. This copy-only follow-up has not had a hosted run; the installed
 auth-outage scenario checks history refresh, while exact Send error copy is
 covered by the executable production-function tests.
+
+The October 16 Store audit reran full Companion verification, including safe
+synthetic ZIP packaging and five runtime repeats. No real configuration was read
+or production ZIP created. The readiness record now includes a reviewer access
+walkthrough, current official policy references, and explicit remaining legal,
+support, asset, and production-service gates. In particular, **unlisted is not
+private**: a restricted Store beta requires Private visibility and named trusted
+testers, with separate owner approval before any submission.
+
+Live tutor checks on October 16 passed the original eleven cases and four of
+five harder cases. One image-only measurement response lost a percent unit and
+was safely blocked; exact table reading remains a limitation. Recovery now asks
+for highlighted/pasted values including signs and units, without repeating the
+rejected draft. Exact supplied quotations are accepted while fabricated or mixed
+passages remain blocked. See `../LAUNCH.md` for the scoped provider, offline,
+hosted, and installed-browser evidence; these are not interchangeable.
 
 Contact update October 13, 2026: local Privacy, Terms, and Support pages now use
 the owner-created `unimatesupport@gmail.com` inbox. Those links are included in

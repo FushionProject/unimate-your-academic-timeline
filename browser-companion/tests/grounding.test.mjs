@@ -4,6 +4,7 @@ import {
   COMPANION_GROUNDING_SYSTEM_PROMPT,
   COMPANION_PROMPT_TEMPLATE_ID,
   GROUNDED_FALLBACK_ANSWER,
+  SCREENSHOT_NUMBERS_FALLBACK_ANSWER,
   buildProvenanceBlock,
   buildTutorTaskInstruction,
   classifyCompanionIntent,
@@ -12,6 +13,7 @@ import {
   detectHallucination,
   normalizeProvenance,
   resolveCompanionReference,
+  selectCompanionGroundingFallback,
 } from "../../src/lib/companion-grounding.ts";
 import { readAiProviderError } from "../../src/lib/ai-provider.ts";
 
@@ -252,6 +254,23 @@ check(
   "fallback is one concise limitation",
   GROUNDED_FALLBACK_ANSWER.length < 220 && !/\n/.test(GROUNDED_FALLBACK_ANSWER),
 );
+for (const [hasScreenshot, reasons, expected] of [
+  [true, ["unsupported_number"], SCREENSHOT_NUMBERS_FALLBACK_ANSWER],
+  [false, ["unsupported_number"], GROUNDED_FALLBACK_ANSWER],
+  [true, ["unsupported_number", "fabricated_quote"], GROUNDED_FALLBACK_ANSWER],
+  [true, ["fabricated_quote"], GROUNDED_FALLBACK_ANSWER],
+  [true, ["unsupported_number", "unknown_reason"], GROUNDED_FALLBACK_ANSWER],
+  [true, [], GROUNDED_FALLBACK_ANSWER],
+]) {
+  assert.equal(
+    selectCompanionGroundingFallback(normalizeProvenance({}, hasScreenshot), reasons),
+    expected,
+  );
+}
+assert.match(SCREENSHOT_NUMBERS_FALLBACK_ANSWER, /exact numbers and units/);
+assert.match(SCREENSHOT_NUMBERS_FALLBACK_ANSWER, /highlight or paste/);
+assert.match(SCREENSHOT_NUMBERS_FALLBACK_ANSWER, /including signs and units/);
+assert.doesNotMatch(SCREENSHOT_NUMBERS_FALLBACK_ANSWER, /\d|capture|try again|unreadable/i);
 
 check(
   "both existing Companion endpoints use shared tutor generation",

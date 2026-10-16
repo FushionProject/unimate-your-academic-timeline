@@ -4,14 +4,25 @@ import vm from "node:vm";
 import ts from "typescript";
 import {
   COMPANION_GROUNDING_SYSTEM_PROMPT,
+  COMPANION_PROMPT_TEMPLATE_ID,
   GROUNDED_FALLBACK_ANSWER,
+  SCREENSHOT_NUMBERS_FALLBACK_ANSWER,
+  buildProvenanceBlock,
   buildTutorTaskInstruction,
   classifyCompanionIntent,
+  classifyResolvedCompanionIntent,
+  companionMaxTokens,
   detectHallucination,
   normalizeProvenance,
   resolveCompanionReference,
+  selectCompanionGroundingFallback,
   stripThinkBlock,
 } from "../../src/lib/companion-grounding.ts";
+import {
+  AI_COMPLETIONS_URL,
+  AiProviderError,
+  aiCompletionBody,
+} from "../../src/lib/ai-provider.ts";
 
 // Execute the actual server functions with mocked transport, without starting
 // the app or spending API credits. AST extraction preserves their real bodies.
@@ -439,7 +450,7 @@ const authenticatedRequest = (path = "/api/billing-status", options = {}) =>
   assert.equal(stripThinkBlock("<think>internal</think>Answer: 42."), "Answer: 42.");
   const context = serverFunctions(["generateGroundedCompanionAnswer"], {
     COMPANION_GROUNDING_SYSTEM_PROMPT,
-    GROUNDED_FALLBACK_ANSWER,
+    selectCompanionGroundingFallback,
     detectHallucination,
   });
   let calls = 0;
@@ -495,7 +506,7 @@ const authenticatedRequest = (path = "/api/billing-status", options = {}) =>
   assert.match(buildTutorTaskInstruction("solve"), /answer first/);
   const context = serverFunctions(["generateGroundedCompanionAnswer"], {
     COMPANION_GROUNDING_SYSTEM_PROMPT,
-    GROUNDED_FALLBACK_ANSWER,
+    selectCompanionGroundingFallback,
     detectHallucination,
   });
   const result = await context.api.generateGroundedCompanionAnswer({
@@ -651,7 +662,7 @@ console.log(
 {
   const context = serverFunctions(["generateGroundedCompanionAnswer"], {
     COMPANION_GROUNDING_SYSTEM_PROMPT,
-    GROUNDED_FALLBACK_ANSWER,
+    selectCompanionGroundingFallback,
     detectHallucination,
   });
   const cases = [
@@ -743,4 +754,148 @@ console.log(
 }
 console.log(
   "PASS actual tutor wrapper preserves authored teaching and blocks unsupported source claims",
+);
+
+// The real one-call wrapper gives precise recovery guidance for screenshot
+// numbers only. It never returns the unsafe draft, retries, or relaxes guards.
+{
+  const context = serverFunctions(["generateGroundedCompanionAnswer"], {
+    COMPANION_GROUNDING_SYSTEM_PROMPT,
+    selectCompanionGroundingFallback,
+    detectHallucination,
+  });
+  const unsupportedDraft = "- T = -1.25 degrees\n- R = 12.5";
+  const supportedDraft = "Temperature change: -1.25 degrees. Survey response: 12.5%.";
+  for (const { provenance, draft, expected } of [
+    {
+      provenance: normalizeProvenance({}, true),
+      draft: unsupportedDraft,
+      expected: SCREENSHOT_NUMBERS_FALLBACK_ANSWER,
+    },
+    {
+      provenance: normalizeProvenance({}, false),
+      draft: unsupportedDraft,
+      expected: GROUNDED_FALLBACK_ANSWER,
+    },
+    {
+      provenance: normalizeProvenance({}, true),
+      draft:
+        'The passage reads "A fabricated research paper found that 97% of students agree with this method."',
+      expected: GROUNDED_FALLBACK_ANSWER,
+    },
+    {
+      provenance: normalizeProvenance({ visiblePageText: supportedDraft }, true),
+      draft: supportedDraft,
+      expected: supportedDraft,
+    },
+  ]) {
+    let providerCalls = 0;
+    const before = detectHallucination(draft, provenance, "Summarize the measurements.");
+    const result = await context.api.generateGroundedCompanionAnswer({
+      provenance,
+      userMessage: "Summarize the measurements.",
+      callModel: async () => {
+        providerCalls++;
+        return draft;
+      },
+    });
+    assert.equal(providerCalls, 1);
+    assert.equal(result.answer, expected);
+    assert.equal(result.blocked, before.flagged);
+    assert.equal(result.regenerated, false);
+    assert.deepEqual(Array.from(result.reasons), before.reasons);
+    if (result.blocked) assert.doesNotMatch(result.answer, /\d/);
+  }
+}
+
+// Execute the screenshot route with its real wrapper and mocked external
+// boundaries. A rejected numerical draft still uses exactly one reservation,
+// one provider generation and one completion, not a hidden extra paid attempt.
+{
+  const reservations = [];
+  const completions = [];
+  let providerCalls = 0;
+  const reservation = { id: "synthetic-reservation" };
+  const context = serverFunctions(
+    [
+      "CompanionUpstreamError",
+      "normalizeCompanionHistory",
+      "resolveCurrentCompanionTask",
+      "companionRequestDiagnostics",
+      "generateGroundedCompanionAnswer",
+      "handleAnalyzeScreenshot",
+    ],
+    {
+      COMPANION_GROUNDING_SYSTEM_PROMPT,
+      COMPANION_PROMPT_TEMPLATE_ID,
+      selectCompanionGroundingFallback,
+      normalizeProvenance,
+      resolveCompanionReference,
+      classifyResolvedCompanionIntent,
+      buildProvenanceBlock,
+      buildTutorTaskInstruction,
+      companionMaxTokens,
+      detectHallucination,
+      stripThinkBlock,
+      AI_COMPLETIONS_URL,
+      AiProviderError,
+      aiCompletionBody,
+      MAX_CHAT_HISTORY: 10,
+      MAX_IMAGE_DATA_URL_CHARS: 2_500_000,
+      MAX_SCREENSHOT_BODY_BYTES: 3_000_000,
+      AI_PROVIDER_TIMEOUT_MS: 45_000,
+      process: { env: { OPENAI_API_KEY: "synthetic-offline-fixture" } },
+      rejectLargeRequest: () => null,
+      parseJsonBody: (request) => request.json(),
+      requireCompanionEntitlement: async () => ({ user: { id: "synthetic-student" } }),
+      enforceUserRateLimit: () => null,
+      aiFeatureEnabled: () => true,
+      reserveProductEntitlementOrResponse: async (options) => {
+        reservations.push(options);
+        return reservation;
+      },
+      completeCapacitySafely: async (...args) => completions.push(args),
+      withAiProviderCapacity: (operation) => operation(),
+      recordProviderSignal: async () => {},
+      fetchWithTimeout: async (url) => {
+        assert.equal(url, AI_COMPLETIONS_URL);
+        providerCalls++;
+        return Response.json({
+          choices: [
+            { message: { content: "- T = -1.25 degrees\n- R = 12.5" }, finish_reason: "stop" },
+          ],
+        });
+      },
+      aiErrorResponse: (error) => {
+        throw error;
+      },
+    },
+  );
+  const response = await context.api.handleAnalyzeScreenshot(
+    new Request("https://synthetic.test/api/analyze-screenshot", {
+      method: "POST",
+      body: JSON.stringify({
+        question: "Summarize the measurements in this screenshot, retaining signs and units.",
+        pageContext: {},
+        imageBase64: "data:image/png;base64,QUJD",
+      }),
+    }),
+  );
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.answer, SCREENSHOT_NUMBERS_FALLBACK_ANSWER);
+  assert.equal(providerCalls, 1);
+  assert.equal(reservations.length, 1);
+  assert.equal(reservations[0].feature, "screenshot");
+  assert.equal(reservations[0].capacityFeature, "browser_companion");
+  assert.equal(completions.length, 1);
+  assert.deepEqual(completions[0], [
+    reservation,
+    "synthetic-student",
+    "succeeded",
+    SCREENSHOT_NUMBERS_FALLBACK_ANSWER,
+  ]);
+}
+console.log(
+  "PASS screenshot-number fallback is specific, fail-closed, and single-generation/single-reservation",
 );

@@ -29,7 +29,6 @@ import { selectPreferredSubscription, stripeStateEntitled } from "./lib/billing-
 import {
   COMPANION_GROUNDING_SYSTEM_PROMPT,
   COMPANION_PROMPT_TEMPLATE_ID,
-  GROUNDED_FALLBACK_ANSWER,
   buildProvenanceBlock,
   buildTutorTaskInstruction,
   classifyResolvedCompanionIntent,
@@ -37,6 +36,7 @@ import {
   detectHallucination,
   normalizeProvenance,
   resolveCompanionReference,
+  selectCompanionGroundingFallback,
   stripThinkBlock,
 } from "./lib/companion-grounding";
 import type { CompanionProvenance } from "./lib/companion-grounding";
@@ -1253,7 +1253,7 @@ async function generateGroundedCompanionAnswer(opts: {
 
   console.warn("Companion grounding guard blocked an unsafe draft:", firstCheck.reasons.join(", "));
   return {
-    answer: GROUNDED_FALLBACK_ANSWER,
+    answer: selectCompanionGroundingFallback(provenance, firstCheck.reasons),
     blocked: true,
     regenerated: false,
     reasons: firstCheck.reasons,

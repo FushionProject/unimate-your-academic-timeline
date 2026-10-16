@@ -1,15 +1,24 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-Readiness updated: October 16, 2026, from checkpoint `0a68da2` plus the reviewed
-temporary-auth-error copy change on `codex/unimate-premium-revival`. The current protected
-Preview runs application commit `72a0e29`. Sandbox purchase → same-panel Pro
-unlock → period-end revocation passed on the earlier `5694bdb` deployment;
-that proof does not automatically certify the new deployment or extension.
-Screenshot/AI/save/reload evidence belongs to the historical deployments below,
-not automatically to the current Preview. Full evidence: [LAUNCH.md](../LAUNCH.md)
+Readiness updated: October 16, 2026, from checkpoint `8c1c0ac` on
+`codex/unimate-premium-revival`. The current protected Preview runs application
+commit `076c427`. Sandbox purchase → same-panel Pro unlock → period-end
+revocation was reverified October 16 on `72a0e29` with the latest installed
+Companion; that proof does not automatically certify the newer website deployment.
+Screenshot/AI/save/readback/reload passed October 16 on the current `076c427`
+Preview using the owner Pro session and fictional coursework. Full evidence: [LAUNCH.md](../LAUNCH.md)
 and [Stripe sandbox manual tests](../STRIPE_SANDBOX_MANUAL_TESTS.md).
 No custom domain was assigned and nothing was submitted to or published in the
 Chrome Web Store.
+
+October 16 Store-readiness recheck: `npm run companion:verify:v2` passed,
+including synthetic production-style ZIP creation, all 13 allow-listed entries,
+root manifest, consent/configuration checks, rejection of unsafe settings and
+nonregular inputs, and five runtime repeats. Only synthetic public configuration
+was packaged by the test. No real local credentials were inspected and no
+production-configured ZIP, Store upload, or developer account was created.
+Current official requirements were rechecked for privacy, minimum permissions,
+Manifest V3 code, images, reviewer instructions, and distribution visibility.
 
 Latest October 16 local follow-up: temporary authentication outages no longer
 claim the student's session ended; only a definitive `AUTH_REQUIRED` rejection
@@ -46,7 +55,12 @@ tests passed; these public-release gates remain:
    pages already implemented at `/privacy`, `/terms`, and `/support`.
 2. Confirm the legal entity/developer name, support mailbox delivery, data-retention periods,
    subprocessors, deletion process, and the AI provider's launch-environment data
-   terms with the product owner or counsel.
+   terms with the product owner or counsel. The current `/privacy` copy does not
+   yet contain an affirmative Chrome Web Store Limited Use statement or the
+   policy's human-access restrictions. Verify that actual business/provider
+   practices meet those commitments before approving and adding the statement.
+   Approve the effective date too; the shared legal-page component currently
+   displays August 12, 2026 despite later policy/support edits.
 3. Configure and verify a production HTTPS `UNIMATE_API_URL`. The example config
    defaults to `http://localhost:8080`, which is blocked from Store packaging.
    No private configuration was read or production ZIP generated in this audit.
@@ -55,7 +69,9 @@ tests passed; these public-release gates remain:
    configured origin. The owner bought `askunimate.com`, but its public website
    and legal-page reachability remain launch gates.
 4. Create current 1280x800 store screenshots from the production-configured
-   extension and provide a 440x280 promotional tile.
+   extension and provide a 440x280 promotional tile. At least one screenshot is
+   required; five are planned below. Icons alone do not satisfy the listing's
+   screenshot and promotional-image requirements.
 5. Supply the approved listing URL as `VITE_COMPANION_STORE_URL`. The implemented
    `/companion-setup` flow already checks Pro access and displays the installation
    action only for an active Pro account and a syntactically valid Store detail
@@ -73,13 +89,45 @@ tests passed; these public-release gates remain:
    alone is not enforcement, and the provider spending cap was not exhausted in testing.
 9. Verify the production billing lifecycle, including purchase, renewal,
    cancellation, and entitlement removal. An existing Pro account's successful
-   study request does not establish these behaviors. The October 14 core hosted
-   sandbox flow now passes, but uses a signed local relay, not a direct production
+   study request does not establish these behaviors. The October 16 core hosted
+   sandbox flow passes, but uses a signed local relay, not a direct production
    webhook. Local renewal/refund/dispute evidence remains separate.
+10. Confirm the publisher's Chrome Web Store account and prepare a dedicated,
+    empty, email-confirmed Pro reviewer account and the private test instructions
+    below. Reviewers must be able to test the paid features without paying or
+    receiving the owner's Vercel/account credentials. No such account or Store
+    submission is claimed by this document.
 
 ## Protected hosted-test progress
 
-- **Current protected Preview — October 15:**
+- **Current protected Preview — October 16:**
+  `https://unimate-mewctpqwm-resumejuice-s-projects.vercel.app/`, deployment
+  `dpl_8BxeAfPZ3acSefc5LDxGCeEXWtV5`, application source `076c427`, `READY`,
+  Preview (`target:null`), no aliases. Anonymous access still redirects to
+  Vercel; protected health, signup-disabled, unsigned Companion denial, and
+  page HTML smoke checks passed. Hosted expired/consumed-confirmation-link UI,
+  explicit resend acknowledgement, and preserved Pro sign-in destination passed.
+  The three approved email callbacks now use this origin. Confirmation is
+  required and public signup remains closed. Persistent protection bypasses and
+  Production environment variables remain zero, automatic custom-domain
+  assignment is off, and live Stripe mode is false. A fresh installed Companion
+  test also passed consent, Pro access, active-tab capture, real AI answer,
+  Supabase save/readback, and restored history after reload. The durable ledger
+  recorded one completed request and zero errors. This is not a fresh full
+  purchase-flow test or exhaustive tutor-quality certification on this deployment.
+- **Fresh October 16 billing run on the preceding Preview:** website `72a0e29`
+  plus the latest installed Companion passed Free revision 53 → Pro revision 56
+  after real sandbox Checkout and signed hosted-handler events. The same open
+  panel/session displayed its composer. Portal cancellation kept access through
+  the paid period; synthetic clock expiry persisted Free revision 61 before
+  return and the same panel removed the composer. Final state was Free revision
+  62, Restart Pro, zero active subscriptions/open Checkouts, and five canceled
+  synthetic subscriptions. Existing return-to-page focus behavior was exercised,
+  not passive push. There were zero AI requests, captures, or page extractions;
+  this is entitlement evidence, not answer-quality or draft-preservation proof.
+  Owned test browsers and the signed local relay exited cleanly. See the exact
+  source hash and lifecycle record in `../STRIPE_SANDBOX_MANUAL_TESTS.md`.
+- **Historical protected Preview — October 15:**
   `https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app/`, deployment
   `dpl_E4Wf1fi7mKEYFd7pwPFMpRWVMt3A`, application source `72a0e29`, `READY`,
   Preview (`target:null`), no aliases. Signed-out health, signup-disabled,
@@ -94,7 +142,7 @@ tests passed; these public-release gates remain:
   credentials and Production environment variables remain zero; unauthenticated
   root access redirects to Vercel. Sandbox billing configuration is Preview-only
   and live mode is false.
-- **Same continuously open panel/session:** genuine sandbox purchase and signed
+- **Historical October 14 same continuously open panel/session:** genuine sandbox purchase and signed
   hosted-handler events produced persisted Pro revision 46 before app return;
   the installed Companion displayed its composer. Real Portal cancellation
   preserved Pro until the exact synthetic clock reached period end. The deletion
@@ -404,7 +452,10 @@ internal pages, the Chrome Web Store, and some browser-owned documents.
 ### Screenshot plan
 
 Use 1280x800 full-bleed PNG or JPEG screenshots with real current UI and no
-student-identifying or copyrighted course content.
+student-identifying or copyrighted course content. Chrome also accepts 640x400;
+1280x800 is preferred. Supply at least one and at most five screenshots, plus
+the separate required 440x280 promotional image. Synthetic installed-test proof
+is not automatically approved production Store artwork.
 
 1. An ordinary study page with the closed mascot and open Companion panel.
 2. A legible practice problem with a concise answer-first response.
@@ -414,6 +465,67 @@ student-identifying or copyrighted course content.
 
 Do not show passwords, tokens, real grades, student names, private LMS data, or
 claims such as “unlimited” unless production limits substantiate them.
+
+### Permission explanation for the listing
+
+- Website access lets the mascot stay available across ordinary authorized pages
+  and allows the one-time visible-tab capture after Send. It is not permission
+  to continuously record or collect unrelated browsing activity.
+- Storage keeps the sign-in session and consent choice on the device. A temporary
+  browser-session recovery record can retain an unsaved question/answer; it does
+  not retain screenshots or page samples and clears on sign-out.
+- Scripting loads only the packaged Companion code when installation, an update,
+  or recovery requires reconnecting it to an eligible page. UniMate does not
+  download or execute extension code from the AI service.
+
+Keep this explanation and the dashboard permission justifications aligned with
+the actual manifest. Broad host access remains review-sensitive, not preapproved.
+
+## Reviewer access plan — not yet provisioned
+
+Chrome provides a private **Test instructions** field for paid/account-gated
+extensions. Prepare these instructions for that field, not the public listing.
+The field itself is optional; usable full-feature access is an important review
+readiness gate for this Pro-only product.
+
+Before submission, the owner must approve the reviewer environment and prepare
+an empty, confirmed-email account with bounded Pro access through an approved
+test entitlement path. Do not use an owner account, copy a live student's data,
+share Vercel credentials, edit profile flags casually, or ask the reviewer to
+purchase Pro. Keep credentials out of Git and supply them only in the Store's
+private reviewer fields. The current owner-protected Preview cannot be assumed
+reachable by an external reviewer; resolve that access separately without
+removing its protection or launching the public site during this readiness work.
+
+Proposed walkthrough, to verify against the exact submitted ZIP:
+
+1. Install the review version and open an ordinary HTTPS page containing a
+   harmless synthetic study example, such as `3x + 5 = 20`. Do not use Chrome's
+   internal pages, the Web Store, or real coursework/student records.
+2. Open the mascot and inspect the page-sharing notice. Choose **Not now** once:
+   the panel closes without a capture or AI request. Open it again and choose
+   **Allow and continue** to proceed.
+3. Choose **Sign in securely** and use the separately supplied reviewer account
+   in the extension-owned window. Return to the page; the Pro composer should
+   appear. A separately supplied Free account, if approved, should instead show
+   the upgrade gate and must not capture or send AI requests.
+4. Ask for a hint without the final answer, then ask for the worked solution.
+   Verify helpful responses use the visible example; answers must not pretend
+   to know an unseen answer key. Capture occurs only after each explicit Send.
+5. Reopen the panel and inspect the saved conversation in Ask UniMate using the
+   same account. Select that conversation for the browser and check the account
+   and conversation boundaries; only synthetic messages belong in this account.
+6. Open **Page sharing**, pause sharing, and reopen the panel. It should request
+   permission again before another study request. Sign out and confirm the
+   account's cached history and unsaved recovery state are no longer displayed.
+7. Review the public Privacy, Terms, and Support links and the restricted-page
+   guidance. Record the extension version, backend origin, verified test date,
+   and any restrictions in the private instructions.
+
+Cancellation/expiry is tested separately with the sandbox clock; do not ask a
+Store reviewer to use the owner's billing fixture, live card, or privileged keys.
+After review, revoke only the dedicated reviewer access using the approved
+account process. Keep a bounded support/contact route available during review.
 
 ## Public Privacy Policy draft inputs
 
@@ -436,6 +548,12 @@ The final policy must be reviewed and published by the owner. It should state:
   business actually follows;
 - treatment of minors, jurisdiction, effective date, and change notification;
 - Chrome Web Store Limited Use compliance in language counsel approves.
+
+The present public-page source is a draft, not evidence that these commitments
+are complete. In particular, add the required affirmative Limited Use statement
+and human-access limits only after the owner verifies they match actual service
+and provider practices. Do not infer retention periods or provider restrictions
+from the extension's local storage behavior.
 
 Do not state that screenshots are never retained until server logs, hosting,
 observability, and the AI provider's retention settings have been verified. The
@@ -521,20 +639,28 @@ screenshots/tile are still pending and must use synthetic, authorized coursework
       The packager validates its allow-listed entries and preserves the previous
       release archive if a replacement fails validation. Automated packaging
       tests use synthetic public configuration, never real credentials.
-- [ ] Upload privately/unlisted first if that matches the launch plan; do not
-      publish until privacy, support, listing, and smoke-test blockers are closed.
+- [ ] Obtain explicit approval before creating/submitting any Store item. If a
+      restricted beta is approved, choose **Private** with named trusted testers.
+      **Unlisted is not private**: anyone with its URL can install it. All three
+      visibility options still undergo review and the same policy requirements.
+      No upload or publication is authorized by passing this checklist.
 
 ## Current official references
 
-Version, listing and disclosure guidance rechecked October 14, 2026. These links
+Version, listing and disclosure guidance rechecked October 16, 2026. These links
 support the requirements; a passing local test is not Store approval.
 
 - [Chrome manifest version rules](https://developer.chrome.com/docs/extensions/reference/manifest/version)
 - [Chrome Web Store Program Policies](https://developer.chrome.com/docs/webstore/program-policies/policies)
 - [Disclosure Requirements](https://developer.chrome.com/docs/webstore/program-policies/disclosure-requirements)
 - [User Data FAQ and Limited Use](https://developer.chrome.com/docs/webstore/program-policies/user-data-faq)
+- [Limited Use restrictions and required affirmative disclosure](https://developer.chrome.com/docs/webstore/program-policies/limited-use)
+- [Manifest V3 code requirements](https://developer.chrome.com/docs/webstore/program-policies/mv3-requirements)
 - [Declare permissions](https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions)
 - [Manifest icons](https://developer.chrome.com/docs/extensions/reference/manifest/icons)
 - [Create a quality listing](https://developer.chrome.com/docs/webstore/best-listing)
 - [Complete listing information](https://developer.chrome.com/docs/webstore/cws-dashboard-listing/)
 - [Prepare an extension package](https://developer.chrome.com/docs/webstore/prepare)
+- [Required Store images](https://developer.chrome.com/docs/webstore/images)
+- [Private reviewer test instructions](https://developer.chrome.com/docs/webstore/cws-dashboard-test-instructions)
+- [Private, unlisted, and public distribution](https://developer.chrome.com/docs/webstore/cws-dashboard-distribution)

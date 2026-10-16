@@ -80,7 +80,7 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [ ] Freeze and record the exact new release commit and rollback point
 - [x] Protected Preview purchase unlocks the same open Companion panel/session (reverified October 16)
 - [x] Protected Preview period-end cancellation revokes the same open Companion panel/session (reverified October 16)
-- [ ] Verify the current protected Preview's live Companion study flow end to end
+- [x] Verify protected Preview `076c427`'s live Companion study flow end to end (October 16)
 - [ ] Complete the remaining real Stripe sandbox lifecycle matrix
 - [x] Verify custom SMTP delivery and private-preview recovery-link landing (October 16)
 - [x] Owner completes isolated test-account password update; saved state and recovery cleanup verified (October 16)
@@ -88,6 +88,64 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [ ] Verify ordinary new-student signup when public registration is deliberately enabled
 - [x] Remove the vulnerable development dependency chain and verify both build targets (October 14)
 - [ ] Complete production-origin, legal, support, and Chrome Web Store gates
+
+### Live tutor and installed Companion recheck — October 16
+
+On protected Preview `076c427` (`unimate-mewctpqwm-resumejuice-s-projects.vercel.app`),
+the existing owner Pro session completed the real installed-extension flow:
+consent/composer → capture of a fictional local biology page → hosted screenshot
+handler 200 → real provider answer → Supabase insert 201 and readback 200 →
+history restored after reload. The answer addressed the visible question
+correctly and concisely. One completed Pro Companion request was recorded in the
+durable ledger, with zero provider errors (235 estimated input and 33 estimated
+output tokens; these are accounting estimates, not provider billing). Only the
+new synthetic exchange was inspected; existing chat content was not printed or
+sent as model history. The isolated browser and local fixture server exited.
+
+The first attempt stopped before AI use because Chromium had disabled the local
+unpacked extension with development mode off. Enabling development mode and this
+extension only inside the existing isolated test profile restored the runner.
+No normal-browser setting, account entitlement, deployment protection, or
+production service was changed.
+
+Separate bounded provider evaluation used production request assembly and only
+fictional coursework: the original 11 cases passed with 11,297 provider-reported
+tokens. Five additional edge cases used 5,176 tokens: exact quote/source URL,
+missing citation metadata, screenshot-over-stale-DOM arithmetic, and a gentle
+quiz correction passed. The screenshot-only measurement case **failed**: the
+draft omitted a percent unit and the existing grounding detector correctly
+blocked its unsupported numbers. This remains an image-only table-reading
+limitation, not a passing answer-quality claim. There were no retries or database
+writes in either evaluation; browser/auth/quota/persistence coverage belongs to
+the separate installed test above. Human review is still required, and single
+runs do not establish model reliability across every subject.
+
+Source fix `a49a6c5` permits complete literal quotation lines only when their text
+occurs in one supplied content field. Fabricated or mixed passages, altered text,
+metadata-only evidence, and unsupported numbers remain blocked. Independent
+review and positive/adversarial tests passed, as did the full offline suite,
+typecheck, lint (eight existing warnings, no errors), secret scan, and the complete
+[GitHub verification and both builds](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38967504272).
+This source fix was not present in the `076c427` hosted test above.
+
+Follow-up recovery now selects a specific, number-free message for screenshot
+drafts blocked solely for unsupported numbers: it asks for highlighted/pasted
+values with signs and units. Other or mixed guard failures retain the generic
+message. Offline execution of the real screenshot handler confirms one capacity
+reservation, one provider call, one completion, and no rejected numeric output
+in the response. This improves safe recovery; it does **not** turn the failed
+live measurement case into a pass or add OCR validation. Both provider-evaluation
+assembly modes and the 26 edge-checker fixtures now run in normal offline CI
+without credentials or network requests.
+
+The installed synthetic browser suite passed 28 scenarios with ten mocked AI
+requests, including saved-answer recovery, account/Pro isolation, small windows,
+keyboard use, and 200% zoom. Test screenshot capture now waits for the panel's
+animation to settle; consent and answer captures were visually checked. These
+are test evidence, not approved Store artwork. Chrome Store readiness now records
+private-versus-unlisted distribution, reviewer access instructions, and explicit
+remaining policy, publisher, production-origin, support, and artwork gates.
+Nothing was submitted to the Store, made public, or charged through live Stripe.
 
 ### Source safety follow-up — October 14 (website deployed October 15)
 

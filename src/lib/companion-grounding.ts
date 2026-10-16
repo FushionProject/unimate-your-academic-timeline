@@ -85,6 +85,22 @@ Use plain readable math symbols and simple equations. Avoid raw LaTeX delimiters
 export const GROUNDED_FALLBACK_ANSWER =
   "I couldn’t verify the page-specific details in that response. Please paste the relevant text or capture that section again.";
 
+export const SCREENSHOT_NUMBERS_FALLBACK_ANSWER =
+  "I couldn’t verify the exact numbers and units in that response. Please highlight or paste the relevant values, including signs and units, so I can help accurately.";
+
+/** Choose recovery guidance without exposing the rejected draft or relaxing
+ * its evidence checks. Mixed/unknown reasons retain the general fallback. */
+export function selectCompanionGroundingFallback(
+  provenance: CompanionProvenance,
+  reasons: readonly string[],
+): string {
+  return provenance.hasScreenshot &&
+    reasons.length > 0 &&
+    reasons.every((reason) => reason === "unsupported_number")
+    ? SCREENSHOT_NUMBERS_FALLBACK_ANSWER
+    : GROUNDED_FALLBACK_ANSWER;
+}
+
 export type CompanionIntent =
   "solve" | "answer" | "explain" | "summarize" | "flashcard" | "quiz-me" | "general-help";
 export const COMPANION_PROMPT_TEMPLATE_ID = "screenshot-first-tutor-v2";
