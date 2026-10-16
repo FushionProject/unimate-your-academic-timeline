@@ -1,6 +1,6 @@
 # UniMate Browser Companion
 
-Implementation notes updated October 16, 2026, including post-`437e7b3` hardening.
+Implementation notes updated October 16, 2026, including post-`ffbae91` checks.
 The current protected Preview runs application commit `561ecc2` at
 `https://unimate-rvrhmln07-resumejuice-s-projects.vercel.app/`. Protected smoke
 checks passed. The live installed study
@@ -17,11 +17,19 @@ Pro-review intent but left the Free account's Companion locked. The test session
 were signed out. A fresh owner-approved support-Gmail confirmation passed:
 the owner reported receipt and a click landing on Pro review, and server readback
 confirmed activation at 17:10 CDT while the account stayed Free with no billing
-customer. Inbox versus Spam placement remains unreported. With owner approval on
-October 16, the Site URL and exactly three
+customer. The owner also confirmed delivery to Gmail's Inbox, not Spam. With owner
+approval on October 16, the Site URL and exactly three
 allowed paths (`/dashboard`, `/upgrade`, `/reset-password`) were moved to the
 current `rvrhmln07` Preview; the previous entries were removed and persistence
 verified after reload. Signup remains closed and confirmation required.
+
+Post-`ffbae91` local configuration generation rejects unsafe file destinations
+and uses atomic replacement to preserve the prior config on failed writes.
+Synthetic tests cover links, special files, partial writes and rename failures.
+Two initial-auth outage scenarios were added to the installed harness, but their
+browser execution is pending explicit approval; its HTTP fixture passes offline.
+Full offline tests, typecheck, lint (eight existing warnings) and secret scan
+passed. No real configuration, deployment, billing or database state was changed.
 
 Post-`437e7b3` extension-only hardening fixes initial session-validation outage
 classification and Store-package URL canonicalization. Full offline tests,

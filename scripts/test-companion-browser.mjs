@@ -36,6 +36,7 @@ let failSave = false;
 let providerUnavailable = false;
 let signInFailure = null;
 let refreshFailureStatus = null;
+let userValidationFailureStatus = null;
 let releaseReply;
 let replyBarrier = null;
 const calls = [];
@@ -59,10 +60,11 @@ const server = http.createServer(async (req, res) => {
     method: req.method,
     grantType: url.searchParams.get("grant_type"),
   });
-  const json = (data, status = 200) => {
+  const json = (data, status = 200, headers = {}) => {
     res.writeHead(status, {
       "content-type": "application/json",
       "access-control-allow-origin": "*",
+      ...headers,
     });
     res.end(JSON.stringify(data));
   };
@@ -86,7 +88,15 @@ const server = http.createServer(async (req, res) => {
       user: student,
     });
   }
-  if (url.pathname === "/auth/v1/user") return json(student);
+  if (url.pathname === "/auth/v1/user") {
+    if (userValidationFailureStatus)
+      return json(
+        { error: "Synthetic user validation outage" },
+        userValidationFailureStatus,
+        userValidationFailureStatus === 429 ? { "retry-after": "30" } : {},
+      );
+    return json(student);
+  }
   if (url.pathname === "/auth/v1/logout") return json({});
   if (url.pathname === "/api/billing-status") return json({ isPro });
   if (url.pathname === "/rest/v1/companion_preferences")
@@ -912,6 +922,129 @@ try {
   await shadowCall(".um-mascot", "click", "", otherCdp);
   await until(() => shadowCall(".um-input", "visible", "", otherCdp), "second tab chat");
   await page.bringToFront();
+
+  // These failures occur on the first user-validation GET, with an unexpired
+  // token. The refresh-only scenarios below cannot catch lost auth metadata or
+  // Retry-After in this distinct path. Observe real Send preflight and panel
+  // copy without issuing any capture, extraction, provider call or new grant.
+  await refreshHistory();
+  await worker.evaluate(async (url) => {
+    const tab = (await chrome.tabs.query({})).find((item) => item.url === url);
+    if (!tab) throw new Error("Synthetic auth-validation tab not found");
+    const { unimateCompanionSession: session } =
+      await chrome.storage.local.get("unimateCompanionSession");
+    if (!session || session.expires_at * 1000 <= Date.now() + 60_000)
+      throw new Error("Initial auth validation needs an unexpired synthetic session");
+    const probe = {
+      captures: 0,
+      originalCapture: chrome.tabs.captureVisibleTab,
+      sessionSnapshot: JSON.stringify(session),
+    };
+    globalThis.__unimateAuthValidationProbe = probe;
+    chrome.tabs.captureVisibleTab = (...args) => {
+      probe.captures++;
+      return probe.originalCapture.apply(chrome.tabs, args);
+    };
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const probe = { extractions: 0, extractor: globalThis.UniMateContextExtractor };
+        globalThis.__unimateAuthValidationProbe = probe;
+        globalThis.UniMateContextExtractor = {
+          ...probe.extractor,
+          extractRenderedContext(...args) {
+            probe.extractions++;
+            return probe.extractor.extractRenderedContext(...args);
+          },
+        };
+      },
+    });
+  }, page.url());
+  const authValidationWork = (restore = false) =>
+    worker.evaluate(
+      async ({ url, restore }) => {
+        const tab = (await chrome.tabs.query({})).find((item) => item.url === url);
+        const [content] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          args: [restore],
+          func: (restore) => {
+            const probe = globalThis.__unimateAuthValidationProbe;
+            if (restore) {
+              globalThis.UniMateContextExtractor = probe.extractor;
+              delete globalThis.__unimateAuthValidationProbe;
+            }
+            return probe.extractions;
+          },
+        });
+        const probe = globalThis.__unimateAuthValidationProbe;
+        const { unimateCompanionSession: session } =
+          await chrome.storage.local.get("unimateCompanionSession");
+        const result = {
+          captures: probe.captures,
+          extractions: content.result,
+          sessionUnchanged: JSON.stringify(session) === probe.sessionSnapshot,
+        };
+        if (restore) {
+          chrome.tabs.captureVisibleTab = probe.originalCapture;
+          delete globalThis.__unimateAuthValidationProbe;
+        }
+        return result;
+      },
+      { url: page.url(), restore },
+    );
+  try {
+    for (const status of [429, 503]) {
+      const draft = `Keep my draft during initial auth ${status}`;
+      await shadowCall(".um-input", "fill", draft);
+      const savedHistory = await shadowCall(".um-messages");
+      const beforeAi = aiRequests.length;
+      const beforeGrants = calls.filter((call) => call.path === "/auth/v1/token").length;
+      const beforeUserChecks = calls.filter((call) => call.path === "/auth/v1/user").length;
+      userValidationFailureStatus = status;
+      await page.keyboard.press("Enter");
+      await until(
+        async () =>
+          calls.filter((call) => call.path === "/auth/v1/user").length > beforeUserChecks &&
+          Boolean(await shadowCall(".um-status.error")),
+        `initial user validation ${status} error displayed`,
+      );
+      const error = await shadowCall(".um-status.error");
+      assert.match(error, /Your question is kept here/);
+      assert.match(error, status === 429 ? /30 seconds/ : /couldn.t verify.*session/i);
+      assert.doesNotMatch(error, /ended|expired|sign in|password|upgrade/i);
+      assert.equal(await shadowCall(".um-input", "value"), draft);
+      assert.equal(await shadowCall(".um-send", "attribute", "disabled"), null);
+      assert.equal(await shadowCall(".um-messages"), savedHistory);
+      assert.equal(await shadowCall(".um-signin"), null);
+      assert.equal(await shadowCall(".um-upgrade"), null);
+      assert.equal(aiRequests.length, beforeAi);
+      assert.equal(calls.filter((call) => call.path === "/auth/v1/token").length, beforeGrants);
+      assert.deepEqual(await authValidationWork(), {
+        captures: 0,
+        extractions: 0,
+        sessionUnchanged: true,
+      });
+      await savePanelScreenshot(`auth-validation-${status}.png`);
+      userValidationFailureStatus = null;
+      await refreshHistory();
+      assert.equal(await shadowCall(".um-status.error"), null);
+      assert.equal(await shadowCall(".um-input", "value"), draft);
+      assert.equal(await shadowCall(".um-messages"), savedHistory);
+      assert.equal(aiRequests.length, beforeAi);
+      assert.equal(calls.filter((call) => call.path === "/auth/v1/token").length, beforeGrants);
+      assert.deepEqual(await authValidationWork(), {
+        captures: 0,
+        extractions: 0,
+        sessionUnchanged: true,
+      });
+      pass(
+        `Initial auth ${status} preserves session/history/draft and shows actionable recovery without capture or AI`,
+      );
+    }
+  } finally {
+    userValidationFailureStatus = null;
+    await authValidationWork(true);
+  }
 
   // Exercise the actual installed worker's refresh path, not a mocked UI
   // message. A transient failure must not be confused with credential expiry.

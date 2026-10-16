@@ -1,6 +1,6 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-Readiness updated: October 16, 2026, including post-`437e7b3` hardening on
+Readiness updated: October 16, 2026, including post-`ffbae91` checks on
 `codex/unimate-premium-revival`. The current protected Preview runs application
 commit `561ecc2`. Sandbox purchase → same-panel Pro unlock → period-end
 revocation was reverified October 16 on `72a0e29` with the latest installed
@@ -10,6 +10,16 @@ Preview using the owner Pro session and fictional coursework. Full evidence: [LA
 and [Stripe sandbox manual tests](../STRIPE_SANDBOX_MANUAL_TESTS.md).
 No custom domain was assigned and nothing was submitted to or published in the
 Chrome Web Store.
+
+Latest source-only follow-up: configuration generation now rejects linked or
+special-file destinations and linked extension directories. Atomic replacement
+preserves the last working config on partial-write/rename failures and avoids
+overwriting unrelated hardlinked files. All new cases use synthetic fixtures.
+Two installed initial-auth 429/503 recovery scenarios are prepared but not yet
+executed; their HTTP fixture passes offline. Full offline tests, five runtime
+repeats, typecheck, lint and secret scan passed. Publisher-dashboard inspection
+reached Google sign-in, so publisher registration remains unverified. No terms,
+fees, account creation, upload, submission or public release was performed.
 
 October 16 Store-readiness recheck: `npm run companion:verify:v2` passed,
 including synthetic production-style ZIP creation, all 13 allow-listed entries,
@@ -135,8 +145,8 @@ tests passed; these public-release gates remain:
   out. The fresh owner-approved support-Gmail confirmation passed at 17:10 CDT:
   owner-reported receipt and Pro-review landing were corroborated by server
   confirmation readback. The account stayed Free with no billing customer.
-  Inbox versus Spam placement was not reported; ordinary public signup remains
-  closed. See `../LAUNCH.md` for exact scope.
+  The owner subsequently confirmed Inbox delivery, not Spam; ordinary public
+  signup remains closed. See `../LAUNCH.md` for exact scope.
 - **Previous protected Preview — October 16:**
   `https://unimate-mewctpqwm-resumejuice-s-projects.vercel.app/`, deployment
   `dpl_8BxeAfPZ3acSefc5LDxGCeEXWtV5`, application source `076c427`, `READY`,

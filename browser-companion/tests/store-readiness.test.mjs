@@ -302,6 +302,85 @@ try {
     VITE_SUPABASE_ANON_KEY: "sb_publishable_fixture_only",
     VITE_UNIMATE_API_URL: "https://unimate.site",
   };
+  // Configuration generation must preserve unrelated files just as packaging
+  // does. These are synthetic paths and values, never the developer's config.
+  const configSentinel = path.join(fixture, "config-write-sentinel.txt");
+  const sentinelValue = "UNRELATED_SYNTHETIC_CONTENT";
+  fs.writeFileSync(configSentinel, sentinelValue);
+  fs.unlinkSync(configFile);
+  fs.symlinkSync(configSentinel, configFile);
+  const rejectedConfigLink = spawnSync(process.execPath, [generator], {
+    cwd: fixture,
+    encoding: "utf8",
+    timeout: 5000,
+  });
+  assert.equal(rejectedConfigLink.error, undefined);
+  assert.notEqual(rejectedConfigLink.status, 0, "Never write through a linked config file");
+  assert.equal(fs.readFileSync(configSentinel, "utf8"), sentinelValue);
+  assert.ok(fs.lstatSync(configFile).isSymbolicLink(), "Keep the owner's link untouched");
+  fs.unlinkSync(configFile);
+  // Missing link targets must not be created, and special files must not hang.
+  const missingTarget = path.join(fixture, "missing-config-target.txt");
+  fs.symlinkSync(missingTarget, configFile);
+  assert.notEqual(spawnSync(process.execPath, [generator], { cwd: fixture }).status, 0);
+  assert.equal(fs.existsSync(missingTarget), false);
+  fs.unlinkSync(configFile);
+  execFileSync("mkfifo", [configFile]);
+  const rejectedConfigFifo = spawnSync(process.execPath, [generator], {
+    cwd: fixture,
+    encoding: "utf8",
+    timeout: 5000,
+  });
+  assert.equal(rejectedConfigFifo.error, undefined, "Config devices must reject without hanging");
+  assert.notEqual(rejectedConfigFifo.status, 0);
+  assert.ok(fs.lstatSync(configFile).isFIFO());
+  fs.unlinkSync(configFile);
+  fs.mkdirSync(configFile);
+  assert.notEqual(spawnSync(process.execPath, [generator], { cwd: fixture }).status, 0);
+  assert.ok(fs.lstatSync(configFile).isDirectory());
+  fs.rmdirSync(configFile);
+  // Atomic replacement must not alter another name for the original file.
+  fs.linkSync(configSentinel, configFile);
+  execFileSync(process.execPath, [generator], { cwd: fixture, stdio: "pipe" });
+  assert.equal(fs.readFileSync(configSentinel, "utf8"), sentinelValue);
+  assert.equal(fs.readFileSync(configFile, "utf8"), generatedConfig);
+  const movedExtension = path.join(fixture, "moved-extension");
+  fs.renameSync(extension, movedExtension);
+  fs.symlinkSync(movedExtension, extension);
+  assert.notEqual(spawnSync(process.execPath, [generator], { cwd: fixture }).status, 0);
+  assert.equal(fs.readFileSync(configFile, "utf8"), generatedConfig);
+  fs.unlinkSync(extension);
+  fs.renameSync(movedExtension, extension);
+  // Inject local I/O failures only in the fixture child process. The old config
+  // must survive both a partial write and a failed final rename.
+  const ioFailureHook = path.join(fixture, "config-write-failure.cjs");
+  for (const operation of ["writeFileSync", "renameSync"]) {
+    fs.writeFileSync(
+      ioFailureHook,
+      `const fs = require("node:fs");
+const original = fs.${operation};
+fs.${operation} = function (file, ...args) {
+  if (String(file).endsWith("/config.local.js")) {
+    ${operation === "writeFileSync" ? 'original(file, "SYNTHETIC_PARTIAL_CONFIG", args[1]);' : ""}
+    throw new Error("SYNTHETIC_CONFIG_IO_FAILURE");
+  }
+  return original(file, ...args);
+};\n`,
+    );
+    const rejectedWrite = spawnSync(process.execPath, ["--require", ioFailureHook, generator], {
+      cwd: fixture,
+      encoding: "utf8",
+    });
+    assert.notEqual(rejectedWrite.status, 0);
+    assert.match(rejectedWrite.stderr, /SYNTHETIC_CONFIG_IO_FAILURE/);
+    assert.equal(fs.readFileSync(configFile, "utf8"), generatedConfig);
+    assert.equal(
+      fs.readdirSync(extension).some((name) => name.startsWith(".companion-config-")),
+      false,
+      "Remove failed staging output without touching the previous config",
+    );
+  }
+  fs.writeFileSync(configFile, generatedConfig);
   const anonFixture = `header.${Buffer.from(JSON.stringify({ role: "anon" })).toString("base64url")}.signature`;
   for (const overrides of [
     { VITE_SUPABASE_ANON_KEY: anonFixture },

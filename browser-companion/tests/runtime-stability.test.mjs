@@ -6,6 +6,65 @@ const backgroundSource = fs.readFileSync(new URL("../background.js", import.meta
 const contentSource = fs.readFileSync(new URL("../content.js", import.meta.url), "utf8");
 const manifest = JSON.parse(fs.readFileSync(new URL("../manifest.json", import.meta.url), "utf8"));
 
+// Check the installed-browser fixture without importing its Playwright entry
+// point, opening a socket, reading credentials or launching a browser. This
+// verifies the HTTP failure contract; it does not substitute for the installed
+// Send/preflight/panel scenarios in that harness.
+{
+  const browserHarness = fs.readFileSync(
+    new URL("../../scripts/test-companion-browser.mjs", import.meta.url),
+    "utf8",
+  );
+  const start = browserHarness.indexOf("const student =");
+  const end = browserHarness.indexOf("\nawait new Promise((resolve) => server.listen");
+  assert.ok(start >= 0 && end > start, "installed fixture boundaries must remain explicit");
+  let handleRequest;
+  const fixture = vm.createContext({
+    URL,
+    http: {
+      createServer(handler) {
+        handleRequest = handler;
+        return {};
+      },
+    },
+  });
+  vm.runInContext(
+    `${browserHarness.slice(start, end)}
+globalThis.setUserValidationFailure = (status) => { userValidationFailureStatus = status; };`,
+    fixture,
+  );
+  const requestUser = async () => {
+    const response = {};
+    await handleRequest(
+      { url: "/auth/v1/user", method: "GET", async *[Symbol.asyncIterator]() {} },
+      {
+        writeHead(status, headers) {
+          response.status = status;
+          response.headers = headers;
+        },
+        end(body) {
+          response.body = JSON.parse(body);
+        },
+      },
+    );
+    return response;
+  };
+  for (const status of [null, 429, 503, null]) {
+    fixture.setUserValidationFailure(status);
+    const response = await requestUser();
+    assert.equal(response.status, status || 200);
+    assert.equal(response.headers["content-type"], "application/json");
+    assert.equal(response.headers["access-control-allow-origin"], "*");
+    assert.equal(response.headers["retry-after"], status === 429 ? "30" : undefined);
+    if (status) {
+      assert.deepEqual(response.body, { error: "Synthetic user validation outage" });
+    } else {
+      assert.equal(response.body.id, "10000000-0000-4000-8000-000000000001");
+      assert.equal(response.body.email, "pro@example.test");
+    }
+  }
+}
+
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
     status,

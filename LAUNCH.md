@@ -49,7 +49,7 @@ The later operator-tooling checkpoint `e68f55d` also passed
 that tooling was not redeployed as application code.
 The purchase-only evidence checkpoint `76d5031` also passed
 [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38620047237).
-The current deployed source `72a0e29eb6cf23f8f7fbf58835959af6f24d4c28` passed its
+The earlier deployed source `72a0e29eb6cf23f8f7fbf58835959af6f24d4c28` passed its
 complete [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38647251032).
 The email-confirmation recovery checkpoint `e0415b2` also passed its complete
 [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38963301478).
@@ -88,6 +88,44 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [ ] Verify ordinary new-student signup when public registration is deliberately enabled
 - [x] Remove the vulnerable development dependency chain and verify both build targets (October 14)
 - [ ] Complete production-origin, legal, support, and Chrome Web Store gates
+
+### Latest source-only checks — October 16
+
+The owner confirmed that the fresh confirmation message reached Gmail's Inbox,
+not Spam. The existing confirmation/activation evidence below is now complete
+for that isolated account; public signup stays closed.
+
+Companion configuration generation now rejects linked or nonregular output
+files and linked extension directories. It stages a private file and atomically
+replaces valid output, preserving the last good configuration and unrelated hard
+links on write/rename failure. Synthetic fixtures cover these failure paths;
+no real local configuration was rewritten.
+
+The installed-browser harness now contains two additional Send/preflight
+scenarios for initial user-validation 429/503 errors, including retry timing,
+draft/history/session retention, and no capture, extraction, token grant or AI
+request. Its synthetic HTTP fixture is separately exercised without starting a
+browser. These two installed scenarios have not yet been executed; explicit
+approval for the separate automated Chromium run is pending.
+
+Full offline `npm test` passed with CI's Node 22 and type-stripping setting,
+including five runtime repeats. Typecheck, lint (zero errors; eight existing
+warnings), and the 341-file secret scan passed. Independent review found no
+actionable issue in the new installed-test assertions; their recovery scope is
+access/history refresh with a preserved composer, not resubmitting the question.
+
+A read-only source comparison from proven hosted-billing source `72a0e29` to
+current Preview `561ecc2` found no changes to Checkout, Portal, webhook processing,
+entitlements, billing schema, dependencies or deployment configuration. A
+current-Preview failed-renewal → Portal payment-method update → successful
+recovery journey remains higher-value missing hosted evidence; local provider
+tests already cover failure/recovery. This does not certify direct production
+webhook delivery or alter the existing grace/refund policies.
+
+The Chrome publisher dashboard reached Google sign-in, so publisher registration
+cannot yet be verified. No credentials, registration fee, terms acceptance,
+upload or submission occurred. The protected website remains `561ecc2`; these
+source-only checks do not require a new deployment or email callback change.
 
 ### Live tutor and installed Companion recheck — October 16
 
@@ -183,7 +221,9 @@ reaching the UniMate Pro page. Independent Auth readback then confirmed
 profile remained Free with no Stripe customer; signup stayed disabled and email
 confirmation required. This combines owner-observed Gmail/callback evidence with
 server-confirmed activation, not an independently captured browser landing or a
-new password-sign-in test. Inbox versus Spam placement was not reported.
+new password-sign-in test. The owner subsequently confirmed delivery to Gmail's
+Inbox, not Spam. This is one successful mailbox delivery, not a general
+deliverability or sender-reputation guarantee.
 No existing user was changed, no public signup was opened, and no Stripe/AI
 request or password operation was made. An independent check confirmed the exact
 protected Preview and all privacy/live-billing safeguards are unchanged. The
@@ -417,8 +457,8 @@ confirmation checks remain valid at their recorded deployment.
 
 The later owner-approved Gmail test above verified a fresh unconfirmed-account
 send/activation on the current deployment. Remaining email checks: ordinary
-public signup (intentionally closed), the owner's recovery-password sign-in,
-and whether the Gmail message reached Inbox rather than Spam. The fresh test
+public signup (intentionally closed) and the owner's recovery-password sign-in.
+Gmail Inbox placement was subsequently confirmed by the owner. The fresh test
 used an admin-created fixture, not an enabled public-registration flow.
 
 ### Companion source follow-up — October 16, 2026
