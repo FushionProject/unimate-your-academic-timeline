@@ -126,6 +126,23 @@ assert.equal(result.matches[0].ancestors[1].tag, "div");
 assert.equal(result.matches[0].ancestors[1].hasClickHandler, true);
 assert.equal(result.matches[0].ancestors[1].testId, "payment-method-card");
 assert.deepEqual([...result.matches[0].ancestors[1].classes], ["PaymentMethod-accordionItem"]);
+{
+  // Real inspected Stripe markup places the fixed cover at ancestor eleven.
+  // The bounded reader must include it without reading values or clicking.
+  let previous = row;
+  for (let depth = 2; depth < 25; depth++) {
+    const next = element("div", {
+      class: depth === 11 ? "card-accordion-item-cover" : `payment-container-${depth}`,
+    });
+    previous.parentElement = next;
+    previous = next;
+  }
+  const deep = vm.runInContext(`(${readVisibleCardAncestors.toString()})`, world)();
+  assert.equal(deep.matches[0].ancestors.length, 20);
+  assert.deepEqual([...deep.matches[0].ancestors[11].classes], ["card-accordion-item-cover"]);
+  assert.ok(!JSON.stringify(deep).includes("payment-container-20"));
+  row.parentElement = null;
+}
 const page = {
   url: () => session.url,
   mainFrame: () => ({ evaluate: async (fn) => vm.runInContext(`(${fn.toString()})`, world)() }),

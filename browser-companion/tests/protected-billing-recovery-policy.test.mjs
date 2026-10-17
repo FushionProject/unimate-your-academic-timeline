@@ -479,6 +479,47 @@ rejects(f.recovered, verifyRecoveryCompletion, [
     i.paymentIntent.status = "requires_action";
   },
 ]);
+// Both previously observed Portal session formats remain strictly event-bound.
+for (const url of [
+  "https://billing.stripe.com/p/session/test_fixture",
+  "https://billing.stripe.com/p/session?session=synthetic-opaque-fixture",
+]) {
+  const input = clone(f.recovered);
+  input.portal.url = url;
+  input.events.at(-1).data.object.url = url;
+  const proof = verifyRecoveryCompletion(input);
+  assert.equal(proof.phase, "recovered");
+  assert.ok(!JSON.stringify(proof).includes(url));
+  assert.doesNotMatch(JSON.stringify(proof), /synthetic-opaque-fixture|billing\.stripe\.com/);
+  input.events.at(-1).data.object.url = `${url}different`;
+  assert.throws(() => verifyRecoveryCompletion(input), /RECOVERY_VERIFIED_PORTAL_REQUIRED/);
+}
+for (const url of [
+  "http://billing.stripe.com/p/session/test_fixture",
+  "https://billing.stripe.com.evil.test/p/session/test_fixture",
+  "https://evil.test/p/session?session=synthetic",
+  "https://user:password@billing.stripe.com/p/session/test_fixture",
+  "https://billing.stripe.com:443/p/session/test_fixture",
+  "https://billing.stripe.com:8443/p/session/test_fixture",
+  "https://billing.stripe.com/p/session/test_fixture#fragment",
+  "https://billing.stripe.com/p/session?session=synthetic#",
+  "https://billing.stripe.com/p/session",
+  "https://billing.stripe.com/p/session?",
+  "https://billing.stripe.com/p/session/",
+  "https://billing.stripe.com/p/session/test_fixture/extra",
+  "https://billing.stripe.com/p/session/test_fixture?extra=1",
+  "https://billing.stripe.com/p/other?session=synthetic",
+  "https://billing.stripe.com/p/other/../session/test_fixture",
+  "https://billing.stripe.com/p/session/%2Ftest_fixture",
+  "https://billing.stripe.com/p/session?session=synthetic\\extra",
+  "https://billing.stripe.com/p/session?session=synthetic\n",
+  " https://billing.stripe.com/p/session/test_fixture",
+]) {
+  const input = clone(f.recovered);
+  input.portal.url = url;
+  input.events.at(-1).data.object.url = url;
+  assert.throws(() => verifyRecoveryCompletion(input), /RECOVERY_VERIFIED_PORTAL_REQUIRED/);
+}
 // Portal may clear a subscription override and install the new customer default.
 const cleared = clone(f.recovered);
 cleared.subscriptions.data.at(-1).default_payment_method = null;

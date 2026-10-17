@@ -9,6 +9,7 @@ import {
   assertRecoverySnapshotLists,
   parseRecoveryCommand,
   recoveryErrorCode,
+  fillReadyRecoverySignIn,
   recoveryRouteDecision,
   verifyRecoveryWarning,
   verifySavedTestMethod,
@@ -17,6 +18,7 @@ import {
   runProtectedBillingRecovery,
   RECOVERY_JOURNAL,
   verifyUnpaidRecoveryResume,
+  verifyInspectedUnpaidRecoveryResume,
   selectObservedRecoveryCard,
   observedRecoveryCard,
   assertNoRecoveryPaymentClaim,
@@ -30,6 +32,47 @@ import { TARGET, SetupError } from "../../scripts/prepare-stripe-sandbox.mjs";
 
 // Import and rejected invocation must not read credentials or contact services.
 await assert.rejects(runProtectedBillingRecovery(), /RECOVERY_EXPLICIT_PRIVATE_APPROVAL_REQUIRED/);
+{
+  const calls = [];
+  const page = {
+    locator(selector) {
+      return {
+        async waitFor(options) {
+          calls.push([selector, options.state]);
+        },
+        async fill(value) {
+          calls.push([selector, value]);
+        },
+      };
+    },
+  };
+  const record = { email: "fixture@example.test", password: "fixture-only" };
+  await fillReadyRecoverySignIn(page, record);
+  assert.deepEqual(calls, [
+    ['html[data-unimate-auth-state="signed-out"]', "attached"],
+    ["#signin-email", record.email],
+    ["#signin-password", record.password],
+  ]);
+  let fills = 0;
+  await assert.rejects(
+    fillReadyRecoverySignIn(
+      {
+        locator() {
+          return {
+            async waitFor() {
+              throw new Error("not ready");
+            },
+            async fill() {
+              fills++;
+            },
+          };
+        },
+      },
+      record,
+    ),
+  );
+  assert.equal(fills, 0);
+}
 assertRecoveryStart({ approved: true, env: {} });
 for (const key of ["DEBUG", "PWDEBUG", "NODE_OPTIONS", "NODE_INSPECT_RESUME_ON_START"])
   assert.throws(() => assertRecoveryStart({ approved: true, env: { [key]: "1" } }));
@@ -545,6 +588,83 @@ const purchase = async (h) => {
       at: 1800000020000,
     },
   };
+  const originalText = JSON.stringify(original);
+  const firstResume = {
+    ...original,
+    resumedFrom: {
+      ...resumeJournal.resumedFrom,
+      journalSha256: createHash("sha256").update(originalText).digest("hex"),
+      at: original.checkoutAttemptedAt + 1,
+      freeCompanion: {
+        action: "expect-free",
+        isPro: false,
+        billingRevision: 62,
+        sourceHash: "b".repeat(64),
+        samePanelTransition: false,
+        sameOpenPanelTransition: false,
+        sessionReused: false,
+        aiRequests: 0,
+        captures: 0,
+        extractions: 0,
+        artifactPath: path.resolve(
+          ".stripe-sandbox.local/companion-10000000-0000-4000-8000-000000000001/result-20000000-0000-4000-8000-000000000002.png",
+        ),
+      },
+    },
+  };
+  const inspectedInput = { ...input, journal: firstResume, originalText };
+  assert.equal(verifyInspectedUnpaidRecoveryResume(inspectedInput).checkoutUrl, h.session.url);
+  assert.throws(() => verifyUnpaidRecoveryResume(inspectedInput));
+  for (const mutate of [
+    (x) => (x.originalText = "{}"),
+    (x) => (x.originalText = x.originalText + " "),
+    (x) => (x.journal.sessionId = "cs_test_other"),
+    (x) => (x.journal.paymentAttempted = false),
+    (x) => (x.journal.cardSelectAttempted = true),
+    (x) => (x.journal.cardFillAttempted = true),
+    (x) => (x.journal.inspectedResume = {}),
+    (x) => (x.journal.resumedFrom.inspectedResume = {}),
+    (x) => (x.journal.resumedFrom.journalSha256 = "c".repeat(64)),
+    (x) => (x.journal.resumedFrom.phase = "card-selected"),
+    (x) => (x.journal.resumedFrom.at = x.state.observedAt + 1),
+    (x) => (x.journal.resumedFrom.newCompanionSession = false),
+    (x) => delete x.journal.resumedFrom.freeCompanion,
+    (x) => (x.journal.resumedFrom.freeCompanion.isPro = true),
+    (x) => (x.journal.resumedFrom.freeCompanion.billingRevision = 63),
+    (x) => (x.journal.resumedFrom.freeCompanion.samePanelTransition = true),
+    (x) => (x.journal.resumedFrom.freeCompanion.aiRequests = 1),
+    (x) => (x.journal.resumedFrom.freeCompanion.artifactPath = "/tmp/elsewhere.png"),
+    (x) => (x.state.profile.billing_revision = 63),
+    (x) => (x.session.payment_status = "paid"),
+    (x) => x.state.openCheckouts.data.push(structuredClone(x.session)),
+    (x) => (x.items.data[0].price = "price_other"),
+  ]) {
+    const bad = structuredClone(inspectedInput);
+    mutate(bad);
+    assert.throws(() => verifyInspectedUnpaidRecoveryResume(bad));
+  }
+  const secondJournal = {
+    ...firstResume,
+    inspectedResume: {
+      journalSha256: createHash("sha256").update(JSON.stringify(firstResume)).digest("hex"),
+      originalJournalSha256: firstResume.resumedFrom.journalSha256,
+      phase: "checkout-verified",
+      newCompanionSession: true,
+      at: 1800000040000,
+    },
+  };
+  const second = harness({ resumeJournal: secondJournal });
+  assert.equal(second.held(), true);
+  await assert.rejects(second.controller.run("CHECKOUT"));
+  await second.controller.run("INSPECT_CHECKOUT");
+  await second.controller.run("SELECT_CARD");
+  await second.controller.run("PAY_CARD_FILL");
+  await second.controller.run("PAY_CARD_SUBMIT");
+  await second.controller.run("EXPECT_PRO");
+  assert.equal(second.counts.click, 0);
+  assert.equal(second.counts.pay, 1);
+  assert.deepEqual(second.journals.at(-1).resumedFrom, firstResume.resumedFrom);
+  assert.deepEqual(second.journals.at(-1).inspectedResume, secondJournal.inspectedResume);
   const resumed = harness({ resumeJournal });
   assert.equal(resumed.held(), true);
   assert.deepEqual(resumed.controller.initialJournal(), resumeJournal);
@@ -868,6 +988,38 @@ try {
     originalText,
   );
   await assert.rejects(createRecoveryJournal(directory, { resumeText: originalText }));
+  const inspectedText = await fs.readFile(path.join(directory, RECOVERY_JOURNAL), "utf8");
+  await assert.rejects(
+    createRecoveryJournal(directory, {
+      resumeText: inspectedText,
+      inspectedOriginalText: originalText + "changed",
+    }),
+  );
+  const inspectedPersist = await createRecoveryJournal(directory, {
+    resumeText: inspectedText,
+    inspectedOriginalText: originalText,
+  });
+  await inspectedPersist({ phase: "checkout-pending", inspectedResume: { fresh: true } });
+  assert.equal(
+    await fs.readFile(
+      path.join(directory, `${RECOVERY_JOURNAL}.unpaid-resume-original.json`),
+      "utf8",
+    ),
+    originalText,
+  );
+  assert.equal(
+    await fs.readFile(
+      path.join(directory, `${RECOVERY_JOURNAL}.inspected-unpaid-resume-original.json`),
+      "utf8",
+    ),
+    inspectedText,
+  );
+  await assert.rejects(
+    createRecoveryJournal(directory, {
+      resumeText: await fs.readFile(path.join(directory, RECOVERY_JOURNAL), "utf8"),
+      inspectedOriginalText: originalText,
+    }),
+  );
   await assert.rejects(createRecoveryJournal(directory));
   assert.equal((await fs.stat(path.join(directory, RECOVERY_JOURNAL))).mode & 0o077, 0);
   assert.equal(

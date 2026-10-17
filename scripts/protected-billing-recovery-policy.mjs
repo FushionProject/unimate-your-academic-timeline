@@ -233,6 +233,32 @@ function methodScope(method, expected) {
     id(method.customer) === C.customer &&
     method.type === "card", "RECOVERY_PAYMENT_METHOD_SCOPE_REQUIRED");
 }
+// Accept only the two observed hosted-session shapes. The opaque query stays
+// in memory and must still match the authenticated Stripe event byte-for-byte.
+// Checking the raw authority also rejects an explicit default :443 port, which
+// URL parsing would normalize away.
+function portalSessionUrl(value) {
+  if (
+    typeof value !== "string" ||
+    !/^https:\/\/billing\.stripe\.com\/p\/session(?:\?[^\s#\\]+|\/[A-Za-z0-9_-]+)$/.test(value)
+  )
+    return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.origin === "https://billing.stripe.com" &&
+      !url.username &&
+      !url.password &&
+      !url.port &&
+      !url.hash &&
+      url.href === value &&
+      ((url.pathname === "/p/session" && url.search.length > 1) ||
+        (/^\/p\/session\/[A-Za-z0-9_-]+$/.test(url.pathname) && !url.search))
+    );
+  } catch {
+    return false;
+  }
+}
 const invoiceEvent = (invoice, sub, status) => (object) =>
   object.object === "invoice" &&
   object.id === invoice.id &&
@@ -331,8 +357,7 @@ export function verifyRecoveryCompletion(input = {}) {
     portal.livemode === false &&
     id(portal.customer) === C.customer &&
     portal.return_url === `${C.origin}/upgrade` &&
-    typeof portal.url === "string" &&
-    /^https:\/\/billing\.stripe\.com\/[A-Za-z0-9_\/-]+$/.test(portal.url) &&
+    portalSessionUrl(portal.url) &&
     positive(input.portalAttemptedAt) &&
     input.portalAttemptedAt >= input.failure.observedAt &&
     input.portalAttemptedAt <= input.actionStartedAt &&

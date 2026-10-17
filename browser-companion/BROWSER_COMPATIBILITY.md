@@ -121,6 +121,11 @@ Brave; Edge extraction failed with `No space left on device` and left no Edge
 application at its intended path. No personal files were deleted. About 700 MiB
 remained free, so the hosted billing recovery continuation was also held before
 payment to avoid starting a multi-process test with unreliable write capacity.
+Subsequent owner-approved cleanup reclaimed 6.8 GiB from only npm's regenerable
+`_cacache` download cache, leaving 7.9 GiB free and clearing that storage hold.
+Projects, personal files, installed apps, browser profiles, `_npx`, and Playwright
+were preserved. This does not change the owner's stop on additional browser
+testing or certify hosted billing recovery; see [the current billing outcome](../LAUNCH.md).
 
 Brave bundle version `155.1.97.56` / build `197.56` passed macOS Gatekeeper
 (`Notarized Developer ID`) and ordinary recursive code-signature verification,

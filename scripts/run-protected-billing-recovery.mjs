@@ -86,6 +86,14 @@ export const recoveryErrorCode = (error) =>
     ? error.code
     : "RECOVERY_STOP_AND_RECONCILE";
 
+export async function fillReadyRecoverySignIn(page, record) {
+  // DOMContentLoaded can precede React auth hydration. Never fill a form that
+  // may still be replaced, or click before the sign-in handler is ready.
+  await page.locator('html[data-unimate-auth-state="signed-out"]').waitFor({ state: "attached" });
+  await page.locator("#signin-email").fill(record.email);
+  await page.locator("#signin-password").fill(record.password);
+}
+
 export function assertRecoveryStart({ approved, env = process.env } = {}) {
   if (!approved || env.DEBUG || env.PWDEBUG || env.NODE_OPTIONS || env.NODE_INSPECT_RESUME_ON_START)
     fail("RECOVERY_EXPLICIT_PRIVATE_APPROVAL_REQUIRED");
@@ -204,6 +212,71 @@ export function verifyUnpaidRecoveryResume({ journal, record, state, session, it
   }
   checkoutPage({ url: () => url.href }, journal.sessionId);
   return { baseline: journal.baseline, checkoutUrl: url.href };
+}
+
+// One additional restart after the first resume performed only observations.
+// The two immutable checkpoints bind the same zero-action Checkout; neither
+// old Companion session is represented as continuous with this new browser.
+export function verifyInspectedUnpaidRecoveryResume(input) {
+  const { journal, originalText, state } = input;
+  let original;
+  try {
+    original = JSON.parse(originalText);
+  } catch {
+    fail("RECOVERY_INSPECTED_RESUME_CHAIN_REQUIRED");
+  }
+  const { resumedFrom, ...unchanged } = journal || {};
+  verifyUnpaidRecoveryResume({ ...input, journal: original });
+  const target = verifyUnpaidRecoveryResume({ ...input, journal: unchanged });
+  const free = resumedFrom?.freeCompanion;
+  if (
+    JSON.stringify(unchanged) !== JSON.stringify(original) ||
+    !resumedFrom ||
+    Object.keys(resumedFrom).some(
+      (key) =>
+        !["journalSha256", "phase", "at", "newCompanionSession", "freeCompanion"].includes(key),
+    ) ||
+    resumedFrom.journalSha256 !== hash(originalText) ||
+    resumedFrom.phase !== "checkout-verified" ||
+    resumedFrom.newCompanionSession !== true ||
+    !Number.isSafeInteger(resumedFrom.at) ||
+    resumedFrom.at < original.checkoutAttemptedAt ||
+    resumedFrom.at > state.observedAt ||
+    !free ||
+    Object.keys(free).some(
+      (key) =>
+        ![
+          "action",
+          "isPro",
+          "billingRevision",
+          "sourceHash",
+          "samePanelTransition",
+          "sameOpenPanelTransition",
+          "sessionReused",
+          "aiRequests",
+          "captures",
+          "extractions",
+          "artifactPath",
+        ].includes(key),
+    ) ||
+    free.action !== "expect-free" ||
+    free.isPro !== false ||
+    free.billingRevision !== 62 ||
+    free.samePanelTransition !== false ||
+    free.sameOpenPanelTransition !== false ||
+    free.sessionReused !== false ||
+    free.aiRequests !== 0 ||
+    free.captures !== 0 ||
+    free.extractions !== 0 ||
+    !/^[a-f0-9]{64}$/.test(free.sourceHash || "") ||
+    typeof free.artifactPath !== "string" ||
+    !free.artifactPath.startsWith(path.join(ROOT, ".stripe-sandbox.local", "companion-")) ||
+    !/^companion-[a-f0-9-]{36}\/result-[a-f0-9-]{36}\.png$/.test(
+      path.relative(path.join(ROOT, ".stripe-sandbox.local"), free.artifactPath),
+    )
+  )
+    fail("RECOVERY_INSPECTED_RESUME_CHAIN_REQUIRED");
+  return target;
 }
 
 export async function assertNoRecoveryPaymentClaim(directory, sessionId) {
@@ -798,7 +871,7 @@ export function createRecoveryController({
   return { run, initialJournal: () => structuredClone(journal) };
 }
 
-export async function createRecoveryJournal(directory, { resumeText } = {}) {
+export async function createRecoveryJournal(directory, { resumeText, inspectedOriginalText } = {}) {
   const stat = await fs.lstat(directory);
   if (
     !stat.isDirectory() ||
@@ -809,12 +882,23 @@ export async function createRecoveryJournal(directory, { resumeText } = {}) {
     fail("RECOVERY_PRIVATE_DIRECTORY_REQUIRED");
   const filename = path.join(directory, RECOVERY_JOURNAL);
   if (
+    inspectedOriginalText !== undefined &&
+    (typeof inspectedOriginalText !== "string" ||
+      typeof resumeText !== "string" ||
+      (await readPrivate(`${filename}.unpaid-resume-original.json`)) !== inspectedOriginalText)
+  )
+    fail("RECOVERY_INSPECTED_RESUME_CHAIN_REQUIRED");
+  if (
     resumeText !== undefined &&
     (typeof resumeText !== "string" || (await readPrivate(filename)) !== resumeText)
   )
     fail("RECOVERY_RESUME_JOURNAL_CHANGED");
   const handle = await fs.open(
-    resumeText === undefined ? filename : `${filename}.unpaid-resume-original.json`,
+    resumeText === undefined
+      ? filename
+      : inspectedOriginalText === undefined
+        ? `${filename}.unpaid-resume-original.json`
+        : `${filename}.inspected-unpaid-resume-original.json`,
     "wx",
     0o600,
   );
@@ -848,9 +932,19 @@ export async function createRecoveryJournal(directory, { resumeText } = {}) {
   };
 }
 
-export async function runProtectedBillingRecovery({ approved = false, resumeUnpaid = false } = {}) {
+export async function runProtectedBillingRecovery({
+  approved = false,
+  resumeUnpaid = false,
+  resumeInspectedUnpaid = false,
+} = {}) {
   assertRecoveryStart({ approved });
-  if (typeof resumeUnpaid !== "boolean") fail("RECOVERY_UNPAID_RESUME_NOT_ELIGIBLE");
+  if (
+    typeof resumeUnpaid !== "boolean" ||
+    typeof resumeInspectedUnpaid !== "boolean" ||
+    (resumeUnpaid && resumeInspectedUnpaid)
+  )
+    fail("RECOVERY_UNPAID_RESUME_NOT_ELIGIBLE");
+  const resuming = resumeUnpaid || resumeInspectedUnpaid;
   const report = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
   const stage = (name) => report({ kind: "startup", stage: name });
   const directory = path.join(ROOT, ".stripe-sandbox.local");
@@ -984,15 +1078,23 @@ export async function runProtectedBillingRecovery({ approved = false, resumeUnpa
     stage("baseline");
     const initial = await snapshot();
     let resumeJournal, resumeTarget, originalJournal;
-    const resumeText = resumeUnpaid
+    const resumeText = resuming
       ? await readPrivate(path.join(directory, RECOVERY_JOURNAL))
       : undefined;
-    if (resumeUnpaid) {
+    const inspectedOriginalText = resumeInspectedUnpaid
+      ? await readPrivate(path.join(directory, `${RECOVERY_JOURNAL}.unpaid-resume-original.json`))
+      : undefined;
+    const verifyResume = resumeInspectedUnpaid
+      ? (value) =>
+          verifyInspectedUnpaidRecoveryResume({ ...value, originalText: inspectedOriginalText })
+      : verifyUnpaidRecoveryResume;
+    const resumeField = resumeInspectedUnpaid ? "inspectedResume" : "resumedFrom";
+    if (resuming) {
       originalJournal = JSON.parse(resumeText);
       if (!/^cs_test_[A-Za-z0-9]+$/.test(originalJournal?.sessionId || ""))
         fail("RECOVERY_UNPAID_RESUME_NOT_ELIGIBLE");
       await assertNoRecoveryPaymentClaim(directory, originalJournal.sessionId);
-      resumeTarget = verifyUnpaidRecoveryResume({
+      resumeTarget = verifyResume({
         journal: originalJournal,
         record,
         state: initial,
@@ -1001,8 +1103,9 @@ export async function runProtectedBillingRecovery({ approved = false, resumeUnpa
       });
       resumeJournal = {
         ...originalJournal,
-        resumedFrom: {
+        [resumeField]: {
           journalSha256: hash(resumeText),
+          ...(resumeInspectedUnpaid ? { originalJournalSha256: hash(inspectedOriginalText) } : {}),
           phase: originalJournal.phase,
           at: Date.now(),
           newCompanionSession: true,
@@ -1011,7 +1114,7 @@ export async function runProtectedBillingRecovery({ approved = false, resumeUnpa
     }
     const baseline = resumeTarget?.baseline || verifyRecoveryBaseline(initial);
     if (baseline.billingRevision !== 62) fail("RECOVERY_EXACT_BASELINE_REVISION_REQUIRED");
-    const persist = await createRecoveryJournal(directory, { resumeText });
+    const persist = await createRecoveryJournal(directory, { resumeText, inspectedOriginalText });
     await persist(
       resumeJournal || {
         version: 1,
@@ -1128,9 +1231,11 @@ export async function runProtectedBillingRecovery({ approved = false, resumeUnpa
     });
     const page = await context.newPage();
     page.setDefaultTimeout(15000);
+    stage("website-navigation");
     await page.goto(`${C.origin}/signin?next=upgrade`, { waitUntil: "domcontentloaded" });
-    await page.locator("#signin-email").fill(record.email);
-    await page.locator("#signin-password").fill(record.password);
+    stage("website-signin-readiness");
+    await fillReadyRecoverySignIn(page, record);
+    stage("website-signin-submit");
     const responsePromise = page.waitForResponse((response) => {
       const url = new URL(response.url());
       return (
@@ -1143,6 +1248,7 @@ export async function runProtectedBillingRecovery({ approved = false, resumeUnpa
       responsePromise,
       page.getByRole("button", { name: "Sign in", exact: true }).click(),
     ]);
+    stage("website-marked-session");
     const user = response.status() === 200 ? (await response.json()).user : null;
     if (
       user?.id !== record.userId ||
@@ -1151,6 +1257,7 @@ export async function runProtectedBillingRecovery({ approved = false, resumeUnpa
       user.app_metadata?.unimate_test_nonce !== record.nonce
     )
       fail("RECOVERY_MARKED_SIGNIN_REQUIRED");
+    stage("website-upgrade-navigation");
     await page.waitForURL((url) => url.origin === C.origin && url.pathname === "/upgrade");
     stage("Companion");
     companion = await startProtectedCompanionBillingHarness({
@@ -1167,10 +1274,11 @@ export async function runProtectedBillingRecovery({ approved = false, resumeUnpa
     report({
       kind: "companion",
       ...freeEvidence,
-      ...(resumeUnpaid ? { freshSessionAfterUnpaidResume: true } : {}),
+      ...(resuming ? { freshSessionAfterUnpaidResume: true } : {}),
+      ...(resumeInspectedUnpaid ? { freshSessionAfterInspectionOnlyStop: true } : {}),
     });
-    if (resumeUnpaid) {
-      resumeTarget = verifyUnpaidRecoveryResume({
+    if (resuming) {
+      resumeTarget = verifyResume({
         journal: originalJournal,
         record,
         state: await snapshot(),
@@ -1179,7 +1287,7 @@ export async function runProtectedBillingRecovery({ approved = false, resumeUnpa
       });
       resumeJournal = {
         ...resumeJournal,
-        resumedFrom: { ...resumeJournal.resumedFrom, freeCompanion: freeEvidence },
+        [resumeField]: { ...resumeJournal[resumeField], freeCompanion: freeEvidence },
       };
     }
     active();
@@ -1218,7 +1326,7 @@ export async function runProtectedBillingRecovery({ approved = false, resumeUnpa
       },
     });
     await persist(controller.initialJournal());
-    if (resumeUnpaid) {
+    if (resuming) {
       await page.goto(resumeTarget.checkoutUrl, { waitUntil: "domcontentloaded" });
       checkoutPage(page, originalJournal.sessionId);
     }
@@ -1257,12 +1365,14 @@ export async function runProtectedBillingRecovery({ approved = false, resumeUnpa
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const resumeUnpaid = process.argv[3] === "--resume-unpaid";
+  const resumeInspectedUnpaid = process.argv[3] === "--resume-inspected-unpaid";
   runProtectedBillingRecovery({
     approved:
-      process.argv.length === (resumeUnpaid ? 4 : 3) &&
+      process.argv.length === (resumeUnpaid || resumeInspectedUnpaid ? 4 : 3) &&
       process.argv[2] === "--recovery-v1" &&
       process.env.UNIMATE_PROTECTED_BILLING_RECOVERY === "approved",
     resumeUnpaid,
+    resumeInspectedUnpaid,
   }).catch((error) => {
     console.error(JSON.stringify({ code: recoveryErrorCode(error) }));
     process.exitCode = 1;

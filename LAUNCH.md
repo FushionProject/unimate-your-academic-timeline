@@ -108,28 +108,51 @@ for lack of disk space; it was not tested. The owner then requested no further
 browser tests. Cross-browser expansion is deferred; no personal browsing data,
 default-browser settings or security protections were changed.
 
-Hosted recovery testing on `561ecc2` is in progress, not passed: the marked
-fixture remains Free at revision 62 with five canceled subscriptions, zero active
-subscriptions, and one verified unpaid sandbox Checkout. The saved-card guard
-stopped before payment because Stripe's card selector was collapsed; no payment
-was submitted. The one-shot recovery journal and existing Checkout are retained
-for a strictly verified continuation, not a duplicate purchase. All prior
-billing journals remain unchanged. A strictly unpaid-only continuation is
-implemented and offline-tested but has not been run: about 700 MiB of free disk
-space remains, so the multi-process hosted recovery test is held before payment.
-Public launch and live charges remain closed.
+The storage hold was cleared by owner-approved cleanup of only the regenerable
+npm `_cacache` download cache: 6.8 GiB reclaimed and 7.9 GiB free afterward.
+Projects, personal files, installed apps, browser profiles, `_npx`, and Playwright
+were preserved. This did not authorize restarting browser-compatibility testing.
+
+Hosted recovery testing on `561ecc2` is **not passed**. The original saved-card
+guard stopped before payment because Stripe's Card selector was collapsed. The
+first strictly unpaid continuation reached fresh Companion Free/revision-62
+proof and read-only Card inspection, then stopped without clicks or payment.
+A separate read-only inspection found the visible Card container at ancestor
+11, beyond the helper's cap of eight. The bounded search was corrected to 20
+with regression tests. A second continuation from that observation-only
+checkpoint stopped during website startup, before new Companion proof or
+commands. Both resume backups are intact, and the current guards permit no
+additional resume.
+
+A separate, one-attempt startup diagnostic then passed: protected sign-in
+document HTTP 200, exact marked test-account password grant HTTP 200, arrival
+at `/upgrade`, and read-only billing status HTTP 200. It waited for the deployed
+signed-out auth-readiness marker before filling; the recovery runner now uses
+the same wait and finer fixed stage labels. The original generic startup
+failure was not reproduced, so hydration timing is a possible cause, not a
+proven diagnosis. This diagnostic made no Checkout, payment, AI, or entitlement
+reconciliation calls, and did not modify the recovery checkpoints. Continuing
+the stopped payment test still requires a reviewed checkpoint-recovery path;
+no third resume or fresh Checkout was attempted.
+
+A subsequent read-only recheck passed: Free revision 62, five canceled
+subscriptions, zero active subscriptions, and the same one unpaid USD 5.99
+sandbox Checkout. No payment, Card-selection, or fill attempt is recorded;
+the prior v1/v2 journals are unchanged. No duplicate purchase or payment was
+submitted. The Preview remains private; public launch and live charges remain
+closed.
 
 The recovery verifier now requires a fresh persisted billing revision after each
 renewal or Portal action; a prior website refresh cannot satisfy that evidence.
+This is whole-action revision proof, not causal attribution to an individual
+webhook delivery.
 Outstanding or failed reconciliation requests block the action boundary. The
 Portal payment-update helper is intentionally not implemented until its actual
 sandbox controls are inspected; that command currently stops safely rather than
 claiming the whole recovery journey works. Full offline tests (including these
 regressions), typecheck, lint (zero errors/eight existing warnings), secret scan
-(349 repository files) and diff checks passed. These are not a hosted recovery
-pass. A final read-only check confirmed Free revision 62, five canceled
-subscriptions, zero active subscriptions and the same one unpaid Checkout;
-neither payment nor resume was attempted, and earlier journals are unchanged.
+(351 repository files) and diff checks passed. These are not a hosted recovery
+pass; the stopped continuations and latest read-only state are recorded above.
 
 The owner confirmed that the fresh confirmation message reached Gmail's Inbox,
 not Spam. The existing confirmation/activation evidence below is now complete

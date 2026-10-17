@@ -177,7 +177,7 @@ export function readVisibleCardAncestors() {
       const ancestors = [];
       for (
         let element = parent;
-        element && ancestors.length < 8;
+        element && ancestors.length < 20;
         element = element.parentElement || element.getRootNode?.()?.host
       ) {
         const attribute = (name) => element.getAttribute(name) || "";
