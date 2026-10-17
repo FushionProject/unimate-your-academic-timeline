@@ -6,6 +6,8 @@ import { createHash } from "node:crypto";
 import {
   assertRecoveryStart,
   assertRecoveryDeployment,
+  verifyRecoveryRuntimeGrace,
+  readRecoveryRuntimeStatus,
   assertRecoverySnapshotLists,
   parseRecoveryCommand,
   recoveryErrorCode,
@@ -17,6 +19,7 @@ import {
   createRecoveryJournal,
   runProtectedBillingRecovery,
   RECOVERY_JOURNAL,
+  RECOVERY_V2_JOURNAL,
   verifyUnpaidRecoveryResume,
   verifyInspectedUnpaidRecoveryResume,
   verifySetupFailureRecoveryResume,
@@ -24,11 +27,13 @@ import {
   selectObservedRecoveryCard,
   observedRecoveryCard,
   assertNoRecoveryPaymentClaim,
+  assertFreshRecoveryV2Run,
   createRecoveryReconciliationFence,
 } from "../../scripts/run-protected-billing-recovery.mjs";
 import {
   PROTECTED_BILLING_RECOVERY as C,
-  verifyRecoveryBaseline,
+  PROTECTED_BILLING_RECOVERY_V2,
+  createRecoveryPolicy,
 } from "../../scripts/protected-billing-recovery-policy.mjs";
 import { TARGET, SetupError } from "../../scripts/prepare-stripe-sandbox.mjs";
 
@@ -159,6 +164,111 @@ const deployment = {
   env: ["STRIPE_SECRET_KEY"],
 };
 {
+  const config = {
+    ...PROTECTED_BILLING_RECOVERY_V2,
+    source: "a".repeat(40),
+    origin: "https://unimate-recovery-fixture.vercel.app",
+  };
+  const metadata = {
+    ...deployment,
+    meta: { githubCommitSha: config.source },
+    env: ["STRIPE_SECRET_KEY", "STRIPE_PAST_DUE_GRACE_ENABLED"],
+  };
+  assert.deepEqual(assertRecoveryDeployment(metadata, config), {
+    runtimeGraceVerificationRequired: true,
+  });
+  for (const mutate of [
+    (x) => (x.env = ["STRIPE_SECRET_KEY"]),
+    (x) => (x.env = [{ key: "STRIPE_PAST_DUE_GRACE_ENABLED", value: "false" }]),
+    (x) => (x.meta.githubCommitSha = C.source),
+    (x) => x.alias.push("public.example.test"),
+  ]) {
+    const bad = structuredClone(metadata);
+    mutate(bad);
+    assert.throws(() => assertRecoveryDeployment(bad, config));
+  }
+  const page = {
+    url: () => config.origin + "/upgrade",
+    evaluate: async (fn, args) => {
+      assert.equal(fn, readRecoveryRuntimeStatus);
+      assert.equal(args.origin, config.origin);
+      assert.equal(args.accessToken, "synthetic.test.token");
+      return { status: 200, pastDueGraceEnabled: false };
+    },
+  };
+  assert.equal(
+    await verifyRecoveryRuntimeGrace(page, config.origin, "synthetic.test.token"),
+    false,
+  );
+  for (const result of [
+    { status: 401 },
+    { status: 200 },
+    { status: 200, pastDueGraceEnabled: "false" },
+    { status: 200, pastDueGraceEnabled: true },
+  ])
+    await assert.rejects(
+      verifyRecoveryRuntimeGrace(
+        { ...page, evaluate: async () => result },
+        config.origin,
+        "synthetic.test.token",
+      ),
+    );
+  await assert.rejects(
+    verifyRecoveryRuntimeGrace(page, "https://other.vercel.app", "synthetic.test.token"),
+  );
+  await assert.rejects(verifyRecoveryRuntimeGrace(page, config.origin, ""));
+  const originalFetch = globalThis.fetch,
+    originalLocation = globalThis.location;
+  let requested = 0;
+  try {
+    globalThis.location = { origin: config.origin };
+    globalThis.fetch = async (url, init) => {
+      requested++;
+      assert.equal(url, config.origin + "/api/billing-status?reconcile=false");
+      assert.deepEqual(init, {
+        method: "GET",
+        redirect: "error",
+        cache: "no-store",
+        credentials: "omit",
+        headers: { Authorization: "Bearer synthetic.test.token" },
+      });
+      return {
+        status: 200,
+        json: async () => ({ pastDueGraceEnabled: false, ignoredSecret: "never returned" }),
+      };
+    };
+    assert.deepEqual(
+      await readRecoveryRuntimeStatus({
+        origin: config.origin,
+        accessToken: "synthetic.test.token",
+      }),
+      { status: 200, pastDueGraceEnabled: false },
+    );
+    globalThis.location = { origin: "https://billing.stripe.com" };
+    await assert.rejects(
+      readRecoveryRuntimeStatus({ origin: config.origin, accessToken: "synthetic.test.token" }),
+    );
+    assert.equal(requested, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalLocation === undefined) delete globalThis.location;
+    else globalThis.location = originalLocation;
+  }
+  assert.equal(
+    recoveryRouteDecision(
+      {
+        url: config.origin + "/api/billing-status?reconcile=true",
+        method: "GET",
+        navigation: false,
+      },
+      false,
+      true,
+      config,
+    ),
+    "read-only-status",
+  );
+}
+{
   const fence = createRecoveryReconciliationFence();
   const first = {},
     second = {},
@@ -221,7 +331,12 @@ assert.equal(
 );
 
 function harness(options = {}) {
-  let time = 1800000000000;
+  const policy = options.recoveryPolicy || createRecoveryPolicy();
+  const C = policy.config;
+  const initialRevision = options.initialRevision ?? C.baselineRevision;
+  const revisionOffset = initialRevision - 62;
+  const subscriptionId = options.subscriptionId || "sub_recovery";
+  let time = options.time || 1800000000000;
   const userId = "10000000-0000-4000-8000-000000000001",
     nonce = "20000000-0000-4000-8000-000000000002";
   const record = {
@@ -267,11 +382,17 @@ function harness(options = {}) {
       invoice_settings: { default_payment_method: "pm_original" },
     },
     clock: { id: "clock_fixture", livemode: false, status: "ready", frozen_time: 1800000000 },
-    profile: { id: userId, stripe_customer_id: C.customer, is_pro: false, billing_revision: 62 },
+    profile: {
+      id: userId,
+      stripe_customer_id: C.customer,
+      is_pro: false,
+      billing_revision: initialRevision,
+    },
     subscriptions: { data: C.baseline.map((id) => sub(id, "canceled")), has_more: false },
     openCheckouts: { data: [], has_more: false },
     journalHashes: { ...C.journalHashes },
     observedAt: time,
+    ...(options.previousRecoveryText ? { previousRecoveryText: options.previousRecoveryText } : {}),
   };
   const session = {
     id: "cs_test_fixture",
@@ -308,7 +429,7 @@ function harness(options = {}) {
     attempt_count: 1,
     parent: {
       type: "subscription_details",
-      subscription_details: { subscription: "sub_recovery" },
+      subscription_details: { subscription: subscriptionId },
     },
     lines: {
       has_more: false,
@@ -414,20 +535,21 @@ function harness(options = {}) {
   };
   const purchased = () => {
     state.profile.is_pro = true;
-    state.profile.billing_revision = 65;
-    state.subscriptions.data.push(sub("sub_recovery", "active"));
+    state.profile.billing_revision = 65 + revisionOffset;
+    state.subscriptions.data.push(sub(subscriptionId, "active"));
     state.openCheckouts.data = [];
     Object.assign(session, {
       status: "complete",
       payment_status: "paid",
-      subscription: "sub_recovery",
+      subscription: subscriptionId,
     });
   };
   const controller = createRecoveryController({
     record,
-    baseline: options.resumeJournal?.baseline || verifyRecoveryBaseline(state),
+    baseline: options.resumeJournal?.baseline || policy.verifyBaseline(state),
     resumeJournal: options.resumeJournal,
-    graceVerified: true,
+    graceVerified: Object.hasOwn(options, "graceVerified") ? options.graceVerified : C.graceEnabled,
+    recoveryPolicy: policy,
     snapshot: async () => {
       trace.push("snapshot");
       state.observedAt = now();
@@ -524,7 +646,8 @@ function harness(options = {}) {
           await claimUpdate();
           trace.push("portal-update");
           if (options.portalFails) throw new Error("uncertain update");
-          if (!options.noRecoveryRevision) state.profile.billing_revision = 72;
+          if (!options.noRecoveryRevision) state.profile.billing_revision = 72 + revisionOffset;
+          state.profile.is_pro = true;
           Object.assign(state.subscriptions.data.at(-1), {
             status: "active",
             default_payment_method: "pm_portalnew",
@@ -537,7 +660,13 @@ function harness(options = {}) {
       };
     },
     companion: Object.fromEntries(
-      ["expectPro", "expectRecoveryPro", "expectRecoveredPro", "expectRevoked"].map((method) => [
+      [
+        "expectPro",
+        "expectRecoveryPro",
+        "expectRecoveryLocked",
+        "expectRecoveredPro",
+        "expectRevoked",
+      ].map((method) => [
         method,
         async (proof) => {
           trace.push(method);
@@ -561,7 +690,8 @@ function harness(options = {}) {
     journals,
     held: () => held,
     failRenewal: () => {
-      if (!options.noFailureRevision) state.profile.billing_revision = 68;
+      if (!options.noFailureRevision) state.profile.billing_revision = 68 + revisionOffset;
+      state.profile.is_pro = C.graceEnabled;
       Object.assign(state.subscriptions.data.at(-1), {
         status: "past_due",
         latest_invoice: "in_renewal",
@@ -580,7 +710,7 @@ function harness(options = {}) {
       eventId = "evt_failure";
     },
     revoke: () => {
-      state.profile.billing_revision = 75;
+      state.profile.billing_revision = 75 + revisionOffset;
       state.profile.is_pro = false;
       state.subscriptions.data.at(-1).status = "canceled";
       eventType = "customer.subscription.deleted";
@@ -594,6 +724,77 @@ const purchase = async (h) => {
   await h.controller.run("PAY_SUBMIT");
   await h.controller.run("EXPECT_PRO");
 };
+{
+  // Complete a synthetic V1 predecessor, then start a separately sealed V2.
+  // No real checkpoint, identity, browser, credentials or services are read.
+  const prior = harness({ subscriptionId: PROTECTED_BILLING_RECOVERY_V2.baseline.at(-1) });
+  await purchase(prior);
+  await prior.controller.run("ARM_REVOCATION");
+  prior.revoke();
+  prior.state.profile.billing_revision = 66;
+  await prior.controller.run("EXPECT_REVOKED");
+  const previous = prior.journals.at(-1),
+    previousRecoveryText = JSON.stringify(previous);
+  const recoveryPolicy = createRecoveryPolicy({
+    ...PROTECTED_BILLING_RECOVERY_V2,
+    origin: "https://unimate-recovery-fixture.vercel.app",
+    source: "a".repeat(40),
+    previousRecoveryV1Sha256: createHash("sha256").update(previousRecoveryText).digest("hex"),
+    previousRecoveryRevocationSha256: previous.revocation.evidenceSha256,
+  });
+  const options = {
+    recoveryPolicy,
+    previousRecoveryText,
+    portalHelper: true,
+    time: 1800005000000,
+    initialRevision: 69,
+  };
+  assert.throws(
+    () => harness({ ...options, graceVerified: undefined }),
+    /RECOVERY_VERIFIED_GRACE_REQUIRED/,
+  );
+  assert.throws(
+    () => harness({ ...options, graceVerified: true }),
+    /RECOVERY_VERIFIED_GRACE_REQUIRED/,
+  );
+  assert.throws(() => harness({ ...options, previousRecoveryText: previousRecoveryText + " " }));
+  const h = harness(options);
+  assert.equal(h.controller.initialJournal().version, 2);
+  assert.equal(h.controller.initialJournal().baseline.billingRevision, 69);
+  assert.equal(h.state.subscriptions.data.length, 6);
+  h.state.profile.billing_revision = 70;
+  await assert.rejects(h.controller.run("CHECKOUT"), /RECOVERY_BASELINE_CHANGED/);
+  assert.equal(h.counts.click, 0);
+  h.state.profile.billing_revision = 69;
+  await h.controller.run("CHECKOUT");
+  h.state.profile.billing_revision = 70;
+  await assert.rejects(h.controller.run("PAY_SUBMIT"), /RECOVERY_EXACT_BASELINE_REVISION_REQUIRED/);
+  assert.equal(h.counts.pay, 0);
+  h.state.profile.billing_revision = 69;
+  await h.controller.run("PAY_SUBMIT");
+  await h.controller.run("EXPECT_PRO");
+  await h.controller.run("RETURN");
+  await h.controller.run("ARM_RENEWAL");
+  h.failRenewal();
+  await h.controller.run("EXPECT_PAST_DUE");
+  assert.equal(h.state.profile.is_pro, false);
+  assert.equal(h.trace.includes("expectRecoveryLocked"), true);
+  assert.equal(h.trace.includes("expectRecoveryPro"), false);
+  await h.controller.run("RETURN");
+  await h.controller.run("PORTAL");
+  await h.controller.run("ARM_PORTAL_UPDATE");
+  await h.controller.run("PORTAL_UPDATE");
+  await h.controller.run("EXPECT_RECOVERED");
+  assert.equal(h.state.profile.is_pro, true);
+  assert.equal(h.trace.includes("expectRecoveredPro"), true);
+  assert.equal(h.journals.at(-1).completion.graceEnabled, false);
+  await h.controller.run("ARM_REVOCATION");
+  h.revoke();
+  await h.controller.run("EXPECT_REVOKED");
+  assert.equal(h.counts.pay, 1);
+  assert.equal(h.state.subscriptions.data.length, 7);
+  assert.equal(JSON.stringify(prior.journals.at(-1)), previousRecoveryText);
+}
 {
   const h = harness();
   await h.controller.run("CHECKOUT");
@@ -1106,6 +1307,19 @@ for (const mutate of [
   );
   assert.equal(seen.options.exact, true);
   assert.match(seen.text, /latest payment failed/);
+  await verifyRecoveryWarning(
+    {
+      getByText: (text) => {
+        seen = text;
+        return { waitFor: async () => {}, count: async () => 1, isVisible: async () => true };
+      },
+    },
+    false,
+  );
+  assert.equal(
+    seen,
+    "Your latest payment failed. Pro access is paused until payment is resolved. Update your payment method to restore access.",
+  );
 }
 const directory = await fs.mkdtemp(path.join(os.tmpdir(), "unimate-recovery-offline-"));
 try {
@@ -1211,6 +1425,24 @@ try {
     }),
   );
   await assert.rejects(createRecoveryJournal(directory));
+  const completedV1 = await fs.readFile(path.join(directory, RECOVERY_JOURNAL), "utf8");
+  await assertFreshRecoveryV2Run(directory);
+  await assert.rejects(
+    createRecoveryJournal(directory, { runVersion: 2, resumeText: completedV1 }),
+  );
+  const v2Persist = await createRecoveryJournal(directory, { runVersion: 2 });
+  await v2Persist({ phase: "ready", version: 2 });
+  await assert.rejects(
+    assertFreshRecoveryV2Run(directory),
+    /RECOVERY_V2_ALREADY_JOURNALED_NO_RESUME/,
+  );
+  assert.equal(await fs.readFile(path.join(directory, RECOVERY_JOURNAL), "utf8"), completedV1);
+  assert.equal(
+    JSON.parse(await fs.readFile(path.join(directory, RECOVERY_V2_JOURNAL), "utf8")).version,
+    2,
+  );
+  await assert.rejects(createRecoveryJournal(directory, { runVersion: 2 }));
+  await assert.rejects(createRecoveryJournal(directory, { runVersion: 3 }));
   assert.equal((await fs.stat(path.join(directory, RECOVERY_JOURNAL))).mode & 0o077, 0);
   assert.equal(
     await fs.readFile(path.join(directory, "protected-billing-checkout-v1.json"), "utf8"),

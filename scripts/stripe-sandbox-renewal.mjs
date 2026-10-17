@@ -35,12 +35,22 @@ const digest = (value) => createHash("sha256").update(JSON.stringify(value)).dig
 
 export async function sandboxRenewal({
   action,
+  expectedSubscriptionId,
   approved = false,
   root = ROOT,
   fetchImpl = fetch,
   verify = prepareSandbox,
 } = {}) {
   if (!approved || !ACTIONS.includes(action)) fail("EXPLICIT_RENEWAL_APPROVAL_REQUIRED");
+  // Programmatic purchase binding only; the CLI still accepts fixed actions,
+  // never arbitrary subscription IDs. Read-only status needs no target claim.
+  if (
+    expectedSubscriptionId !== undefined &&
+    (action === "status" ||
+      !validId(expectedSubscriptionId, "sub") ||
+      expectedSubscriptionId.trim() !== expectedSubscriptionId)
+  )
+    fail("EXPECTED_RENEWAL_SUBSCRIPTION_INVALID");
   let lock;
   let lockPath;
   try {
@@ -165,6 +175,8 @@ export async function sandboxRenewal({
     if (current.length > 1 || (action !== "status" && current.length !== 1))
       fail("SINGLE_CURRENT_SUBSCRIPTION_REQUIRED");
     const sub = current[0];
+    if (expectedSubscriptionId !== undefined && sub.id !== expectedSubscriptionId)
+      fail("EXPECTED_RENEWAL_SUBSCRIPTION_MISMATCH");
     const invoiceId = id(sub?.latest_invoice);
     let invoice = null;
     if (sub) {

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   PROTECTED_BILLING_RECOVERY as C,
+  PROTECTED_BILLING_RECOVERY_V2 as V2,
+  createRecoveryPolicy,
   assertRecoveryProof,
   verifyRecoveryBaseline,
   verifyRecoveryPurchase,
@@ -643,6 +646,152 @@ for (const [input, predecessor] of [
   }
   rejects(revoked, verifyRecoveryRevocation, revocationFailures);
 }
+// A separately journaled grace-off run starts only after the exact completed
+// V1 purchase/cancellation. Its prior raw journal is checked on every snapshot.
+const priorBought = JSON.parse(
+  JSON.stringify(f.bought).replaceAll("sub_recovery", V2.baseline.at(-1)),
+);
+const priorPurchase = verifyRecoveryPurchase(priorBought);
+const priorCanceled = revocationInput(priorBought, priorPurchase);
+priorCanceled.actionBillingRevision = 65;
+priorCanceled.profile.billing_revision = 66;
+const priorRevocation = verifyRecoveryRevocation(priorCanceled);
+const priorJournal = {
+  version: 1,
+  kind: C.kind,
+  account: C.account,
+  origin: C.origin,
+  source: C.source,
+  userId: f.base.record.userId,
+  customerId: C.customer,
+  phase: "revoked",
+  baseline: f.baseline,
+  purchase: priorPurchase,
+  revocation: priorRevocation,
+};
+const previousRecoveryText = JSON.stringify(priorJournal);
+const hashText = (value) => createHash("sha256").update(value).digest("hex");
+const v2Config = {
+  ...V2,
+  origin: "https://unimate-recovery-fixture.vercel.app",
+  source: "a".repeat(40),
+  previousRecoveryV1Sha256: hashText(previousRecoveryText),
+  previousRecoveryRevocationSha256: priorRevocation.evidenceSha256,
+};
+const policy2 = createRecoveryPolicy(v2Config);
+assert.equal(Object.isFrozen(policy2.config), true);
+assert.equal(Object.isFrozen(policy2.config.baseline), true);
+function v2Input(input, billingRevision, isPro) {
+  const result = {
+    ...clone(input),
+    origin: v2Config.origin,
+    source: v2Config.source,
+    previousRecoveryText,
+    graceEnabled: false,
+  };
+  result.profile.billing_revision = billingRevision;
+  result.profile.is_pro = isPro;
+  result.subscriptions.data.splice(5, 0, clone(priorCanceled.subscriptions.data.at(-1)));
+  result.observedAt += 100000;
+  if (result.actionStartedAt) result.actionStartedAt += 100000;
+  if (result.portalAttemptedAt) result.portalAttemptedAt += 100000;
+  for (const delivery of result.deliveries || []) delivery.at += 100000;
+  for (const event of result.events || []) if (event.created) event.created += 100;
+  return result;
+}
+const base2 = v2Input(f.base, 67, false);
+const baseline2 = policy2.verifyBaseline(base2);
+assert.equal(baseline2.graceEnabled, false);
+assert.equal(baseline2.previousRecoveryV1Sha256, v2Config.previousRecoveryV1Sha256);
+const laterBaseline = v2Input(f.base, 68, false);
+assert.equal(policy2.verifyBaseline(laterBaseline).billingRevision, 68);
+const bought2 = { ...v2Input(f.bought, 70, true), baseline: baseline2 };
+const purchase2 = policy2.verifyPurchase(bought2);
+const failed2 = {
+  ...v2Input(f.failed, 73, false),
+  baseline: baseline2,
+  purchase: purchase2,
+  actionBillingRevision: 72,
+};
+const failure2 = policy2.verifyFailure(failed2);
+assert.equal(failure2.phase, "past-due");
+const recovered2 = {
+  ...v2Input(f.recovered, 77, true),
+  baseline: baseline2,
+  purchase: purchase2,
+  failure: failure2,
+  actionBillingRevision: 76,
+};
+recovered2.portal.return_url = `${v2Config.origin}/upgrade`;
+recovered2.events.at(-1).data.object.return_url = recovered2.portal.return_url;
+const completion2 = policy2.verifyCompletion(recovered2);
+assert.equal(completion2.phase, "recovered");
+assert.equal(completion2.failureSha256, failure2.evidenceSha256);
+assert.equal(completion2.paymentMethodId, "pm_portalnew");
+assert.equal(policy2.verifyRevocation(revocationInput(recovered2, completion2)).phase, "revoked");
+assert.throws(() => assertRecoveryProof(baseline2, "baseline"), /PRIOR_PROOF/);
+assert.throws(() => policy2.assertProof(f.baseline, "baseline"), /PRIOR_PROOF/);
+rejects(base2, policy2.verifyBaseline, [
+  (i) => delete i.previousRecoveryText,
+  (i) => (i.previousRecoveryText += " "),
+  (i) => (i.profile.billing_revision = 66),
+  (i) => i.subscriptions.data.pop(),
+  (i) => (i.subscriptions.data.at(-1).status = "active"),
+  (i) => (i.subscriptions.data.at(-1).id = "sub_different"),
+  (i) => (i.origin = C.origin),
+  (i) => (i.source = C.source),
+]);
+for (const [input, verify] of [
+  [bought2, policy2.verifyPurchase],
+  [failed2, policy2.verifyFailure],
+  [recovered2, policy2.verifyCompletion],
+])
+  rejects(input, verify, [
+    (i) => (i.previousRecoveryText += " "),
+    (i) => (i.graceEnabled = true),
+    (i) => (i.profile.is_pro = !i.profile.is_pro),
+    (i) => (i.events = []),
+    (i) => (i.deliveries[0].httpStatus = 500),
+    (i) => (i.customer.livemode = true),
+    (i) => (i.baseline = f.baseline),
+  ]);
+rejects(failed2, policy2.verifyFailure, [
+  (i) => (i.profile.billing_revision = i.actionBillingRevision),
+  (i) => (i.subscriptions.data.at(-1).status = "unpaid"),
+]);
+rejects(recovered2, policy2.verifyCompletion, [
+  (i) => (i.profile.billing_revision = i.actionBillingRevision),
+  (i) => (i.paymentIntent.payment_method = "pm_original"),
+  (i) => (i.invoicePayment.invoice = "in_other"),
+  (i) => (i.invoice.amount_remaining = 599),
+  (i) => (i.failure = f.failure),
+  (i) => (i.portal.return_url = `${C.origin}/upgrade`),
+]);
+// Even a newly hashed replacement journal is rejected unless its terminal
+// proof and ownership chain match the pinned previous run.
+for (const change of [
+  (j) => (j.phase = "purchased"),
+  (j) => (j.userId = "owner"),
+  (j) => (j.origin = v2Config.origin),
+  (j) => (j.revocation = { ...j.revocation, billingRevision: 67 }),
+  (j) => (j.purchase = { ...j.purchase, subscriptionId: "sub_other" }),
+]) {
+  const changed = clone(priorJournal);
+  change(changed);
+  const text = JSON.stringify(changed);
+  const policy = createRecoveryPolicy({ ...v2Config, previousRecoveryV1Sha256: hashText(text) });
+  assert.throws(() => policy.verifyBaseline({ ...base2, previousRecoveryText: text }), /RECOVERY_/);
+}
+for (const altered of [
+  { ...v2Config, graceEnabled: true },
+  { ...v2Config, account: "acct_other" },
+  { ...v2Config, baseline: C.baseline },
+  { ...v2Config, origin: "https://example.com" },
+  { ...v2Config, source: null },
+  { ...v2Config, previousRecoveryV1Sha256: "" },
+  { ...v2Config, journal: C.journal },
+])
+  assert.throws(() => createRecoveryPolicy(altered), /FIXED_POLICY_CONFIGURATION/);
 console.log(
   "PASS fixed private hosted recovery proof: exact preserved baseline, paid purchase, failed renewal, Portal invoice/payment graph, distinct direct/recovered revocation, pre-return delivery and revision guards (offline)",
 );

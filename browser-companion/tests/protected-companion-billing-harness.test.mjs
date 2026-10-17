@@ -9,7 +9,11 @@ import {
 } from "../../scripts/protected-companion-billing-harness.mjs";
 import { installPreviewFetch } from "../../scripts/protected-companion-preview.mjs";
 import { TARGET } from "../../scripts/prepare-stripe-sandbox.mjs";
-import { PROTECTED_BILLING_RECOVERY as RECOVERY } from "../../scripts/protected-billing-recovery-policy.mjs";
+import {
+  PROTECTED_BILLING_RECOVERY as RECOVERY,
+  PROTECTED_BILLING_RECOVERY_V2 as RECOVERY_V2,
+  createRecoveryPolicy,
+} from "../../scripts/protected-billing-recovery-policy.mjs";
 
 const app = "https://unimate-synthetic.vercel.app";
 const record = {
@@ -218,8 +222,9 @@ assert.match(source, /expect\("expect-revoked", "expect-pro", false\)/);
 assert.match(source, /expect\("expect-recovery-pro", "expect-pro", true, proof, "past-due"\)/);
 assert.match(
   source,
-  /expect\("expect-recovered-pro", "expect-recovery-pro", true, proof, "recovered"\)/,
+  /recoveryPolicy\.config\.graceEnabled === false\s*\? "expect-recovery-locked"\s*: "expect-recovery-pro"/,
 );
+assert.match(source, /expect\("expect-recovery-locked", "expect-pro", false, proof, "past-due"\)/);
 assert.match(
   source,
   /proof\?\.predecessorPhase === "purchased" \? "expect-pro" : "expect-recovered-pro"/,
@@ -360,6 +365,82 @@ for (const [predecessorPhase, previousPhase] of [
     { ...input, proof: seal({ ...revokedBody, subscriptionId: "sub_other" }) },
     { ...input, proof: seal({ ...revokedBody, actionBillingRevision: 65 }) },
     { ...input, proof: seal({ ...revokedBody, actionBillingRevision: 68 }) },
+  ])
+    assert.throws(() => protectedRecoveryCompanionCheckpoint(altered));
+}
+const v2Config = {
+  ...RECOVERY_V2,
+  origin: "https://unimate-recovery-fixture.vercel.app",
+  source: "a".repeat(40),
+};
+const policy2 = createRecoveryPolicy(v2Config);
+const { evidenceSha256: _v1Hash, ...v1Body } = recoveryBaseline;
+const v2Body = {
+  ...v1Body,
+  kind: v2Config.kind,
+  origin: v2Config.origin,
+  source: v2Config.source,
+  graceEnabled: false,
+  previousRecoveryV1Sha256: v2Config.previousRecoveryV1Sha256,
+  billingRevision: 67,
+};
+const baseline2 = seal(v2Body);
+const purchaseBody2 = {
+  ...v2Body,
+  phase: "purchased",
+  baselineSha256: baseline2.evidenceSha256,
+  subscriptionId: "sub_freshv2",
+  billingRevision: 70,
+};
+const purchase2 = seal(purchaseBody2);
+const failureBody2 = {
+  ...purchaseBody2,
+  phase: "past-due",
+  billingRevision: 73,
+  purchaseSha256: purchase2.evidenceSha256,
+};
+const failure2 = seal(failureBody2);
+const recoveredBody2 = {
+  ...purchaseBody2,
+  phase: "recovered",
+  billingRevision: 77,
+  failureSha256: failure2.evidenceSha256,
+};
+const recovered2 = seal(recoveredBody2);
+for (const [proof, previousProof, previousPhase] of [
+  [failure2, purchase2, "expect-pro"],
+  [recovered2, failure2, "expect-recovery-locked"],
+]) {
+  const input = {
+    recoveryPolicy: policy2,
+    baseline: baseline2,
+    proof,
+    phase: proof.phase,
+    origin: v2Config.origin,
+    userId: record.userId,
+    lastRevision: previousProof.billingRevision,
+    previousProof,
+    previousPhase,
+  };
+  assert.equal(protectedRecoveryCompanionCheckpoint(input), proof.billingRevision);
+  const { evidenceSha256: _hash, ...body } = proof;
+  for (const altered of [
+    { ...input, recoveryPolicy: createRecoveryPolicy() },
+    { ...input, baseline: recoveryBaseline },
+    { ...input, previousPhase: "expect-recovery-pro" },
+    { ...input, previousPhase: "expect-free" },
+    { ...input, previousProof: null },
+    { ...input, previousProof: recoveryBaseline },
+    { ...input, proof: seal({ ...body, graceEnabled: true }) },
+    { ...input, proof: seal({ ...body, previousRecoveryV1Sha256: "0".repeat(64) }) },
+    { ...input, proof: seal({ ...body, subscriptionId: "sub_other" }) },
+    {
+      ...input,
+      proof: seal({
+        ...body,
+        [proof.phase === "past-due" ? "purchaseSha256" : "failureSha256"]: "0".repeat(64),
+      }),
+    },
   ])
     assert.throws(() => protectedRecoveryCompanionCheckpoint(altered));
 }

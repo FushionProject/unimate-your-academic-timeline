@@ -8,9 +8,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { TARGET, assertIgnored } from "./prepare-stripe-sandbox.mjs";
 import { validateRecord, saveFixtureScreenshot } from "./verify-companion-sandbox-browser.mjs";
 import { attachPreviewAccess, validatePreviewAccess } from "./protected-companion-preview.mjs";
-import { assertRecoveryProof } from "./protected-billing-recovery-policy.mjs";
+import { createRecoveryPolicy } from "./protected-billing-recovery-policy.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
+const DEFAULT_RECOVERY_POLICY = createRecoveryPolicy();
 const fail = (code) => {
   throw new Error(code);
 };
@@ -27,7 +28,9 @@ export function protectedRecoveryCompanionCheckpoint({
   lastRevision,
   previousProof,
   previousPhase,
+  recoveryPolicy = DEFAULT_RECOVERY_POLICY,
 } = {}) {
+  const assertRecoveryProof = recoveryPolicy.assertProof;
   assertRecoveryProof(baseline, "baseline");
   if (!["purchased", "past-due", "recovered", "revoked"].includes(phase))
     fail("COMPANION_RECOVERY_PHASE_REQUIRED");
@@ -43,6 +46,17 @@ export function protectedRecoveryCompanionCheckpoint({
     proof.billingRevision <= lastRevision
   )
     fail("COMPANION_RECOVERY_PROOF_MISMATCH");
+  if (recoveryPolicy.config.graceEnabled === false && ["past-due", "recovered"].includes(phase)) {
+    const prior = phase === "past-due" ? "purchased" : "past-due";
+    assertRecoveryProof(previousProof, prior);
+    if (
+      previousPhase !== (phase === "past-due" ? "expect-pro" : "expect-recovery-locked") ||
+      proof[phase === "past-due" ? "purchaseSha256" : "failureSha256"] !==
+        previousProof.evidenceSha256 ||
+      proof.subscriptionId !== previousProof.subscriptionId
+    )
+      fail("COMPANION_RECOVERY_PREDECESSOR_MISMATCH");
+  }
   if (phase === "revoked") {
     if (!["purchased", "recovered"].includes(proof.predecessorPhase))
       fail("COMPANION_REVOCATION_PREDECESSOR_REQUIRED");
@@ -233,7 +247,9 @@ export async function startProtectedCompanionBillingHarness({
   privateDirectory,
   modulePath,
   recoveryBaseline = null,
+  recoveryPolicy = DEFAULT_RECOVERY_POLICY,
 } = {}) {
+  const assertRecoveryProof = recoveryPolicy.assertProof;
   validateRecord(record);
   validatePublicKey(publicKey);
   if (process.env.DEBUG || process.env.PWDEBUG) fail("PROTOCOL_LOGGING_MUST_BE_DISABLED");
@@ -500,6 +516,7 @@ export async function startProtectedCompanionBillingHarness({
                 lastRevision,
                 previousProof: previousRecoveryProof,
                 previousPhase: previous,
+                recoveryPolicy,
               })
             : null;
         let persisted;
@@ -604,12 +621,26 @@ export async function startProtectedCompanionBillingHarness({
       expectFree: () => expect("expect-free", "created", false),
       expectPro: (proof) => expect("expect-pro", "expect-free", true, proof, "purchased"),
       expectRecoveryPro: (proof) => {
-        if (!recoveryBaseline) fail("COMPANION_RECOVERY_BASELINE_REQUIRED");
+        if (!recoveryBaseline || recoveryPolicy.config.graceEnabled !== true)
+          fail("COMPANION_RECOVERY_BASELINE_REQUIRED");
         return expect("expect-recovery-pro", "expect-pro", true, proof, "past-due");
+      },
+      expectRecoveryLocked: (proof) => {
+        if (!recoveryBaseline || recoveryPolicy.config.graceEnabled !== false)
+          fail("COMPANION_RECOVERY_LOCKED_POLICY_REQUIRED");
+        return expect("expect-recovery-locked", "expect-pro", false, proof, "past-due");
       },
       expectRecoveredPro: (proof) => {
         if (!recoveryBaseline) fail("COMPANION_RECOVERY_BASELINE_REQUIRED");
-        return expect("expect-recovered-pro", "expect-recovery-pro", true, proof, "recovered");
+        return expect(
+          "expect-recovered-pro",
+          recoveryPolicy.config.graceEnabled === false
+            ? "expect-recovery-locked"
+            : "expect-recovery-pro",
+          true,
+          proof,
+          "recovered",
+        );
       },
       expectRevoked: (proof) =>
         recoveryBaseline

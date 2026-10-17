@@ -160,9 +160,10 @@ async function fixture(test) {
         });
       throw new Error("unexpected fixture read");
     };
-    const run = (action) =>
+    const run = (action, expectedSubscriptionId) =>
       sandboxRenewal({
         action,
+        expectedSubscriptionId,
         approved: true,
         root,
         fetchImpl,
@@ -203,6 +204,64 @@ await fixture(async ({ run, state }) => {
     !/cus_|sub_|pm_|sk_test_|example.test/.test(JSON.stringify(result)),
     "no private identities or keys in status",
   );
+});
+for (const action of [
+  "advance-to-renewal",
+  "settle-renewal",
+  "install-decline",
+  "restore-payment",
+  "pay-invoice",
+])
+  await fixture(async ({ run, state, root }) => {
+    const directory = path.join(root, ".stripe-sandbox.local");
+    const before = await fs.readdir(directory);
+    await assert.rejects(run(action, "sub_other"), /EXPECTED_RENEWAL_SUBSCRIPTION_MISMATCH/);
+    assert.equal(state.writes.length, 0);
+    assert.deepEqual(
+      await fs.readdir(directory),
+      before,
+      "No new attempt journal; owned lock released",
+    );
+  });
+for (const expected of [
+  null,
+  "",
+  42,
+  {},
+  "cus_fixture",
+  "sub_fixture/other",
+  "sub_fixture?x=1",
+  "sub_fixture\n",
+])
+  await fixture(async ({ run, state, root }) => {
+    const directory = path.join(root, ".stripe-sandbox.local");
+    const before = await fs.readdir(directory);
+    await assert.rejects(run("install-decline", expected), /EXPECTED_RENEWAL_SUBSCRIPTION_INVALID/);
+    assert.equal(state.writes.length, 0);
+    assert.deepEqual(await fs.readdir(directory), before);
+  });
+await fixture(async ({ run, state, root }) => {
+  const before = await fs.readdir(path.join(root, ".stripe-sandbox.local"));
+  await assert.rejects(run("status", "sub_fixture"), /EXPECTED_RENEWAL_SUBSCRIPTION_INVALID/);
+  assert.equal(state.writes.length, 0);
+  assert.deepEqual(await fs.readdir(path.join(root, ".stripe-sandbox.local")), before);
+});
+await fixture(async ({ run, state, recurring }) => {
+  const expected = state.sub.id;
+  await run("install-decline", expected);
+  assert.equal(state.sub.default_payment_method, "pm_decline");
+  assert.equal(state.writes.at(-1).path, `/v1/subscriptions/${expected}`);
+  await run("advance-to-renewal", expected);
+  assert.equal(state.writes.at(-1).path, `/v1/test_helpers/test_clocks/${state.clock.id}/advance`);
+  recurring("draft");
+  await run("settle-renewal", expected);
+  state.sub.status = "past_due";
+  recurring("open");
+  await run("restore-payment", expected);
+  assert.equal(state.writes.at(-1).path, `/v1/subscriptions/${expected}`);
+  await run("pay-invoice", expected);
+  assert.equal(state.writes.at(-1).path, `/v1/invoices/${state.invoice.id}/pay`);
+  assert.equal(state.invoice.status, "paid");
 });
 await fixture(async ({ run, state }) => {
   await run("advance-to-renewal");
@@ -356,5 +415,5 @@ for (const kind of ["dispute", "dispute-payment"])
       }
     });
 console.log(
-  "PASS offline synthetic renewal helper: scoped clock steps, decline/restore/payment, identity/amount gates, private journals, no uncertain retries or secret output",
+  "PASS offline synthetic renewal helper: scoped clock steps, exact expected subscription, decline/restore/payment, identity/amount gates, private journals, no uncertain retries or secret output",
 );

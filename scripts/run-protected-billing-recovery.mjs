@@ -41,18 +41,16 @@ import { inspectContinuationFields } from "./continue-protected-sandbox-checkout
 import { inspectCheckoutCardStructure } from "./inspect-protected-sandbox-checkout.mjs";
 import {
   PROTECTED_BILLING_RECOVERY as C,
+  PROTECTED_BILLING_RECOVERY_V2,
+  createRecoveryPolicy,
   assertRecoveryProof,
-  verifyRecoveryBaseline,
-  verifyRecoveryPurchase,
-  verifyRecoveryFailure,
-  verifyRecoveryCompletion,
-  verifyRecoveryRevocation,
 } from "./protected-billing-recovery-policy.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const PROJECT = "prj_5XZ4ulni13tNLCvNzdL1gUPvashI";
 const TEAM = "team_MwJPMKdnqu1z8dxbKYBqdJCY";
 export const RECOVERY_JOURNAL = "protected-billing-recovery-v1.json";
+export const RECOVERY_V2_JOURNAL = "protected-billing-recovery-v2.json";
 const COMMANDS = new Set([
   "STATUS",
   "CHECKOUT",
@@ -99,22 +97,52 @@ export function assertRecoveryStart({ approved, env = process.env } = {}) {
     fail("RECOVERY_EXPLICIT_PRIVATE_APPROVAL_REQUIRED");
 }
 
-export function assertRecoveryDeployment(raw) {
+export function assertRecoveryDeployment(raw, recoveryConfig = C) {
+  const graceOff = recoveryConfig.graceEnabled === false;
   if (
-    raw?.meta?.githubCommitSha !== C.source ||
+    raw?.meta?.githubCommitSha !== recoveryConfig.source ||
     !Array.isArray(raw.alias) ||
     raw.alias.length ||
     raw?.target !== null ||
     raw?.readyState !== "READY" ||
     !Array.isArray(raw.env) ||
     raw.env.some((key) => typeof key !== "string" || !/^[A-Z][A-Z0-9_]*$/.test(key)) ||
-    raw.env.includes("STRIPE_PAST_DUE_GRACE_ENABLED")
+    raw.env.includes("STRIPE_PAST_DUE_GRACE_ENABLED") !== graceOff
   )
     fail("RECOVERY_EXACT_UNALIASED_SOURCE_REQUIRED");
-  // This exact deployed source enables grace unless its value is "false".
-  // Authenticated deployment metadata exposes keys, not decrypted values. Only
-  // the verified absence is accepted; an encrypted present key is not guessed.
-  return { graceEnabled: true };
+  // V1's pinned source enables grace when absent. V2 must have the key, but
+  // metadata exposes names only: its effective value still needs the separate
+  // authenticated read-only runtime check. Never infer an encrypted value.
+  return graceOff ? { runtimeGraceVerificationRequired: true } : { graceEnabled: true };
+}
+
+// Executed in the isolated, authenticated website context. The existing route
+// transport attaches OIDC to this exact origin only. Return no token/user data.
+export async function readRecoveryRuntimeStatus({ origin, accessToken }) {
+  if (globalThis.location.origin !== origin) throw new Error("RECOVERY_RUNTIME_ORIGIN_REQUIRED");
+  const response = await fetch(`${origin}/api/billing-status?reconcile=false`, {
+    method: "GET",
+    redirect: "error",
+    cache: "no-store",
+    credentials: "omit",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (response.status !== 200) return { status: response.status };
+  const body = await response.json();
+  return { status: 200, pastDueGraceEnabled: body?.pastDueGraceEnabled };
+}
+
+export async function verifyRecoveryRuntimeGrace(page, origin, accessToken) {
+  if (
+    new URL(page.url()).origin !== origin ||
+    typeof accessToken !== "string" ||
+    !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(accessToken)
+  )
+    fail("RECOVERY_RUNTIME_GRACE_OFF_REQUIRED");
+  const result = await page.evaluate(readRecoveryRuntimeStatus, { origin, accessToken });
+  if (result?.status !== 200 || result.pastDueGraceEnabled !== false)
+    fail("RECOVERY_RUNTIME_GRACE_OFF_REQUIRED");
+  return false;
 }
 
 export function assertRecoverySetup(setup, record) {
@@ -346,6 +374,16 @@ export async function assertNoRecoveryPaymentClaim(directory, sessionId) {
   fail("RECOVERY_PRIOR_PAYMENT_CLAIM_PRESENT");
 }
 
+export async function assertFreshRecoveryV2Run(directory) {
+  try {
+    await fs.lstat(path.join(directory, RECOVERY_V2_JOURNAL));
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  fail("RECOVERY_V2_ALREADY_JOURNALED_NO_RESUME");
+}
+
 export async function selectObservedRecoveryCard({ page, sessionId }) {
   checkoutPage(page, sessionId);
   const card = page.locator(".card-accordion-item-cover");
@@ -380,16 +418,17 @@ export function recoveryRouteDecision(
   { url: address, method, navigation },
   held,
   initialReadOnly = false,
+  recoveryConfig = C,
 ) {
   const url = new URL(address);
   if (/analyze-screenshot|dashboard-ai|ask-unimate/.test(url.pathname)) return "block";
   if (
     (held || initialReadOnly) &&
-    url.origin === C.origin &&
+    url.origin === recoveryConfig.origin &&
     url.pathname === "/api/billing-status"
   )
     return method === "GET" ? "read-only-status" : "block";
-  if (held && url.origin === C.origin && url.pathname === "/upgrade" && navigation)
+  if (held && url.origin === recoveryConfig.origin && url.pathname === "/upgrade" && navigation)
     return "hold-return";
   return "pass";
 }
@@ -463,9 +502,11 @@ export function assertRecoverySnapshotLists(state, record) {
   return state;
 }
 
-export async function verifyRecoveryWarning(page) {
+export async function verifyRecoveryWarning(page, graceEnabled = true) {
   const warning = page.getByText(
-    "Your latest payment failed. Pro remains available during the recovery period; update your payment method to avoid interruption.",
+    graceEnabled
+      ? "Your latest payment failed. Pro remains available during the recovery period; update your payment method to avoid interruption."
+      : "Your latest payment failed. Pro access is paused until payment is resolved. Update your payment method to restore access.",
     { exact: true },
   );
   await warning.waitFor({ state: "visible", timeout: 15000 });
@@ -505,7 +546,8 @@ export function createRecoveryController({
   companion,
   persist,
   hold,
-  graceVerified = false,
+  graceVerified,
+  recoveryPolicy = createRecoveryPolicy(C),
   resumeJournal,
   inspectSurface = inspectStripeSurface,
   inspectFields = inspectContinuationFields,
@@ -520,12 +562,20 @@ export function createRecoveryController({
   loadPortalHelper = () => import("./protected-stripe-browser-recovery.mjs"),
   now = Date.now,
 }) {
-  if (graceVerified !== true) fail("RECOVERY_VERIFIED_GRACE_REQUIRED");
+  const C = recoveryPolicy.config;
+  const {
+    verifyBaseline: verifyRecoveryBaseline,
+    verifyPurchase: verifyRecoveryPurchase,
+    verifyFailure: verifyRecoveryFailure,
+    verifyCompletion: verifyRecoveryCompletion,
+    verifyRevocation: verifyRecoveryRevocation,
+  } = recoveryPolicy;
+  if (graceVerified !== (C.graceEnabled ?? true)) fail("RECOVERY_VERIFIED_GRACE_REQUIRED");
   const readSnapshot = async () => assertRecoverySnapshotLists(await snapshot(), record);
   let journal = resumeJournal
     ? structuredClone(resumeJournal)
     : {
-        version: 1,
+        version: C.kind === PROTECTED_BILLING_RECOVERY_V2.kind ? 2 : 1,
         kind: C.kind,
         account: C.account,
         origin: C.origin,
@@ -721,7 +771,7 @@ export function createRecoveryController({
         const session = await stripe(`/checkout/sessions/${journal.sessionId}`);
         const items = await stripe(`/checkout/sessions/${journal.sessionId}/line_items?limit=100`);
         const state = await readSnapshot();
-        if (state.profile.billing_revision !== 62)
+        if (state.profile.billing_revision !== baseline.billingRevision)
           fail("RECOVERY_EXACT_BASELINE_REVISION_REQUIRED");
         assertProtectedPaymentAttempt(
           { ...journal, phase: "checkout-verified" },
@@ -779,7 +829,8 @@ export function createRecoveryController({
         try {
           await page.goto(`${C.origin}/upgrade`, { waitUntil: "domcontentloaded" });
           if (journal.phase === "past-due") {
-            if ((await inspectWarning(page)) !== true) fail("RECOVERY_PAYMENT_WARNING_REQUIRED");
+            if ((await inspectWarning(page, graceVerified)) !== true)
+              fail("RECOVERY_PAYMENT_WARNING_REQUIRED");
             await save({ ...journal, failureWarningVerified: true });
           }
           return {
@@ -809,7 +860,8 @@ export function createRecoveryController({
       if (command === "EXPECT_PAST_DUE") {
         requirePhase("renewal-armed");
         const failure = await evidence("past-due");
-        const result = await companion.expectRecoveryPro(failure);
+        const result =
+          await companion[graceVerified ? "expectRecoveryPro" : "expectRecoveryLocked"](failure);
         await save({ ...journal, phase: "past-due", failure, companionFailure: result });
         return { kind: "companion", ...result };
       }
@@ -939,8 +991,16 @@ export function createRecoveryController({
 
 export async function createRecoveryJournal(
   directory,
-  { resumeText, inspectedOriginalText, startupInspectedText } = {},
+  { resumeText, inspectedOriginalText, startupInspectedText, runVersion = 1 } = {},
 ) {
+  if (
+    ![1, 2].includes(runVersion) ||
+    (runVersion === 2 &&
+      [resumeText, inspectedOriginalText, startupInspectedText].some(
+        (value) => value !== undefined,
+      ))
+  )
+    fail("RECOVERY_RUN_VERSION_REQUIRED");
   const stat = await fs.lstat(directory);
   if (
     !stat.isDirectory() ||
@@ -949,7 +1009,7 @@ export async function createRecoveryJournal(
     stat.mode & 0o077
   )
     fail("RECOVERY_PRIVATE_DIRECTORY_REQUIRED");
-  const filename = path.join(directory, RECOVERY_JOURNAL);
+  const filename = path.join(directory, runVersion === 2 ? RECOVERY_V2_JOURNAL : RECOVERY_JOURNAL);
   if (
     startupInspectedText !== undefined &&
     (typeof startupInspectedText !== "string" ||
@@ -1013,6 +1073,7 @@ export async function createRecoveryJournal(
 
 export async function runProtectedBillingRecovery({
   approved = false,
+  runVersion = 1,
   resumeUnpaid = false,
   resumeInspectedUnpaid = false,
   resumeStartupFailure = false,
@@ -1026,6 +1087,13 @@ export async function runProtectedBillingRecovery({
   )
     fail("RECOVERY_UNPAID_RESUME_NOT_ELIGIBLE");
   const resuming = resumeUnpaid || resumeInspectedUnpaid || resumeStartupFailure;
+  if (![1, 2].includes(runVersion) || (runVersion === 2 && resuming))
+    fail("RECOVERY_RUN_VERSION_REQUIRED");
+  const recoveryPolicy = createRecoveryPolicy(runVersion === 2 ? PROTECTED_BILLING_RECOVERY_V2 : C);
+  const recoveryConfig = recoveryPolicy.config;
+  // No operator-supplied baseline, origin, source or journal path is accepted.
+  const selectedOrigin = recoveryConfig.origin;
+  const deferredStart = runVersion === 2 || resumeStartupFailure;
   const report = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
   let currentStage = "configuration";
   const stage = (name) => {
@@ -1081,12 +1149,15 @@ export async function runProtectedBillingRecovery({
     )
       fail("RECOVERY_PRIVATE_DIRECTORY_REQUIRED");
     lock = await fs.open(path.join(directory, "protected-billing-run.lock"), "wx", 0o600);
+    if (runVersion === 2) await assertFreshRecoveryV2Run(directory);
     const record = JSON.parse(await readPrivate(path.join(ROOT, ARTIFACT)));
     validateRecord(record);
     const setup = JSON.parse(
       await readPrivate(path.join(directory, "protected-preview-setup-v1.json")),
     );
     assertRecoverySetup(setup, record);
+    const previousRecoveryText =
+      runVersion === 2 ? await readPrivate(path.join(directory, RECOVERY_JOURNAL)) : undefined;
     const journalHashes = {};
     for (const version of ["v1", "v2"])
       journalHashes[version] = hash(
@@ -1100,14 +1171,17 @@ export async function runProtectedBillingRecovery({
         ...options,
         env: { ...environment, CI: "1", NO_COLOR: "1", VERCEL_CLI_USE_NATIVE_BINARY: "0" },
       });
-    let graceVerified = false;
+    let graceVerified;
     const deployment = await loadVerifiedPreviewDeployment(
-      C.origin,
+      selectedOrigin,
       project,
       async (file, args, options) => {
         if (file !== "npx" || args[1] !== "vercel@63.1.2") fail("RECOVERY_PINNED_CLI_REQUIRED");
         const result = await vercel(args.slice(2), options);
-        graceVerified = assertRecoveryDeployment(JSON.parse(result.stdout)).graceEnabled;
+        graceVerified = assertRecoveryDeployment(
+          JSON.parse(result.stdout),
+          recoveryConfig,
+        ).graceEnabled;
         return result;
       },
     );
@@ -1124,6 +1198,11 @@ export async function runProtectedBillingRecovery({
       : { apikey: service, Authorization: `Bearer ${service}` };
     const snapshot = async () => {
       active();
+      if (
+        runVersion === 2 &&
+        (await readPrivate(path.join(directory, RECOVERY_JOURNAL))) !== previousRecoveryText
+      )
+        fail("RECOVERY_PREVIOUS_JOURNAL_CHANGED");
       const user = await privateJson(
         fetch,
         `${TARGET.supabase}/auth/v1/admin/users/${record.userId}`,
@@ -1147,8 +1226,8 @@ export async function runProtectedBillingRecovery({
         `/checkout/sessions?${new URLSearchParams({ customer: C.customer, status: "open", limit: "100" })}`,
       );
       return {
-        origin: C.origin,
-        source: C.source,
+        origin: selectedOrigin,
+        source: recoveryConfig.source,
         record,
         user,
         customer,
@@ -1157,6 +1236,7 @@ export async function runProtectedBillingRecovery({
         subscriptions,
         openCheckouts,
         journalHashes,
+        ...(runVersion === 2 ? { previousRecoveryText } : {}),
         observedAt: Date.now(),
       };
     };
@@ -1217,11 +1297,16 @@ export async function runProtectedBillingRecovery({
         },
       };
     }
-    const baseline = resumeTarget?.baseline || verifyRecoveryBaseline(initial);
-    if (baseline.billingRevision !== 62) fail("RECOVERY_EXACT_BASELINE_REVISION_REQUIRED");
-    const journalOptions = { resumeText, inspectedOriginalText, startupInspectedText };
+    const baseline = resumeTarget?.baseline || recoveryPolicy.verifyBaseline(initial);
+    if (
+      runVersion === 2
+        ? baseline.billingRevision < recoveryConfig.baselineRevision
+        : baseline.billingRevision !== 62
+    )
+      fail("RECOVERY_EXACT_BASELINE_REVISION_REQUIRED");
+    const journalOptions = { resumeText, inspectedOriginalText, startupInspectedText, runVersion };
     let persist;
-    if (!resumeStartupFailure) {
+    if (!deferredStart) {
       persist = await createRecoveryJournal(directory, journalOptions);
       await persist(
         resumeJournal || {
@@ -1258,7 +1343,7 @@ export async function runProtectedBillingRecovery({
     } finally {
       await fs.rm(cwd, { recursive: true, force: true });
     }
-    const access = validatePreviewAccess(C.origin, token, project, deployment);
+    const access = validatePreviewAccess(selectedOrigin, token, project, deployment);
     token = "";
     active();
     stage("listener");
@@ -1318,12 +1403,13 @@ export async function runProtectedBillingRecovery({
         { url: url.href, method: request.method(), navigation: request.isNavigationRequest() },
         held,
         initialReadOnly,
+        recoveryConfig,
       );
       if (decision === "block") return route.abort("blockedbyclient");
       if (decision === "read-only-status") {
         // A read-only entitlement refresh is needed to render Manage billing;
         // never let the website reconcile the profile during evidence collection.
-        return route.fallback({ url: `${C.origin}/api/billing-status?reconcile=false` });
+        return route.fallback({ url: `${selectedOrigin}/api/billing-status?reconcile=false` });
       }
       if (decision === "hold-return")
         return route.fulfill({
@@ -1332,7 +1418,7 @@ export async function runProtectedBillingRecovery({
           body: "<!doctype html><title>Private verification</title><p>Waiting for verified test evidence.</p>",
         });
       if (
-        url.origin === C.origin &&
+        url.origin === selectedOrigin &&
         url.pathname === "/api/billing-status" &&
         request.method() === "GET" &&
         url.searchParams.get("reconcile") !== "false"
@@ -1343,7 +1429,7 @@ export async function runProtectedBillingRecovery({
     const page = await context.newPage();
     page.setDefaultTimeout(15000);
     stage("website-navigation");
-    await page.goto(`${C.origin}/signin?next=upgrade`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${selectedOrigin}/signin?next=upgrade`, { waitUntil: "domcontentloaded" });
     stage("website-signin-readiness");
     await fillReadyRecoverySignIn(page, record);
     stage("website-signin-submit");
@@ -1360,7 +1446,8 @@ export async function runProtectedBillingRecovery({
       page.getByRole("button", { name: "Sign in", exact: true }).click(),
     ]);
     stage("website-marked-session");
-    const user = response.status() === 200 ? (await response.json()).user : null;
+    const signedIn = response.status() === 200 ? await response.json() : null;
+    const user = signedIn?.user;
     if (
       user?.id !== record.userId ||
       user.email !== record.email ||
@@ -1369,7 +1456,15 @@ export async function runProtectedBillingRecovery({
     )
       fail("RECOVERY_MARKED_SIGNIN_REQUIRED");
     stage("website-upgrade-navigation");
-    await page.waitForURL((url) => url.origin === C.origin && url.pathname === "/upgrade");
+    await page.waitForURL((url) => url.origin === selectedOrigin && url.pathname === "/upgrade");
+    if (runVersion === 2) {
+      stage("website-runtime-grace");
+      graceVerified = await verifyRecoveryRuntimeGrace(
+        page,
+        selectedOrigin,
+        signedIn?.access_token,
+      );
+    }
     stage("Companion");
     companion = await startProtectedCompanionBillingHarness({
       record,
@@ -1380,6 +1475,7 @@ export async function runProtectedBillingRecovery({
       privateDirectory: directory,
       modulePath,
       recoveryBaseline: baseline,
+      recoveryPolicy,
     });
     const freeEvidence = await companion.expectFree();
     report({
@@ -1427,6 +1523,23 @@ export async function runProtectedBillingRecovery({
         createWriter: () => createRecoveryJournal(directory, journalOptions),
       });
     }
+    if (runVersion === 2) {
+      persist = deferRecoveryJournal({
+        verifyReady: async () => {
+          active();
+          const location = new URL(page.url());
+          if (location.origin !== selectedOrigin || location.pathname !== "/upgrade")
+            fail("RECOVERY_UPGRADE_PAGE_REQUIRED");
+          const current = recoveryPolicy.verifyBaseline(await snapshot());
+          if (
+            current.billingRevision !== baseline.billingRevision ||
+            current.clockId !== baseline.clockId
+          )
+            fail("RECOVERY_BASELINE_CHANGED");
+        },
+        createWriter: () => createRecoveryJournal(directory, journalOptions),
+      });
+    }
     const deliveredEvents = async () => {
       const observed = deliveries.filter((entry) => entry.httpStatus === 200);
       const ids = [...new Set(observed.map((entry) => entry.eventId))];
@@ -1454,6 +1567,7 @@ export async function runProtectedBillingRecovery({
       companion,
       persist,
       graceVerified,
+      recoveryPolicy,
       resumeJournal,
       assertReconciliationSettled: reconciliation.assertSettled,
       hold: (value) => {
@@ -1510,6 +1624,7 @@ export async function runProtectedBillingRecovery({
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const runVersion = process.argv[2] === "--recovery-v2" ? 2 : 1;
   const resumeUnpaid = process.argv[3] === "--resume-unpaid";
   const resumeInspectedUnpaid = process.argv[3] === "--resume-inspected-unpaid";
   const resumeStartupFailure = process.argv[3] === "--resume-startup-failure";
@@ -1517,11 +1632,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     approved:
       process.argv.length ===
         (resumeUnpaid || resumeInspectedUnpaid || resumeStartupFailure ? 4 : 3) &&
-      process.argv[2] === "--recovery-v1" &&
+      ["--recovery-v1", "--recovery-v2"].includes(process.argv[2]) &&
       process.env.UNIMATE_PROTECTED_BILLING_RECOVERY === "approved",
     resumeUnpaid,
     resumeInspectedUnpaid,
     resumeStartupFailure,
+    runVersion,
   }).catch((error) => {
     console.error(JSON.stringify({ code: recoveryErrorCode(error) }));
     process.exitCode = 1;
