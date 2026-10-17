@@ -530,33 +530,62 @@ const checkout = clone(f.bought);
 checkout.events[0].type = checkout.deliveries[0].eventType = "checkout.session.completed";
 checkout.events[0].data.object = { ...checkout.session, object: "checkout.session" };
 assert.equal(verifyRecoveryPurchase(checkout).phase, "purchased");
-const revoked = {
-  ...clone(f.recovered),
-  completion: completed,
-  observedAt: f.recovered.observedAt + 10000,
-  actionStartedAt: f.recovered.observedAt + 1000,
-};
-revoked.profile.is_pro = false;
-revoked.profile.billing_revision = 75;
-revoked.subscriptions.data.at(-1).status = "canceled";
-revoked.events = [
-  {
-    id: "evt_deleted",
-    type: "customer.subscription.deleted",
-    livemode: false,
-    data: { object: { ...clone(revoked.subscriptions.data.at(-1)), object: "subscription" } },
-  },
-];
-revoked.deliveries = [
-  {
-    eventId: "evt_deleted",
-    eventType: "customer.subscription.deleted",
-    httpStatus: 200,
-    at: revoked.observedAt - 100,
-  },
-];
-assert.equal(verifyRecoveryRevocation(revoked).phase, "revoked");
-rejects(revoked, verifyRecoveryRevocation, [
+function revocationInput(input, completion) {
+  const revoked = {
+    ...clone(input),
+    completion,
+    observedAt: input.observedAt + 10000,
+    actionStartedAt: input.observedAt + 1000,
+    actionBillingRevision: completion.billingRevision + 2,
+  };
+  revoked.profile.is_pro = false;
+  revoked.profile.billing_revision = revoked.actionBillingRevision + 1;
+  revoked.subscriptions.data.at(-1).status = "canceled";
+  revoked.events = [
+    {
+      id: "evt_deleted",
+      type: "customer.subscription.deleted",
+      livemode: false,
+      data: { object: { ...clone(revoked.subscriptions.data.at(-1)), object: "subscription" } },
+    },
+  ];
+  revoked.deliveries = [
+    {
+      eventId: "evt_deleted",
+      eventType: "customer.subscription.deleted",
+      httpStatus: 200,
+      at: revoked.observedAt - 100,
+    },
+  ];
+  return revoked;
+}
+const revocationFailures = [
+  (i) => delete i.actionBillingRevision,
+  (i) => (i.actionBillingRevision = -1),
+  (i) => (i.actionBillingRevision = i.completion.billingRevision - 1),
+  (i) => (i.profile.billing_revision = i.actionBillingRevision),
+  (i) => (i.completion = f.failure),
+  (i) => (i.completion = f.baseline),
+  (i) =>
+    (i.completion = {
+      ...i.completion,
+      phase: "purchased" === i.completion.phase ? "recovered" : "purchased",
+    }),
+  (i) => (i.origin = "https://unimate-other.vercel.app"),
+  (i) => (i.source = "72a0e29"),
+  (i) => (i.journalHashes.v1 = "0".repeat(64)),
+  (i) => (i.record.account = "acct_other"),
+  (i) => (i.customer.livemode = true),
+  (i) => (i.customer.id = "cus_other"),
+  (i) => (i.clock.id = "clock_other"),
+  (i) => (i.user.app_metadata = {}),
+  (i) => (i.subscriptions.data[0].status = "active"),
+  (i) => (i.subscriptions.has_more = true),
+  (i) => i.subscriptions.data.push({ ...i.subscriptions.data.at(-1), id: "sub_extra" }),
+  (i) => (i.subscriptions.data.at(-1).items.data[0].price = "price_other"),
+  (i) => (i.openCheckouts.data = [{ id: "cs_test_open" }]),
+  (i) => (i.actionStartedAt = i.completion.observedAt - 1),
+  (i) => (i.actionStartedAt = i.observedAt + 1),
   (i) => {
     i.profile.is_pro = true;
   },
@@ -578,13 +607,42 @@ rejects(revoked, verifyRecoveryRevocation, [
   (i) => {
     i.events[0].livemode = true;
   },
+  (i) => (i.events[0].account = "acct_other"),
+  (i) => (i.events[0].context = "acct_other"),
+  (i) => (i.events[0].data.object.customer = "cus_other"),
+  (i) => (i.events[0].data.object.status = "active"),
+  (i) => (i.events = []),
+  (i) => (i.deliveries = []),
+  (i) => (i.deliveries[0].eventId = "evt_other"),
   (i) => {
     i.deliveries[0].httpStatus = 500;
   },
   (i) => {
     i.deliveries[0].at = i.actionStartedAt - 1;
   },
-]);
+  (i) => (i.deliveries[0].at = i.observedAt + 1),
+];
+// Direct purchase cancellation must not claim the failed-renewal/Portal path.
+for (const [input, predecessor] of [
+  [f.bought, f.purchase],
+  [f.recovered, completed],
+]) {
+  const revoked = revocationInput(input, predecessor);
+  const proof = verifyRecoveryRevocation(revoked);
+  assert.equal(proof.phase, "revoked");
+  assert.equal(proof.predecessorPhase, predecessor.phase);
+  assert.equal(proof.completionSha256, predecessor.evidenceSha256);
+  assert.equal(proof.actionBillingRevision, revoked.actionBillingRevision);
+  assert.equal(proof.subscriptionId, predecessor.subscriptionId);
+  assertRecoveryProof(proof, "revoked");
+  if (predecessor.phase === "purchased") {
+    assert.equal(revoked.failure, undefined);
+    assert.equal(revoked.portal, undefined);
+    assert.equal(proof.failureSha256, undefined);
+    assert.equal(proof.portalId, undefined);
+  }
+  rejects(revoked, verifyRecoveryRevocation, revocationFailures);
+}
 console.log(
-  "PASS fixed private hosted recovery proof: exact preserved baseline, paid purchase, failed renewal, Portal invoice/payment graph, pre-return delivery and revision guards (offline)",
+  "PASS fixed private hosted recovery proof: exact preserved baseline, paid purchase, failed renewal, Portal invoice/payment graph, distinct direct/recovered revocation, pre-return delivery and revision guards (offline)",
 );

@@ -22,6 +22,7 @@ const objectId = (value) => (typeof value === "string" ? value : value?.id);
 
 export async function sandboxClock({
   action,
+  expectedSubscriptionId,
   approved = false,
   root = ROOT,
   fetchImpl = fetch,
@@ -33,6 +34,16 @@ export async function sandboxClock({
     !["status", "attach-clock", "advance-to-expiry", "cancel-immediately"].includes(action)
   )
     fail("EXPLICIT_CLOCK_APPROVAL_REQUIRED");
+  // Programmatic exact-target guard for the separately proven purchase. It is
+  // deliberately not a new CLI argument or a generic subscription selector.
+  if (
+    expectedSubscriptionId !== undefined &&
+    (action !== "cancel-immediately" ||
+      typeof expectedSubscriptionId !== "string" ||
+      !/^sub_[A-Za-z0-9]+$/.test(expectedSubscriptionId) ||
+      expectedSubscriptionId.trim() !== expectedSubscriptionId)
+  )
+    fail("EXPECTED_CANCELLATION_SUBSCRIPTION_INVALID");
   try {
     const config = await verify({ approved: true, verificationOnly: true, root, fetchImpl });
     const directory = path.join(root, ".stripe-sandbox.local");
@@ -148,6 +159,8 @@ export async function sandboxClock({
     if (active.length !== 1 || active[0].status !== "active")
       fail("SINGLE_ACTIVE_SUBSCRIPTION_REQUIRED");
     const subscription = active[0];
+    if (expectedSubscriptionId !== undefined && subscription.id !== expectedSubscriptionId)
+      fail("EXPECTED_CANCELLATION_SUBSCRIPTION_MISMATCH");
     let targetTime = null;
     if (action === "advance-to-expiry") {
       const periodEnd =

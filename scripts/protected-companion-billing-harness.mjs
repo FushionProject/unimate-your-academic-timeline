@@ -25,6 +25,8 @@ export function protectedRecoveryCompanionCheckpoint({
   origin,
   userId,
   lastRevision,
+  previousProof,
+  previousPhase,
 } = {}) {
   assertRecoveryProof(baseline, "baseline");
   if (!["purchased", "past-due", "recovered", "revoked"].includes(phase))
@@ -41,6 +43,21 @@ export function protectedRecoveryCompanionCheckpoint({
     proof.billingRevision <= lastRevision
   )
     fail("COMPANION_RECOVERY_PROOF_MISMATCH");
+  if (phase === "revoked") {
+    if (!["purchased", "recovered"].includes(proof.predecessorPhase))
+      fail("COMPANION_REVOCATION_PREDECESSOR_REQUIRED");
+    assertRecoveryProof(previousProof, proof.predecessorPhase);
+    if (
+      previousPhase !==
+        (proof.predecessorPhase === "purchased" ? "expect-pro" : "expect-recovered-pro") ||
+      proof.completionSha256 !== previousProof.evidenceSha256 ||
+      proof.subscriptionId !== previousProof.subscriptionId ||
+      !Number.isSafeInteger(proof.actionBillingRevision) ||
+      proof.actionBillingRevision < lastRevision ||
+      proof.billingRevision <= proof.actionBillingRevision
+    )
+      fail("COMPANION_REVOCATION_PREDECESSOR_MISMATCH");
+  }
   return proof.billingRevision;
 }
 
@@ -466,6 +483,7 @@ export async function startProtectedCompanionBillingHarness({
     await panel(".um-mascot", true);
     let phase = "created";
     let lastRevision;
+    let previousRecoveryProof;
     let checking = false;
     async function expect(action, previous, isPro, recoveryProof, recoveryPhase) {
       if (checking || phase !== previous || closed) fail("COMPANION_EXPECTATION_ORDER_INVALID");
@@ -480,6 +498,8 @@ export async function startProtectedCompanionBillingHarness({
                 origin: app,
                 userId: record.userId,
                 lastRevision,
+                previousProof: previousRecoveryProof,
+                previousPhase: previous,
               })
             : null;
         let persisted;
@@ -556,6 +576,7 @@ export async function startProtectedCompanionBillingHarness({
         const artifactPath = await saveFixtureScreenshot(page, fixtureOrigin, directory);
         screenshots.push(artifactPath);
         lastRevision = persisted.revision;
+        if (recoveryProof) previousRecoveryProof = recoveryProof;
         phase = action;
         return {
           action,
@@ -592,7 +613,13 @@ export async function startProtectedCompanionBillingHarness({
       },
       expectRevoked: (proof) =>
         recoveryBaseline
-          ? expect("expect-revoked", "expect-recovered-pro", false, proof, "revoked")
+          ? expect(
+              "expect-revoked",
+              proof?.predecessorPhase === "purchased" ? "expect-pro" : "expect-recovered-pro",
+              false,
+              proof,
+              "revoked",
+            )
           : expect("expect-revoked", "expect-pro", false),
       close,
       get screenshotPaths() {

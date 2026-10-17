@@ -7,6 +7,8 @@ import { TARGET, ARTIFACT } from "../../scripts/prepare-stripe-sandbox.mjs";
 
 async function fixture({
   action = "status",
+  expectedSubscriptionId,
+  expectedTargetError,
   wrongMarker = false,
   wrongCustomer = false,
   wrongPrice = false,
@@ -134,6 +136,7 @@ async function fixture({
     const run = () =>
       sandboxClock({
         action,
+        expectedSubscriptionId,
         approved: true,
         root,
         fetchImpl,
@@ -146,6 +149,17 @@ async function fixture({
         },
         now: () => 1999999900000,
       });
+    if (expectedTargetError) {
+      const before = await fs.readdir(path.join(root, ".stripe-sandbox.local"));
+      await assert.rejects(run(), expectedTargetError);
+      assert.equal(writes.length, 0, "Wrong exact target never reaches a Stripe mutation");
+      assert.deepEqual(
+        await fs.readdir(path.join(root, ".stripe-sandbox.local")),
+        before,
+        "Wrong exact target never creates a new attempt journal",
+      );
+      return;
+    }
     if (
       wrongMarker ||
       wrongCustomer ||
@@ -176,6 +190,14 @@ async function fixture({
       assert.equal((await fs.stat(path.join(root, result.artifact))).mode & 0o777, 0o600);
       const journal = JSON.parse(await fs.readFile(path.join(root, result.artifact), "utf8"));
       assert.equal(journal.state, "accepted");
+      if (expectedSubscriptionId !== undefined) {
+        assert.equal(journal.subscriptionId, expectedSubscriptionId);
+        assert.equal(writes[0].init.method, "DELETE");
+        assert.equal(
+          new URL(writes[0].url).pathname,
+          `/v1/subscriptions/${expectedSubscriptionId}`,
+        );
+      }
       if (action === "advance-to-expiry") assert.equal(journal.targetTime, periodEnd + 1);
       if (action === "attach-clock") {
         assert.equal(result.clockStatus, attachmentStatus);
@@ -198,6 +220,33 @@ await assert.rejects(
 );
 for (const action of ["status", "attach-clock", "advance-to-expiry", "cancel-immediately"])
   await fixture({ action });
+await fixture({ action: "cancel-immediately", expectedSubscriptionId: "sub_fixture" });
+await fixture({
+  action: "cancel-immediately",
+  expectedSubscriptionId: "sub_other",
+  expectedTargetError: /EXPECTED_CANCELLATION_SUBSCRIPTION_MISMATCH/,
+});
+for (const expectedSubscriptionId of [
+  null,
+  "",
+  42,
+  {},
+  "cus_fixture",
+  "sub_fixture?invoice_now=true",
+  "sub_fixture/other",
+  "sub_fixture\n",
+])
+  await fixture({
+    action: "cancel-immediately",
+    expectedSubscriptionId,
+    expectedTargetError: /EXPECTED_CANCELLATION_SUBSCRIPTION_INVALID/,
+  });
+for (const action of ["status", "attach-clock", "advance-to-expiry"])
+  await fixture({
+    action,
+    expectedSubscriptionId: "sub_fixture",
+    expectedTargetError: /EXPECTED_CANCELLATION_SUBSCRIPTION_INVALID/,
+  });
 await fixture({ action: "attach-clock", attachmentStatus: "advancing" });
 for (const attachmentStatus of ["internal_failure", "initializing", "unknown"])
   await fixture({ action: "attach-clock", attachmentStatus });
@@ -230,5 +279,5 @@ for (const bad of [
   await fixture({ action: "cancel-immediately", [bad]: true });
 await fixture({ action: "advance-to-expiry", scheduled: false });
 console.log(
-  "PASS offline sandbox clock: synthetic identity/link/price, single-active scope, exact expiry, no DB writes, private journal and no uncertain retry",
+  "PASS offline sandbox clock: synthetic identity/link/price, single-active and optional exact cancellation scope, exact expiry, no DB writes, private journal and no uncertain retry",
 );

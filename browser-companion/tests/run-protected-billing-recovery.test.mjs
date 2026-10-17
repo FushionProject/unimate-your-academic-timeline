@@ -19,6 +19,8 @@ import {
   RECOVERY_JOURNAL,
   verifyUnpaidRecoveryResume,
   verifyInspectedUnpaidRecoveryResume,
+  verifySetupFailureRecoveryResume,
+  deferRecoveryJournal,
   selectObservedRecoveryCard,
   observedRecoveryCard,
   assertNoRecoveryPaymentClaim,
@@ -32,6 +34,56 @@ import { TARGET, SetupError } from "../../scripts/prepare-stripe-sandbox.mjs";
 
 // Import and rejected invocation must not read credentials or contact services.
 await assert.rejects(runProtectedBillingRecovery(), /RECOVERY_EXPLICIT_PRIVATE_APPROVAL_REQUIRED/);
+{
+  const calls = [];
+  let ready = false;
+  const persist = deferRecoveryJournal({
+    verifyReady: async () => {
+      calls.push("verify");
+      if (!ready) throw new Error("fixture not ready");
+    },
+    createWriter: async () => {
+      calls.push("create");
+      return async (value) => calls.push(value.phase);
+    },
+  });
+  assert.deepEqual(calls, [], "Construction and a browser failure before commit do no journal I/O");
+  await assert.rejects(persist({ phase: "not-ready" }));
+  assert.deepEqual(calls, ["verify"]);
+  ready = true;
+  await persist({ phase: "checkout-verified" });
+  await persist({ phase: "card-select-pending" });
+  assert.deepEqual(calls, [
+    "verify",
+    "verify",
+    "create",
+    "checkout-verified",
+    "card-select-pending",
+  ]);
+  let writes = 0;
+  const uncertain = deferRecoveryJournal({
+    verifyReady: async () => {},
+    createWriter: async () => async () => {
+      writes++;
+      throw new Error("fixture write failure");
+    },
+  });
+  await assert.rejects(uncertain({}));
+  await assert.rejects(uncertain({}), /RECOVERY_CHECKPOINT_COMMIT_UNCERTAIN/);
+  assert.equal(writes, 1);
+  let release;
+  const concurrent = deferRecoveryJournal({
+    verifyReady: () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    createWriter: async () => async () => {},
+  });
+  const pending = concurrent({});
+  await assert.rejects(concurrent({}), /RECOVERY_CHECKPOINT_COMMIT_UNCERTAIN/);
+  release();
+  await pending;
+}
 {
   const calls = [];
   const page = {
@@ -650,9 +702,74 @@ const purchase = async (h) => {
       originalJournalSha256: firstResume.resumedFrom.journalSha256,
       phase: "checkout-verified",
       newCompanionSession: true,
-      at: 1800000040000,
+      at: firstResume.resumedFrom.at + 1,
     },
   };
+  const startupInput = {
+    ...inspectedInput,
+    journal: secondJournal,
+    inspectedText: JSON.stringify(firstResume),
+  };
+  assert.equal(verifySetupFailureRecoveryResume(startupInput).checkoutUrl, h.session.url);
+  assert.throws(() => verifyInspectedUnpaidRecoveryResume(startupInput));
+  for (const mutate of [
+    (x) => (x.inspectedText += " "),
+    (x) => (x.originalText += " "),
+    (x) => (x.journal.startupResume = {}),
+    (x) => (x.journal.inspectedResume.freeCompanion = firstResume.resumedFrom.freeCompanion),
+    (x) => (x.journal.inspectedResume.journalSha256 = "f".repeat(64)),
+    (x) => (x.journal.inspectedResume.originalJournalSha256 = "f".repeat(64)),
+    (x) => (x.journal.inspectedResume.at = x.state.observedAt + 1),
+    (x) => (x.journal.inspectedResume.at = firstResume.resumedFrom.at - 1),
+    (x) => (x.journal.inspectedResume.newCompanionSession = false),
+    (x) => (x.journal.inspectedResume.phase = "card-selected"),
+    (x) => (x.journal.inspectedResume.commands = []),
+    (x) => (x.journal.paymentAttempted = false),
+    (x) => (x.journal.cardFillAttempted = true),
+    (x) => (x.journal.cardSelectAttempted = true),
+    (x) => (x.journal.sessionId = "cs_test_other"),
+    (x) => (x.state.profile.billing_revision = 63),
+    (x) => (x.state.profile.is_pro = true),
+    (x) => (x.state.clock.status = "advancing"),
+    (x) => (x.state.subscriptions.data[0].status = "active"),
+    (x) => x.state.openCheckouts.data.push(structuredClone(x.session)),
+    (x) => (x.session.payment_intent = "pi_attempted"),
+    (x) => (x.session.payment_status = "paid"),
+    (x) => (x.session.customer = "cus_other"),
+    (x) => (x.session.livemode = true),
+    (x) => (x.items.data[0].price = "price_other"),
+  ]) {
+    const bad = structuredClone(startupInput);
+    mutate(bad);
+    assert.throws(() => verifySetupFailureRecoveryResume(bad));
+  }
+  const startupJournal = {
+    ...secondJournal,
+    startupResume: {
+      journalSha256: createHash("sha256").update(JSON.stringify(secondJournal)).digest("hex"),
+      originalJournalSha256: firstResume.resumedFrom.journalSha256,
+      inspectedJournalSha256: secondJournal.inspectedResume.journalSha256,
+      phase: "checkout-verified",
+      at: secondJournal.inspectedResume.at + 1,
+      newCompanionSession: true,
+      freeCompanion: firstResume.resumedFrom.freeCompanion,
+    },
+  };
+  const startup = harness({ resumeJournal: startupJournal });
+  await assert.rejects(startup.controller.run("CHECKOUT"));
+  await startup.controller.run("INSPECT_CHECKOUT");
+  await startup.controller.run("SELECT_CARD");
+  await startup.controller.run("PAY_CARD_FILL");
+  await startup.controller.run("PAY_CARD_SUBMIT");
+  await startup.controller.run("EXPECT_PRO");
+  assert.equal(startup.counts.click, 0, "Setup continuation reuses the existing unpaid Checkout");
+  assert.equal(startup.counts.pay, 1);
+  assert.deepEqual(startup.journals.at(-1).resumedFrom, firstResume.resumedFrom);
+  assert.deepEqual(startup.journals.at(-1).inspectedResume, secondJournal.inspectedResume);
+  assert.deepEqual(startup.journals.at(-1).startupResume, startupJournal.startupResume);
+  assert.throws(() =>
+    verifySetupFailureRecoveryResume({ ...startupInput, journal: startupJournal }),
+  );
   const second = harness({ resumeJournal: secondJournal });
   assert.equal(second.held(), true);
   await assert.rejects(second.controller.run("CHECKOUT"));
@@ -741,6 +858,7 @@ for (const options of [{ structureInvalid: true }, { selectFails: true }]) {
   await h.controller.run("ARM_RENEWAL");
   h.failRenewal();
   await h.controller.run("EXPECT_PAST_DUE");
+  await assert.rejects(h.controller.run("ARM_REVOCATION"), /RECOVERY_COMMAND_PHASE_REJECTED/);
   await assert.rejects(h.controller.run("PORTAL"), /RECOVERY_PAYMENT_WARNING_REQUIRED/);
   const start = h.trace.length;
   assert.equal((await h.controller.run("RETURN")).paymentWarningVerified, true);
@@ -760,6 +878,41 @@ for (const options of [{ structureInvalid: true }, { selectFails: true }]) {
   await assert.rejects(h.controller.run("PORTAL"));
   await assert.rejects(h.controller.run("EXPECT_RECOVERED"));
   assert.ok(!JSON.stringify(h.journals).includes("https://billing.stripe.com"));
+}
+{
+  const options = { reconcileOnReturn: true, reconciliationInFlight: true };
+  const h = harness(options);
+  await purchase(h);
+  const purchaseProof = structuredClone(h.journals.at(-1).purchase);
+  await h.controller.run("RETURN");
+  assert.equal(h.state.profile.billing_revision, 66);
+  await assert.rejects(h.controller.run("ARM_REVOCATION"), /RECONCILIATION_IN_FLIGHT/);
+  assert.equal(h.journals.at(-1).revocationArmedAt, undefined);
+  options.reconciliationInFlight = false;
+  await h.controller.run("ARM_REVOCATION");
+  assert.equal(h.journals.at(-1).revocationPredecessorPhase, "purchased");
+  assert.equal(h.journals.at(-1).revocationBillingRevision, 66);
+  assert.deepEqual(h.journals.at(-1).purchase, purchaseProof);
+  h.revoke();
+  h.state.profile.billing_revision = 66;
+  await assert.rejects(h.controller.run("EXPECT_REVOKED"), /RECOVERY_ACTION_REVISION_REQUIRED/);
+  assert.equal(h.trace.includes("expectRevoked"), false);
+  h.state.profile.billing_revision = 75;
+  options.noDelivery = true;
+  await assert.rejects(h.controller.run("EXPECT_REVOKED"));
+  options.noDelivery = false;
+  await h.controller.run("EXPECT_REVOKED");
+  const done = h.journals.at(-1);
+  assert.equal(done.revocation.predecessorPhase, "purchased");
+  assert.equal(done.revocation.completionSha256, purchaseProof.evidenceSha256);
+  assert.equal(done.revocation.actionBillingRevision, 66);
+  assert.equal(done.failure, undefined);
+  assert.equal(done.completion, undefined);
+  assert.equal(h.trace.includes("expectRecoveryPro"), false);
+  assert.equal(h.trace.includes("expectRecoveredPro"), false);
+  await h.controller.run("RETURN");
+  assert.equal(h.state.profile.is_pro, false);
+  assert.equal(h.counts.pay, 1);
 }
 {
   // Website reconciliation happens before the action; its increment is not
@@ -1018,6 +1171,43 @@ try {
     createRecoveryJournal(directory, {
       resumeText: await fs.readFile(path.join(directory, RECOVERY_JOURNAL), "utf8"),
       inspectedOriginalText: originalText,
+    }),
+  );
+  const startupText = await fs.readFile(path.join(directory, RECOVERY_JOURNAL), "utf8");
+  for (const changed of [
+    { resumeText: startupText + " " },
+    { inspectedOriginalText: originalText + " " },
+    { startupInspectedText: inspectedText + " " },
+  ])
+    await assert.rejects(
+      createRecoveryJournal(directory, {
+        resumeText: startupText,
+        inspectedOriginalText: originalText,
+        startupInspectedText: inspectedText,
+        ...changed,
+      }),
+    );
+  const startupPersist = await createRecoveryJournal(directory, {
+    resumeText: startupText,
+    inspectedOriginalText: originalText,
+    startupInspectedText: inspectedText,
+  });
+  assert.equal(await fs.readFile(path.join(directory, RECOVERY_JOURNAL), "utf8"), startupText);
+  await startupPersist({ phase: "checkout-pending", startupResume: { fresh: true } });
+  for (const [suffix, expected] of [
+    ["unpaid-resume-original.json", originalText],
+    ["inspected-unpaid-resume-original.json", inspectedText],
+    ["startup-failure-resume-original.json", startupText],
+  ]) {
+    const backup = path.join(directory, `${RECOVERY_JOURNAL}.${suffix}`);
+    assert.equal(await fs.readFile(backup, "utf8"), expected);
+    assert.equal((await fs.stat(backup)).mode & 0o077, 0);
+  }
+  await assert.rejects(
+    createRecoveryJournal(directory, {
+      resumeText: await fs.readFile(path.join(directory, RECOVERY_JOURNAL), "utf8"),
+      inspectedOriginalText: originalText,
+      startupInspectedText: inspectedText,
     }),
   );
   await assert.rejects(createRecoveryJournal(directory));

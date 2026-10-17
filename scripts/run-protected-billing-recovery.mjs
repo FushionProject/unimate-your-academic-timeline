@@ -279,6 +279,62 @@ export function verifyInspectedUnpaidRecoveryResume(input) {
   return target;
 }
 
+export function verifySetupFailureRecoveryResume(input) {
+  const { journal, originalText, inspectedText, state } = input;
+  let inspected;
+  try {
+    inspected = JSON.parse(inspectedText);
+  } catch {
+    fail("RECOVERY_SETUP_FAILURE_CHAIN_REQUIRED");
+  }
+  const { inspectedResume, ...unchanged } = journal || {};
+  const target = verifyInspectedUnpaidRecoveryResume({ ...input, journal: unchanged });
+  verifyInspectedUnpaidRecoveryResume({ ...input, journal: inspected });
+  if (
+    JSON.stringify(unchanged) !== JSON.stringify(inspected) ||
+    !inspectedResume ||
+    Object.keys(inspectedResume).some(
+      (key) =>
+        !["journalSha256", "originalJournalSha256", "phase", "at", "newCompanionSession"].includes(
+          key,
+        ),
+    ) ||
+    inspectedResume.journalSha256 !== hash(inspectedText) ||
+    inspectedResume.originalJournalSha256 !== hash(originalText) ||
+    inspectedResume.phase !== "checkout-verified" ||
+    inspectedResume.newCompanionSession !== true ||
+    !Number.isSafeInteger(inspectedResume.at) ||
+    inspectedResume.at < unchanged.resumedFrom.at ||
+    inspectedResume.at > state.observedAt
+  )
+    fail("RECOVERY_SETUP_FAILURE_CHAIN_REQUIRED");
+  return target;
+}
+
+// Constructing this closure does no I/O. Only the post-readiness commit may
+// preserve/extend the checkpoint. Browser/sign-in failures cannot consume it.
+export function deferRecoveryJournal({ verifyReady, createWriter }) {
+  let writer,
+    committing = false,
+    uncertain = false;
+  return async (value) => {
+    if (committing || uncertain) fail("RECOVERY_CHECKPOINT_COMMIT_UNCERTAIN");
+    committing = true;
+    try {
+      if (!writer) {
+        await verifyReady();
+        uncertain = true;
+        writer = await createWriter();
+      }
+      uncertain = true;
+      await writer(value);
+      uncertain = false;
+    } finally {
+      committing = false;
+    }
+  };
+}
+
 export async function assertNoRecoveryPaymentClaim(directory, sessionId) {
   if (!/^cs_test_[A-Za-z0-9]+$/.test(sessionId || "")) fail("RECOVERY_UNPAID_RESUME_NOT_ELIGIBLE");
   try {
@@ -509,10 +565,14 @@ export function createRecoveryController({
       return verifyRecoveryRevocation({
         ...state,
         baseline,
-        completion: journal.completion,
+        completion:
+          journal.revocationPredecessorPhase === "purchased"
+            ? journal.purchase
+            : journal.completion,
         deliveries,
         events,
         actionStartedAt: journal.revocationArmedAt,
+        actionBillingRevision: journal.revocationBillingRevision,
         reconciliationHeld: held,
       });
     }
@@ -849,11 +909,17 @@ export function createRecoveryController({
         return { kind: "portal-update-submitted", testMode: true, recoveryNotYetVerified: true };
       }
       if (command === "ARM_REVOCATION") {
-        requirePhase("recovered");
+        requirePhase("purchased", "recovered");
         setHold(true);
         assertReconciliationSettled();
-        await evidence("recovered");
-        await save({ ...journal, phase: "revocation-armed", revocationArmedAt: now() });
+        const current = await evidence(journal.phase);
+        await save({
+          ...journal,
+          phase: "revocation-armed",
+          revocationArmedAt: now(),
+          revocationPredecessorPhase: journal.phase,
+          revocationBillingRevision: current.billingRevision,
+        });
         return { kind: "revocation-armed", externalApprovedActionRequired: true };
       }
       if (command === "EXPECT_REVOKED") {
@@ -871,7 +937,10 @@ export function createRecoveryController({
   return { run, initialJournal: () => structuredClone(journal) };
 }
 
-export async function createRecoveryJournal(directory, { resumeText, inspectedOriginalText } = {}) {
+export async function createRecoveryJournal(
+  directory,
+  { resumeText, inspectedOriginalText, startupInspectedText } = {},
+) {
   const stat = await fs.lstat(directory);
   if (
     !stat.isDirectory() ||
@@ -881,6 +950,14 @@ export async function createRecoveryJournal(directory, { resumeText, inspectedOr
   )
     fail("RECOVERY_PRIVATE_DIRECTORY_REQUIRED");
   const filename = path.join(directory, RECOVERY_JOURNAL);
+  if (
+    startupInspectedText !== undefined &&
+    (typeof startupInspectedText !== "string" ||
+      typeof inspectedOriginalText !== "string" ||
+      (await readPrivate(`${filename}.inspected-unpaid-resume-original.json`)) !==
+        startupInspectedText)
+  )
+    fail("RECOVERY_SETUP_FAILURE_CHAIN_REQUIRED");
   if (
     inspectedOriginalText !== undefined &&
     (typeof inspectedOriginalText !== "string" ||
@@ -896,9 +973,11 @@ export async function createRecoveryJournal(directory, { resumeText, inspectedOr
   const handle = await fs.open(
     resumeText === undefined
       ? filename
-      : inspectedOriginalText === undefined
-        ? `${filename}.unpaid-resume-original.json`
-        : `${filename}.inspected-unpaid-resume-original.json`,
+      : startupInspectedText !== undefined
+        ? `${filename}.startup-failure-resume-original.json`
+        : inspectedOriginalText === undefined
+          ? `${filename}.unpaid-resume-original.json`
+          : `${filename}.inspected-unpaid-resume-original.json`,
     "wx",
     0o600,
   );
@@ -936,17 +1015,23 @@ export async function runProtectedBillingRecovery({
   approved = false,
   resumeUnpaid = false,
   resumeInspectedUnpaid = false,
+  resumeStartupFailure = false,
 } = {}) {
   assertRecoveryStart({ approved });
   if (
     typeof resumeUnpaid !== "boolean" ||
     typeof resumeInspectedUnpaid !== "boolean" ||
-    (resumeUnpaid && resumeInspectedUnpaid)
+    typeof resumeStartupFailure !== "boolean" ||
+    [resumeUnpaid, resumeInspectedUnpaid, resumeStartupFailure].filter(Boolean).length > 1
   )
     fail("RECOVERY_UNPAID_RESUME_NOT_ELIGIBLE");
-  const resuming = resumeUnpaid || resumeInspectedUnpaid;
+  const resuming = resumeUnpaid || resumeInspectedUnpaid || resumeStartupFailure;
   const report = (value) => process.stdout.write(`${JSON.stringify(value)}\n`);
-  const stage = (name) => report({ kind: "startup", stage: name });
+  let currentStage = "configuration";
+  const stage = (name) => {
+    currentStage = name;
+    report({ kind: "startup", stage: name });
+  };
   const directory = path.join(ROOT, ".stripe-sandbox.local");
   const environment = Object.fromEntries(
     ["PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG"]
@@ -1081,14 +1166,31 @@ export async function runProtectedBillingRecovery({
     const resumeText = resuming
       ? await readPrivate(path.join(directory, RECOVERY_JOURNAL))
       : undefined;
-    const inspectedOriginalText = resumeInspectedUnpaid
-      ? await readPrivate(path.join(directory, `${RECOVERY_JOURNAL}.unpaid-resume-original.json`))
+    const inspectedOriginalText =
+      resumeInspectedUnpaid || resumeStartupFailure
+        ? await readPrivate(path.join(directory, `${RECOVERY_JOURNAL}.unpaid-resume-original.json`))
+        : undefined;
+    const startupInspectedText = resumeStartupFailure
+      ? await readPrivate(
+          path.join(directory, `${RECOVERY_JOURNAL}.inspected-unpaid-resume-original.json`),
+        )
       : undefined;
-    const verifyResume = resumeInspectedUnpaid
+    const verifyResume = resumeStartupFailure
       ? (value) =>
-          verifyInspectedUnpaidRecoveryResume({ ...value, originalText: inspectedOriginalText })
-      : verifyUnpaidRecoveryResume;
-    const resumeField = resumeInspectedUnpaid ? "inspectedResume" : "resumedFrom";
+          verifySetupFailureRecoveryResume({
+            ...value,
+            originalText: inspectedOriginalText,
+            inspectedText: startupInspectedText,
+          })
+      : resumeInspectedUnpaid
+        ? (value) =>
+            verifyInspectedUnpaidRecoveryResume({ ...value, originalText: inspectedOriginalText })
+        : verifyUnpaidRecoveryResume;
+    const resumeField = resumeStartupFailure
+      ? "startupResume"
+      : resumeInspectedUnpaid
+        ? "inspectedResume"
+        : "resumedFrom";
     if (resuming) {
       originalJournal = JSON.parse(resumeText);
       if (!/^cs_test_[A-Za-z0-9]+$/.test(originalJournal?.sessionId || ""))
@@ -1105,7 +1207,10 @@ export async function runProtectedBillingRecovery({
         ...originalJournal,
         [resumeField]: {
           journalSha256: hash(resumeText),
-          ...(resumeInspectedUnpaid ? { originalJournalSha256: hash(inspectedOriginalText) } : {}),
+          ...(resumeInspectedUnpaid || resumeStartupFailure
+            ? { originalJournalSha256: hash(inspectedOriginalText) }
+            : {}),
+          ...(resumeStartupFailure ? { inspectedJournalSha256: hash(startupInspectedText) } : {}),
           phase: originalJournal.phase,
           at: Date.now(),
           newCompanionSession: true,
@@ -1114,17 +1219,21 @@ export async function runProtectedBillingRecovery({
     }
     const baseline = resumeTarget?.baseline || verifyRecoveryBaseline(initial);
     if (baseline.billingRevision !== 62) fail("RECOVERY_EXACT_BASELINE_REVISION_REQUIRED");
-    const persist = await createRecoveryJournal(directory, { resumeText, inspectedOriginalText });
-    await persist(
-      resumeJournal || {
-        version: 1,
-        kind: C.kind,
-        origin: C.origin,
-        source: C.source,
-        baseline,
-        phase: "preparing",
-      },
-    );
+    const journalOptions = { resumeText, inspectedOriginalText, startupInspectedText };
+    let persist;
+    if (!resumeStartupFailure) {
+      persist = await createRecoveryJournal(directory, journalOptions);
+      await persist(
+        resumeJournal || {
+          version: 1,
+          kind: C.kind,
+          origin: C.origin,
+          source: C.source,
+          baseline,
+          phase: "preparing",
+        },
+      );
+    }
     stage("OIDC");
     const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "unimate-recovery-oidc-"));
     let token;
@@ -1184,11 +1293,13 @@ export async function runProtectedBillingRecovery({
     if ((await captureSecret(listener)) !== setup.webhookSecret)
       fail("RECOVERY_LISTENER_SECRET_MISMATCH");
     active();
-    stage("website");
+    stage("website-browser-import");
     const modulePath = process.env.PLAYWRIGHT_MODULE_PATH;
     const { chromium } = await import(modulePath ? pathToFileURL(modulePath).href : "playwright");
+    stage("website-browser-launch");
     browser = await chromium.launch({ channel: "chromium", headless: true, env: environment });
     active();
+    stage("website-browser-context");
     context = await browser.newContext({
       serviceWorkers: "block",
       viewport: { width: 1280, height: 900 },
@@ -1276,6 +1387,7 @@ export async function runProtectedBillingRecovery({
       ...freeEvidence,
       ...(resuming ? { freshSessionAfterUnpaidResume: true } : {}),
       ...(resumeInspectedUnpaid ? { freshSessionAfterInspectionOnlyStop: true } : {}),
+      ...(resumeStartupFailure ? { freshSessionAfterSetupFailure: true } : {}),
     });
     if (resuming) {
       resumeTarget = verifyResume({
@@ -1291,6 +1403,30 @@ export async function runProtectedBillingRecovery({
       };
     }
     active();
+    if (resumeStartupFailure) {
+      held = true;
+      initialReadOnly = false;
+      stage("checkout-readiness");
+      await page.goto(resumeTarget.checkoutUrl, { waitUntil: "domcontentloaded" });
+      checkoutPage(page, originalJournal.sessionId);
+      persist = deferRecoveryJournal({
+        verifyReady: async () => {
+          active();
+          checkoutPage(page, originalJournal.sessionId);
+          await assertNoRecoveryPaymentClaim(directory, originalJournal.sessionId);
+          verifyResume({
+            journal: originalJournal,
+            record,
+            state: await snapshot(),
+            session: await stripe(`/checkout/sessions/${originalJournal.sessionId}`),
+            items: await stripe(
+              `/checkout/sessions/${originalJournal.sessionId}/line_items?limit=100`,
+            ),
+          });
+        },
+        createWriter: () => createRecoveryJournal(directory, journalOptions),
+      });
+    }
     const deliveredEvents = async () => {
       const observed = deliveries.filter((entry) => entry.httpStatus === 200);
       const ids = [...new Set(observed.map((entry) => entry.eventId))];
@@ -1326,7 +1462,7 @@ export async function runProtectedBillingRecovery({
       },
     });
     await persist(controller.initialJournal());
-    if (resuming) {
+    if (resuming && !resumeStartupFailure) {
       await page.goto(resumeTarget.checkoutUrl, { waitUntil: "domcontentloaded" });
       checkoutPage(page, originalJournal.sessionId);
     }
@@ -1350,6 +1486,16 @@ export async function runProtectedBillingRecovery({
       }
     }
   } catch (error) {
+    report({
+      kind: "startup-stopped",
+      stage: currentStage,
+      category:
+        error?.name === "TimeoutError"
+          ? "timeout"
+          : ["ENOENT", "ERR_MODULE_NOT_FOUND"].includes(error?.code)
+            ? "missing-local-dependency"
+            : "operation-failed",
+    });
     throw new SetupError(recoveryErrorCode(error));
   } finally {
     await stop();
@@ -1366,13 +1512,16 @@ export async function runProtectedBillingRecovery({
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const resumeUnpaid = process.argv[3] === "--resume-unpaid";
   const resumeInspectedUnpaid = process.argv[3] === "--resume-inspected-unpaid";
+  const resumeStartupFailure = process.argv[3] === "--resume-startup-failure";
   runProtectedBillingRecovery({
     approved:
-      process.argv.length === (resumeUnpaid || resumeInspectedUnpaid ? 4 : 3) &&
+      process.argv.length ===
+        (resumeUnpaid || resumeInspectedUnpaid || resumeStartupFailure ? 4 : 3) &&
       process.argv[2] === "--recovery-v1" &&
       process.env.UNIMATE_PROTECTED_BILLING_RECOVERY === "approved",
     resumeUnpaid,
     resumeInspectedUnpaid,
+    resumeStartupFailure,
   }).catch((error) => {
     console.error(JSON.stringify({ code: recoveryErrorCode(error) }));
     process.exitCode = 1;

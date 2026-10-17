@@ -416,7 +416,14 @@ export function verifyRecoveryCompletion(input = {}) {
 export function verifyRecoveryRevocation(input = {}) {
   const scope = snapshot(input);
   assertRecoveryProof(input.baseline, "baseline");
-  assertRecoveryProof(input.completion, "recovered");
+  // A direct paid-purchase cancellation is distinct from a completed recovery.
+  // Neither a failed renewal nor an unverified UI observation is a predecessor.
+  const predecessorPhase = input.completion?.phase;
+  require(["purchased", "recovered"].includes(
+    predecessorPhase,
+  ), "RECOVERY_REVOCATION_PREDECESSOR_REQUIRED");
+  assertRecoveryProof(input.completion, predecessorPhase);
+  actionRevision(input, input.completion);
   const fresh = input.subscriptions.data.filter((sub) => !C.baseline.includes(sub.id));
   require(input.reconciliationHeld === true &&
     positive(input.actionStartedAt) &&
@@ -446,6 +453,8 @@ export function verifyRecoveryRevocation(input = {}) {
     phase: "revoked",
     baselineSha256: input.baseline.evidenceSha256,
     completionSha256: input.completion.evidenceSha256,
+    predecessorPhase,
+    actionBillingRevision: input.actionBillingRevision,
     subscriptionId: fresh[0].id,
     eventId,
   });

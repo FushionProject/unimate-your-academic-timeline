@@ -220,7 +220,12 @@ assert.match(
   source,
   /expect\("expect-recovered-pro", "expect-recovery-pro", true, proof, "recovered"\)/,
 );
-assert.match(source, /expect\("expect-revoked", "expect-recovered-pro", false, proof, "revoked"\)/);
+assert.match(
+  source,
+  /proof\?\.predecessorPhase === "purchased" \? "expect-pro" : "expect-recovered-pro"/,
+);
+assert.match(source, /if \(recoveryProof\) previousRecoveryProof = recoveryProof/);
+assert.match(source, /previousProof: previousRecoveryProof/);
 assert.match(source, /persisted\.revision >= proofRevision/);
 assert.match(source, /COMPANION_RECOVERY_BASELINE_REQUIRED/);
 assert.match(source, /saveFixtureScreenshot\(page, fixtureOrigin, directory\)/);
@@ -249,6 +254,7 @@ const recoveryBaseline = seal({
   phase: "baseline",
 });
 let previousRevision = 62;
+let previousProof;
 for (const phase of ["purchased", "past-due", "recovered", "revoked"]) {
   const { evidenceSha256: _digest, ...body } = recoveryBaseline;
   const proof = seal({
@@ -256,6 +262,14 @@ for (const phase of ["purchased", "past-due", "recovered", "revoked"]) {
     phase,
     baselineSha256: recoveryBaseline.evidenceSha256,
     billingRevision: previousRevision + 3,
+    subscriptionId: "sub_fixture",
+    ...(phase === "revoked"
+      ? {
+          predecessorPhase: "recovered",
+          completionSha256: previousProof.evidenceSha256,
+          actionBillingRevision: previousRevision + 1,
+        }
+      : {}),
   });
   const input = {
     baseline: recoveryBaseline,
@@ -264,6 +278,8 @@ for (const phase of ["purchased", "past-due", "recovered", "revoked"]) {
     origin: RECOVERY.origin,
     userId: record.userId,
     lastRevision: previousRevision,
+    previousProof,
+    previousPhase: phase === "revoked" ? "expect-recovered-pro" : undefined,
   };
   assert.equal(protectedRecoveryCompanionCheckpoint(input), previousRevision + 3);
   for (const altered of [
@@ -287,6 +303,65 @@ for (const phase of ["purchased", "past-due", "recovered", "revoked"]) {
   ])
     assert.throws(() => protectedRecoveryCompanionCheckpoint(altered));
   previousRevision += 3;
+  previousProof = proof;
+}
+// Either paid purchase or completed recovery can precede revocation, but the
+// same panel must have displayed that exact proof: no failed-renewal shortcut.
+for (const [predecessorPhase, previousPhase] of [
+  ["purchased", "expect-pro"],
+  ["recovered", "expect-recovered-pro"],
+]) {
+  const { evidenceSha256: _digest, ...scope } = recoveryBaseline;
+  const predecessorBody = {
+    ...scope,
+    phase: predecessorPhase,
+    baselineSha256: recoveryBaseline.evidenceSha256,
+    subscriptionId: "sub_fixture",
+    billingRevision: 65,
+  };
+  const predecessor = seal(predecessorBody);
+  const revokedBody = {
+    ...predecessorBody,
+    phase: "revoked",
+    predecessorPhase,
+    completionSha256: predecessor.evidenceSha256,
+    actionBillingRevision: 67,
+    billingRevision: 68,
+  };
+  const input = {
+    baseline: recoveryBaseline,
+    proof: seal(revokedBody),
+    phase: "revoked",
+    origin: RECOVERY.origin,
+    userId: record.userId,
+    lastRevision: 66,
+    previousProof: predecessor,
+    previousPhase,
+  };
+  assert.equal(protectedRecoveryCompanionCheckpoint(input), 68);
+  for (const altered of [
+    { ...input, previousProof: undefined },
+    { ...input, previousPhase: "expect-recovery-pro" },
+    { ...input, previousPhase: "expect-free" },
+    {
+      ...input,
+      previousPhase: predecessorPhase === "purchased" ? "expect-recovered-pro" : "expect-pro",
+    },
+    { ...input, previousProof: seal({ ...predecessorBody, billingRevision: 64 }) },
+    { ...input, proof: seal({ ...revokedBody, predecessorPhase: "past-due" }) },
+    {
+      ...input,
+      proof: seal({
+        ...revokedBody,
+        predecessorPhase: predecessorPhase === "purchased" ? "recovered" : "purchased",
+      }),
+    },
+    { ...input, proof: seal({ ...revokedBody, completionSha256: "0".repeat(64) }) },
+    { ...input, proof: seal({ ...revokedBody, subscriptionId: "sub_other" }) },
+    { ...input, proof: seal({ ...revokedBody, actionBillingRevision: 65 }) },
+    { ...input, proof: seal({ ...revokedBody, actionBillingRevision: 68 }) },
+  ])
+    assert.throws(() => protectedRecoveryCompanionCheckpoint(altered));
 }
 console.log(
   "PASS continuous protected companion boundary: composed transport, synthetic identity, read-only scope, no AI/capture, ordered same-panel evidence (offline)",
