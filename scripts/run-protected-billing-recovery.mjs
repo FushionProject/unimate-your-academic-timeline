@@ -107,12 +107,12 @@ export function assertRecoveryDeployment(raw, recoveryConfig = C) {
     raw?.readyState !== "READY" ||
     !Array.isArray(raw.env) ||
     raw.env.some((key) => typeof key !== "string" || !/^[A-Z][A-Z0-9_]*$/.test(key)) ||
-    raw.env.includes("STRIPE_PAST_DUE_GRACE_ENABLED") !== graceOff
+    (!graceOff && raw.env.includes("STRIPE_PAST_DUE_GRACE_ENABLED"))
   )
     fail("RECOVERY_EXACT_UNALIASED_SOURCE_REQUIRED");
-  // V1's pinned source enables grace when absent. V2 must have the key, but
-  // metadata exposes names only: its effective value still needs the separate
-  // authenticated read-only runtime check. Never infer an encrypted value.
+  // V1's pinned source enables grace when absent. V2's runtime-only deployment
+  // setting can be omitted from this names-only list; neither presence nor
+  // absence proves its value. Require the separate authenticated runtime check.
   return graceOff ? { runtimeGraceVerificationRequired: true } : { graceEnabled: true };
 }
 

@@ -172,13 +172,24 @@ const deployment = {
   const metadata = {
     ...deployment,
     meta: { githubCommitSha: config.source },
-    env: ["STRIPE_SECRET_KEY", "STRIPE_PAST_DUE_GRACE_ENABLED"],
+    env: ["STRIPE_SECRET_KEY"],
   };
   assert.deepEqual(assertRecoveryDeployment(metadata, config), {
     runtimeGraceVerificationRequired: true,
   });
+  assert.deepEqual(
+    assertRecoveryDeployment(
+      { ...metadata, env: [...metadata.env, "STRIPE_PAST_DUE_GRACE_ENABLED"] },
+      config,
+    ),
+    {
+      runtimeGraceVerificationRequired: true,
+    },
+  );
   for (const mutate of [
-    (x) => (x.env = ["STRIPE_SECRET_KEY"]),
+    (x) => delete x.env,
+    (x) => (x.env = "STRIPE_PAST_DUE_GRACE_ENABLED=false"),
+    (x) => x.env.push("not-an-env-name"),
     (x) => (x.env = [{ key: "STRIPE_PAST_DUE_GRACE_ENABLED", value: "false" }]),
     (x) => (x.meta.githubCommitSha = C.source),
     (x) => x.alias.push("public.example.test"),
@@ -200,6 +211,39 @@ const deployment = {
     await verifyRecoveryRuntimeGrace(page, config.origin, "synthetic.test.token"),
     false,
   );
+  // Deployment metadata with no runtime key is acceptable, but never itself
+  // verifies grace-off or opens the deferred journal. The authenticated runtime
+  // response remains the gate before any checkpoint creation.
+  for (const result of [
+    { status: 200, pastDueGraceEnabled: false },
+    { status: 200 },
+    { status: 200, pastDueGraceEnabled: true },
+  ]) {
+    let writes = 0;
+    const persist = deferRecoveryJournal({
+      verifyReady: async () => {
+        assert.equal(assertRecoveryDeployment(metadata, config).graceEnabled, undefined);
+        await verifyRecoveryRuntimeGrace(
+          { ...page, evaluate: async () => result },
+          config.origin,
+          "synthetic.test.token",
+        );
+      },
+      createWriter: async () => {
+        writes++;
+        return async () => {
+          writes++;
+        };
+      },
+    });
+    if (result.pastDueGraceEnabled === false) {
+      await persist({ phase: "ready" });
+      assert.equal(writes, 2);
+    } else {
+      await assert.rejects(persist({ phase: "ready" }), /RECOVERY_RUNTIME_GRACE_OFF_REQUIRED/);
+      assert.equal(writes, 0);
+    }
+  }
   for (const result of [
     { status: 401 },
     { status: 200 },
