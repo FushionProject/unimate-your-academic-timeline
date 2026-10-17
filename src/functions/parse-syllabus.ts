@@ -28,15 +28,24 @@ export class SyllabusParseError extends Error {
   }
 }
 
-export async function parseSyllabus(data: { syllabusText: string }) {
+export async function parseSyllabus(
+  data: { syllabusText: string },
+  access: { expectedUserId: string; signal?: AbortSignal },
+) {
   const { syllabusText } = data;
+  const authHeaders = await getAuthHeaders({
+    expectedUserId: access?.expectedUserId,
+    signal: access?.signal,
+  });
+  access.signal?.throwIfAborted();
 
   const response = await fetch("/api/parse-syllabus", {
     method: "POST",
+    signal: access.signal,
     headers: {
       "Content-Type": "application/json",
       "X-UniMate-Request-Id": crypto.randomUUID(),
-      ...(await getAuthHeaders()),
+      ...authHeaders,
     },
     body: JSON.stringify({ syllabusText }),
   });

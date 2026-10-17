@@ -10,6 +10,98 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - Every completed manual item must include a dated evidence note or link.
 - If a release-blocking check fails, stop promotion and record the response under **Launch incidents**.
 
+## Remaining work and owner handoff — October 16, 2026
+
+**Still private; not approved for public release or live payments.** Core sandbox
+purchase, cancellation and failed-payment repair now pass, including installed
+Companion unlock/revocation. Do not repeat the completed payment journals or
+interpret old unchecked production boxes as missing implementation. Detailed
+evidence and its separate scopes are below.
+
+Owner decisions/access still needed:
+
+1. **Store owner:** choose the long-term Google publisher account (proposed
+   `unimatesupport@gmail.com`), complete any Google identity/2-Step Verification
+   personally, and confirm the public publisher/operator identity. Any displayed
+   registration fee, terms acceptance or submission needs separate approval.
+2. **Artwork rights:** confirm who created the logo/mascot and the permission
+   for commercial redistribution. Final Store images remain engineering work
+   after that confirmation, not an asset the owner must design.
+3. **Pricing and billing policy:** approve the launch price (currently advertised
+   USD $5.99/month), failed-payment grace policy (normal configuration is still
+   grace-on), and refund/dispute policy. The strict grace-off test was isolated;
+   it did not change the normal policy. Review applicable tax registrations
+   before enabling tax collection; no live billing is authorized here.
+4. **Support and privacy:** approve the real operator, retention/deletion/provider
+   practices and policy effective date; verify the support Gmail can send replies
+   as well as receive mail. Confirm who receives outage/spending alerts. The
+   earlier Gmail confirmation test proves incoming delivery, not staffed support.
+5. **Later launch approval:** approve a bounded external reviewer environment
+   and dedicated empty Pro account, then the exact Store submission, production
+   domain/callback transition, public signup and live billing separately. Do not
+   share owner or Vercel credentials with reviewers. These are future gates,
+   not permission to make the current preview public.
+
+Engineering work remains: isolate all account-local drafts; keep the complete
+offline/GitHub checks green; deploy and verify the final private candidate;
+complete authentication-required/delayed-payment and remaining hosted lifecycle
+checks; verify direct deployed webhook delivery when a reachable endpoint is
+approved; prepare final Store images/package; verify alerts, release rollback,
+production quotas and the final new-student flow. No further browser-compatibility
+tests are planned, following the owner's instruction.
+
+Read-only hosting verification at this checkpoint confirmed exact UniMate
+project/team, `READY` isolated Preview source `6a6e39f`, no aliases or Production
+variables, custom-domain auto-assignment off and live Stripe false. Its health
+probe returned `ready` / AI configuration `ready`; this is not a paid AI test.
+The native Vercel CLI 63.1.2 health request unexpectedly created an automation
+bypass token. Only that newly created token was revoked immediately afterward;
+readback confirmed protection still enabled and zero persistent bypasses. Avoid
+unguarded `vercel curl` here: use the existing origin-scoped short-lived OIDC
+transport and verify protection before/after. No token was printed or committed.
+The previous pushed checkpoint `beebaaa` passed all
+[GitHub checks](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38990695725).
+
+### Account-local privacy and release-preflight follow-up
+
+The local-data audit found cross-account effect races in Notes and Bulletin,
+an automatic adoption of ownerless legacy Bulletin data, and an unscoped
+syllabus-review draft. Notes, Bulletin, Planner and Results now remount on account
+changes, not ordinary same-account refresh. Notes saves are fenced by the loaded
+account key. Bulletin persists only intentional edits and retains edits when a
+write fails. Invalid stored data is preserved for recovery instead of being
+replaced with an empty list. Its grouping also safely handles special class tags.
+
+Syllabus drafts now use account-scoped versioned keys plus an owner field;
+Results requires sign-in. Legacy ownerless drafts/links are left untouched but
+never automatically displayed or imported. Parsing binds the originating user
+before token acquisition and aborts on unmount; late PDF/parser completions do
+not save or navigate after the account changes. Results stops later save steps
+when the originating screen/account goes away. No real student data was read,
+migrated, deleted or rewritten by these offline tests.
+
+Executable synthetic regressions cover account switches, same-user unsaved work,
+read/parse/write failure and retry, owner mismatches, late parsing/PDF completion,
+and interrupted course/assignment saves. These execute production handlers and
+effects offline; they are not new installed-browser or deployed-RLS evidence.
+They are wired into `auth:test`. An independent review found no blocker in the
+Notes/Planner/Results and Bulletin patches. Full offline tests and typecheck
+passed; lint had zero errors/eight existing refresh-export warnings. The secret
+scan checked 362 repository files without printing values. No browser-compatibility
+run was performed.
+
+Release preflight checkpoint `28eb135` is pushed. It rejects unsafe canonical
+origins, development Pro overrides, advertised-price drift and missing explicit
+grace/live-lock flags. Tests use invented values; output is configuration-only
+and cannot certify a launch. Actual pricing, entitlement policy, provider keys
+and deployment settings were not changed by this preflight patch.
+
+Account deletion is still a support-request workflow. Before public launch, the
+owner must approve identity verification, billing/retention handling and the
+local-device cleanup instructions: deleting a server account cannot remotely
+erase browser-local notes/links or session drafts. This audit does not certify
+deployed cascade constraints or execute a destructive account-deletion drill.
+
 ## Current candidate — October 16, 2026
 
 The active candidate is on `codex/unimate-premium-revival`. The product work was
@@ -1054,7 +1146,7 @@ localhost PID/parent/working directory before authenticated helper requests.
 - [ ] Webhook signature and test/live-mode validation confirmed
 - [x] Duplicate webhook delivery confirmed safe (native paid-event redelivery twice, October 14)
 - [x] Customer Portal access and ownership isolation verified (real portal plus cross-account/unsigned rejection, October 14)
-- [ ] Customer Portal payment-method editing and protected-hosted return verified
+- [x] Customer Portal payment-method editing and protected-hosted return verified (isolated grace-off recovery, same failed invoice/new method and proof-gated return, October 16; signed local relay, not direct public webhook certification)
 - [x] Cancellation at period end verified (real Portal and test-clock terminal webhook, October 13 local / October 14 UTC)
 - [x] Immediate cancellation verified (synthetic-only sandbox API, terminal webhook and pre-return access revocation; October 13 local / October 14 UTC)
 - [x] Failed initial payment verified (real generic-decline browser submission; Free/403 preserved and unpaid Checkout expired, October 14)

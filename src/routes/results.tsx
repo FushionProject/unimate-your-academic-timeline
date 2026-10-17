@@ -13,7 +13,8 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { useAddAssignment, useAddCourse, useAssignments, useCourses } from "../lib/courses";
 import { useAuth } from "../lib/auth-context";
-import { SYLLABUS_RESULT_STORAGE_PREFIX } from "../lib/syllabus-results";
+import { ProtectedRoute } from "../components/protected-route";
+import { syllabusResultStorageKey } from "../lib/syllabus-results";
 import { askJourneyHref } from "../lib/journey-experience";
 import { removeBrowserStorage, writeBrowserStorage } from "../lib/browser-storage";
 import {
@@ -35,6 +36,7 @@ type SyllabusItem = z.infer<typeof itemSchema>;
 type EditableSyllabusItem = SyllabusItem & { rowId: string };
 
 const storedResultSchema = z.object({
+  userId: z.string(),
   items: z.array(itemSchema),
   syllabusText: z.string().optional(),
   courseName: z.string().optional(),
@@ -49,14 +51,20 @@ export const Route = createFileRoute("/results")({
 });
 
 function ResultsRoute() {
+  const { user } = useAuth();
   const { resultId } = Route.useSearch();
-  return <Results key={resultId} />;
+  return (
+    <ProtectedRoute>
+      <Results key={`${user?.id ?? "signed-out"}:${resultId ?? ""}`} />
+    </ProtectedRoute>
+  );
 }
 
 function Results() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { resultId } = Route.useSearch();
+  const storageKey = syllabusResultStorageKey(user?.id, resultId);
   const [items, setItems] = useState<EditableSyllabusItem[]>([]);
   const [reviewLoaded, setReviewLoaded] = useState(false);
   const [draftAvailable, setDraftAvailable] = useState(false);
@@ -101,11 +109,10 @@ function Results() {
 
   useEffect(() => {
     try {
-      const raw = resultId
-        ? sessionStorage.getItem(`${SYLLABUS_RESULT_STORAGE_PREFIX}${resultId}`)
-        : null;
+      const raw = storageKey ? sessionStorage.getItem(storageKey) : null;
       if (raw) {
         const draft = storedResultSchema.parse(JSON.parse(raw));
+        if (draft.userId !== user?.id) throw new Error("Review belongs to another account");
         setItems(draft.items.map((item) => ({ ...item, rowId: crypto.randomUUID() })));
         setCourseName(draft.courseName ?? "");
         setCourseCode(draft.courseCode ?? "");
@@ -118,21 +125,21 @@ function Results() {
       );
     }
     setReviewLoaded(true);
-  }, [resultId]);
+  }, [storageKey, user?.id]);
 
   useEffect(() => {
-    if (!draftAvailable || !resultId || saved) return;
+    if (!draftAvailable || !storageKey || !user || saved) return;
     const stored = writeBrowserStorage(
       () => sessionStorage,
-      `${SYLLABUS_RESULT_STORAGE_PREFIX}${resultId}`,
-      JSON.stringify({ items, syllabusText, courseName, courseCode }),
+      storageKey,
+      JSON.stringify({ userId: user.id, items, syllabusText, courseName, courseCode }),
     );
     setDraftWarning(
       stored
         ? ""
         : "Your edits are available on this page, but this browser couldn’t keep a draft. Keep this tab open until saving finishes.",
     );
-  }, [draftAvailable, resultId, saved, items, syllabusText, courseName, courseCode]);
+  }, [draftAvailable, storageKey, user, saved, items, syllabusText, courseName, courseCode]);
 
   const updateItem = (index: number, patch: Partial<SyllabusItem>) => {
     setItems((current) =>
@@ -215,8 +222,7 @@ function Results() {
       setSaveMessage(
         `${added} item${added === 1 ? "" : "s"} added to the semester map${skipped ? `; ${skipped} duplicate${skipped === 1 ? " was" : "s were"} skipped` : ""}.`,
       );
-      if (resultId)
-        removeBrowserStorage(() => sessionStorage, `${SYLLABUS_RESULT_STORAGE_PREFIX}${resultId}`);
+      if (storageKey) removeBrowserStorage(() => sessionStorage, storageKey);
     } catch {
       if (!isCurrent()) return;
       setSaveMessage(

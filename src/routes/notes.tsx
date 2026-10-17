@@ -21,12 +21,17 @@ import { ProtectedRoute } from "../components/protected-route";
 import { useAuth } from "../lib/auth-context";
 
 export const Route = createFileRoute("/notes")({
-  component: () => (
-    <ProtectedRoute>
-      <Notes />
-    </ProtectedRoute>
-  ),
+  component: NotesRoute,
 });
+
+function NotesRoute() {
+  const { user } = useAuth();
+  return (
+    <ProtectedRoute>
+      <Notes key={user?.id ?? "signed-out"} />
+    </ProtectedRoute>
+  );
+}
 
 interface NoteFormatting {
   fontFamily: "sans-serif" | "serif" | "monospace" | "cursive";
@@ -112,7 +117,8 @@ function Notes() {
   const { user } = useAuth();
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  const [hasLoadedNotes, setHasLoadedNotes] = useState(false);
+  const [loadedNotesKey, setLoadedNotesKey] = useState<string | null>(null);
+  const [storageError, setStorageError] = useState("");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [formatting, setFormatting] = useState<NoteFormatting>({
@@ -132,6 +138,7 @@ function Notes() {
 
   const { data: manualCourses = [] } = useCourses();
   const notesStorageKey = user ? `unimateNotes:${user.id}` : null;
+  const hasLoadedNotes = Boolean(notesStorageKey && loadedNotesKey === notesStorageKey);
 
   const selectedNote = notes.find((note) => note.id === selectedNoteId);
   const hasUnsavedChanges =
@@ -178,43 +185,51 @@ function Notes() {
 
   useEffect(() => {
     if (!notesStorageKey) return;
-    setHasLoadedNotes(false);
+    setLoadedNotesKey(null);
+    setStorageError("");
     try {
       const saved = localStorage.getItem(notesStorageKey);
-      if (saved) {
-        const parsedNotes = normalizeStoredNotes(JSON.parse(saved));
-        setNotes(parsedNotes);
-        if (parsedNotes.length > 0) {
-          setSelectedNoteId(parsedNotes[0].id);
-          setTitle(parsedNotes[0].title);
-          setBody(parsedNotes[0].body);
-          setFormatting(parsedNotes[0].formatting);
-          setTags(parsedNotes[0].tags || []);
-          setSelectedCourse(parsedNotes[0].course || "");
-        }
-      } else {
-        setNotes([]);
-        setSelectedNoteId(null);
-        setTitle("");
-        setBody("");
-        setTags([]);
-      }
+      const parsed = saved ? JSON.parse(saved) : [];
+      if (!Array.isArray(parsed)) throw new Error("Saved notes must be a list");
+      const parsedNotes = normalizeStoredNotes(parsed);
+      const first = parsedNotes[0];
+      setNotes(parsedNotes);
+      setSelectedNoteId(first?.id ?? null);
+      setTitle(first?.title ?? "");
+      setBody(first?.body ?? "");
+      setFormatting(first?.formatting ?? { ...DEFAULT_FORMATTING });
+      setTags(first?.tags ?? []);
+      setSelectedCourse(first?.course ?? "");
+      setLoadedNotesKey(notesStorageKey);
     } catch {
       setNotes([]);
       setSelectedNoteId(null);
       setTitle("");
       setBody("");
       setTags([]);
+      setFormatting({ ...DEFAULT_FORMATTING });
+      setSelectedCourse("");
+      setStorageError(
+        "We couldn’t open your saved notes. Allow browser storage and reload. Your stored notes have not been replaced.",
+      );
     }
-    setHasLoadedNotes(true);
   }, [notesStorageKey]);
 
   useEffect(() => {
     if (!notesStorageKey || !hasLoadedNotes) return;
-    localStorage.setItem(notesStorageKey, JSON.stringify(notes));
+    try {
+      localStorage.setItem(notesStorageKey, JSON.stringify(notes));
+      setStorageError("");
+    } catch {
+      setSaveStatus("");
+      setStorageError(
+        "Your changes are only in this tab because browser storage is unavailable. Keep this tab open and try Save again after freeing storage.",
+      );
+    }
   }, [notes, notesStorageKey, hasLoadedNotes]);
 
   const handleCreateNote = () => {
+    if (!hasLoadedNotes) return;
     if (!confirmDiscardUnsaved()) return;
     const newNote: Note = {
       id: Date.now().toString(),
@@ -352,6 +367,14 @@ function Notes() {
 
   return (
     <div className="min-h-[calc(100vh-12rem)] bg-background" aria-busy={!hasLoadedNotes}>
+      {storageError && (
+        <p
+          role="alert"
+          className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"
+        >
+          {storageError}
+        </p>
+      )}
       <div className="flex min-h-[calc(100vh-12rem)] flex-col overflow-hidden rounded-xl border border-border/60 lg:flex-row">
         {/* Left Panel - Notes List */}
         <div className="flex max-h-[18rem] w-full flex-col border-b border-border/60 lg:max-h-none lg:w-80 lg:border-b-0 lg:border-r">
@@ -359,6 +382,7 @@ function Notes() {
             <button
               type="button"
               onClick={handleCreateNote}
+              disabled={!hasLoadedNotes}
               className="w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
             >
               <Plus className="h-4 w-4" />
@@ -736,6 +760,7 @@ function Notes() {
                 <button
                   type="button"
                   onClick={handleCreateNote}
+                  disabled={!hasLoadedNotes}
                   className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   <Plus className="h-4 w-4" />

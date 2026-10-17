@@ -5,18 +5,53 @@ import { ProtectedRoute } from "../components/protected-route";
 import { useAuth } from "../lib/auth-context";
 
 export const Route = createFileRoute("/bulletin")({
-  component: () => (
-    <ProtectedRoute>
-      <Bulletin />
-    </ProtectedRoute>
-  ),
+  component: BulletinRoute,
 });
+
+function BulletinRoute() {
+  const { user } = useAuth();
+  return (
+    <ProtectedRoute>
+      <Bulletin key={user?.id ?? "signed-out"} />
+    </ProtectedRoute>
+  );
+}
 
 interface Link {
   id: string;
   title: string;
   url: string;
   classTag: string;
+}
+
+function readStoredLinks(value: unknown): Link[] {
+  if (!Array.isArray(value)) throw new Error("Invalid saved links");
+  const seen = new Set<string>();
+  return value.map((entry: unknown) => {
+    if (!entry || typeof entry !== "object") throw new Error("Invalid saved link");
+    const link = entry as Record<string, unknown>;
+    if (
+      !["id", "title", "url", "classTag"].every(
+        (field) => typeof link[field] === "string" && (link[field] as string).trim(),
+      )
+    )
+      throw new Error("Invalid saved link");
+    const parsed = new URL(link.url as string);
+    if (
+      !["http:", "https:"].includes(parsed.protocol) ||
+      parsed.username ||
+      parsed.password ||
+      seen.has(link.id as string)
+    )
+      throw new Error("Invalid saved link");
+    seen.add(link.id as string);
+    return {
+      id: link.id as string,
+      title: link.title as string,
+      url: parsed.toString(),
+      classTag: link.classTag as string,
+    };
+  });
 }
 
 function Bulletin() {
@@ -26,30 +61,54 @@ function Bulletin() {
   const [newLink, setNewLink] = useState({ title: "", url: "", classTag: "" });
   const [formError, setFormError] = useState("");
   const [notice, setNotice] = useState("");
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadedLinksKey, setLoadedLinksKey] = useState<string | null>(null);
+  const [storageError, setStorageError] = useState("");
+  const [savePending, setSavePending] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const storageKey = user ? `bulletinLinks:${user.id}` : null;
+  const hasLoaded = Boolean(storageKey && loadedLinksKey === storageKey);
 
   useEffect(() => {
+    setLoadedLinksKey(null);
+    setLinks([]);
+    setStorageError("");
+    setSavePending(false);
+    setNotice("");
+    setFormError("");
+    setIsModalOpen(false);
+    setNewLink({ title: "", url: "", classTag: "" });
     if (!storageKey) return;
-    setHasLoaded(false);
     try {
       const saved = localStorage.getItem(storageKey);
-      const legacySaved = !saved ? localStorage.getItem("bulletinLinks") : null;
-      const initialLinks = saved || legacySaved;
-      setLinks(initialLinks ? JSON.parse(initialLinks) : []);
-      if (legacySaved) {
-        localStorage.setItem(storageKey, legacySaved);
-        localStorage.removeItem("bulletinLinks");
-      }
+      // Ownerless legacy "bulletinLinks" data cannot safely be attributed to
+      // this account. Never read, adopt, overwrite or delete it automatically.
+      setLinks(saved === null ? [] : readStoredLinks(JSON.parse(saved)));
+      setLoadedLinksKey(storageKey);
     } catch {
-      setLinks([]);
+      setStorageError(
+        "We couldn’t open your saved links. They have not been changed. Check browser storage permissions and try loading again; if this continues, contact support before clearing any data.",
+      );
     }
-    setHasLoaded(true);
-  }, [storageKey]);
+  }, [storageKey, loadAttempt]);
 
-  useEffect(() => {
-    if (storageKey && hasLoaded) localStorage.setItem(storageKey, JSON.stringify(links));
-  }, [hasLoaded, links, storageKey]);
+  // Persist only intentional edits after this exact account finished loading.
+  // Loading/normalizing never writes, including after a read or parse failure.
+  const saveLinks = (next: Link[]) => {
+    if (!storageKey || !hasLoaded) return false;
+    setLinks(next);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(next));
+      setStorageError("");
+      setSavePending(false);
+      return true;
+    } catch {
+      setSavePending(true);
+      setStorageError(
+        "Your changes are only in this tab because browser storage is unavailable. Keep this tab open, allow or free browser storage, then try saving again.",
+      );
+      return false;
+    }
+  };
 
   useEffect(() => {
     if (!isModalOpen) return;
@@ -61,6 +120,7 @@ function Bulletin() {
   }, [isModalOpen]);
 
   const handleAddLink = () => {
+    if (!hasLoaded) return;
     const title = newLink.title.trim();
     const classTag = newLink.classTag.trim();
     let url = newLink.url.trim();
@@ -71,11 +131,16 @@ function Bulletin() {
     if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
     try {
       const parsedUrl = new URL(url);
-      if (!["http:", "https:"].includes(parsedUrl.protocol)) throw new Error();
-      setLinks([
+      if (
+        !["http:", "https:"].includes(parsedUrl.protocol) ||
+        parsedUrl.username ||
+        parsedUrl.password
+      )
+        throw new Error();
+      const saved = saveLinks([
         ...links,
         {
-          id: Date.now().toString(),
+          id: crypto.randomUUID(),
           title,
           url: parsedUrl.toString(),
           classTag,
@@ -83,7 +148,11 @@ function Bulletin() {
       ]);
       setNewLink({ title: "", url: "", classTag: "" });
       setFormError("");
-      setNotice(`${title} added to ${classTag}.`);
+      setNotice(
+        saved
+          ? `${title} added to ${classTag}.`
+          : `${title} added in this tab; saving still needs attention.`,
+      );
       setIsModalOpen(false);
     } catch {
       setFormError("Enter a valid web address, like canvas.edu.");
@@ -91,9 +160,16 @@ function Bulletin() {
   };
 
   const handleDeleteLink = (id: string) => {
+    if (!hasLoaded) return;
     const removed = links.find((link) => link.id === id);
-    setLinks(links.filter((link) => link.id !== id));
-    setNotice(removed ? `${removed.title} removed.` : "Link removed.");
+    const saved = saveLinks(links.filter((link) => link.id !== id));
+    setNotice(
+      saved
+        ? removed
+          ? `${removed.title} removed.`
+          : "Link removed."
+        : "Removed in this tab; saving still needs attention.",
+    );
   };
 
   useEffect(() => {
@@ -102,16 +178,9 @@ function Bulletin() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
-  const groupedLinks = links.reduce(
-    (acc, link) => {
-      if (!acc[link.classTag]) {
-        acc[link.classTag] = [];
-      }
-      acc[link.classTag].push(link);
-      return acc;
-    },
-    {} as Record<string, Link[]>,
-  );
+  const groupedLinks = new Map<string, Link[]>();
+  for (const link of hasLoaded ? links : [])
+    groupedLinks.set(link.classTag, [...(groupedLinks.get(link.classTag) ?? []), link]);
 
   return (
     <div className="relative min-h-screen bg-background text-foreground">
@@ -134,19 +203,45 @@ function Bulletin() {
         <div className="flex justify-center mb-8">
           <button
             onClick={() => setIsModalOpen(true)}
+            disabled={!hasLoaded}
             className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-base font-bold transition-transform hover:scale-[1.02] active:scale-[0.98] bg-[#F5C518] text-[#1a1a1a]"
           >
             <Plus className="h-4 w-4" />
             Add link
           </button>
         </div>
-        {notice && (
+        {storageError && (
+          <div
+            className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm"
+            role="alert"
+          >
+            <p>{storageError}</p>
+            <button
+              type="button"
+              className="mt-3 min-h-11 font-semibold underline underline-offset-4"
+              onClick={() => {
+                if (savePending && hasLoaded) {
+                  if (saveLinks(links)) setNotice("Your links are saved in this browser.");
+                } else setLoadAttempt((attempt) => attempt + 1);
+              }}
+            >
+              {savePending ? "Try saving again" : "Try loading again"}
+            </button>
+          </div>
+        )}
+        {hasLoaded && notice && (
           <p className="-mt-4 mb-6 text-center text-sm font-medium text-foreground" role="status">
             {notice}
           </p>
         )}
 
-        {Object.keys(groupedLinks).length === 0 ? (
+        {!hasLoaded ? (
+          <p className="py-10 text-center text-sm text-muted-foreground" role="status">
+            {storageError
+              ? "Your saved board is protected until it can be loaded safely."
+              : "Loading your links…"}
+          </p>
+        ) : groupedLinks.size === 0 ? (
           <div className="rounded-3xl border border-dashed border-border bg-card/40 px-6 py-14 text-center">
             <Link2 className="mx-auto h-8 w-8 text-primary" aria-hidden />
             <h2 className="mt-4 text-lg font-semibold text-foreground">Your board is ready</h2>
@@ -163,7 +258,7 @@ function Bulletin() {
           </div>
         ) : (
           <div className="space-y-8">
-            {Object.entries(groupedLinks)
+            {[...groupedLinks.entries()]
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([classTag, classLinks]) => (
                 <div key={classTag}>
@@ -216,7 +311,7 @@ function Bulletin() {
         )}
       </main>
 
-      {isModalOpen && (
+      {hasLoaded && isModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
           role="presentation"
@@ -284,7 +379,10 @@ function Bulletin() {
                   </label>
                   <input
                     id="bulletin-url"
-                    type="url"
+                    type="text"
+                    inputMode="url"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     value={newLink.url}
                     onChange={(e) => setNewLink({ ...newLink, url: e.target.value })}
                     placeholder="canvas.instructure.com"

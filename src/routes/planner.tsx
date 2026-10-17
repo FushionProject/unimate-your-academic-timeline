@@ -1,22 +1,28 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Upload, FileText, Sparkles, Loader2 } from "lucide-react";
 import { parseSyllabus, SyllabusParseError } from "../functions/parse-syllabus";
 import { extractPdfText } from "../lib/pdf";
 import { ProtectedRoute } from "../components/protected-route";
-import { createSyllabusResultId, SYLLABUS_RESULT_STORAGE_PREFIX } from "../lib/syllabus-results";
+import { createSyllabusResultId, syllabusResultStorageKey } from "../lib/syllabus-results";
+import { useAuth } from "../lib/auth-context";
 import { LogoMark } from "../components/logo-mark";
 import { removeBrowserStorage, writeBrowserStorage } from "../lib/browser-storage";
 
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
 export const Route = createFileRoute("/planner")({
-  component: () => (
-    <ProtectedRoute>
-      <Planner />
-    </ProtectedRoute>
-  ),
+  component: PlannerRoute,
 });
+
+function PlannerRoute() {
+  const { user } = useAuth();
+  return (
+    <ProtectedRoute>
+      <Planner key={user?.id ?? "signed-out"} />
+    </ProtectedRoute>
+  );
+}
 
 function TabButton({
   active,
@@ -45,6 +51,7 @@ function TabButton({
 }
 
 function Planner() {
+  const { user } = useAuth();
   const [tab, setTab] = useState<"pdf" | "text">("pdf");
   const [filename, setFilename] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -57,7 +64,18 @@ function Planner() {
   const inputRef = useRef<HTMLInputElement>(null);
   const latestPdfRead = useRef(0);
   const parseInFlight = useRef(false);
+  const activeRequest = useRef<AbortController | null>(null);
+  const mounted = useRef(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      latestPdfRead.current += 1;
+      activeRequest.current?.abort();
+    };
+  }, []);
 
   const handlePdfFile = async (file: File) => {
     if (parseInFlight.current) return;
@@ -97,12 +115,13 @@ function Planner() {
 
   const handleMapSemester = async () => {
     const syllabusText = tab === "pdf" ? pdfText : pastedText;
-    if (parseInFlight.current || extractingPdf || !syllabusText.trim()) {
+    if (!user || parseInFlight.current || extractingPdf || !syllabusText.trim()) {
       return;
     }
 
     const resultId = createSyllabusResultId();
-    const storageKey = `${SYLLABUS_RESULT_STORAGE_PREFIX}${resultId}`;
+    const storageKey = syllabusResultStorageKey(user.id, resultId);
+    if (!storageKey) return;
     if (!writeBrowserStorage(() => sessionStorage, storageKey, "{}")) {
       setProcessingError(
         "Your browser couldn’t keep a review draft. Allow browser storage, then try again. Your syllabus is still here.",
@@ -111,14 +130,22 @@ function Planner() {
     }
     removeBrowserStorage(() => sessionStorage, storageKey);
     parseInFlight.current = true;
+    const request = new AbortController();
+    activeRequest.current = request;
+    const isCurrent = () =>
+      mounted.current && activeRequest.current === request && !request.signal.aborted;
     setLoading(true);
     setProcessingError("");
     try {
-      const result = await parseSyllabus({ syllabusText });
+      const result = await parseSyllabus(
+        { syllabusText },
+        { expectedUserId: user.id, signal: request.signal },
+      );
+      if (!isCurrent()) return;
       const stored = writeBrowserStorage(
         () => sessionStorage,
         storageKey,
-        JSON.stringify({ items: result.items, syllabusText }),
+        JSON.stringify({ userId: user.id, items: result.items, syllabusText }),
       );
       if (!stored) {
         setProcessingError(
@@ -131,6 +158,7 @@ function Planner() {
         search: { resultId },
       });
     } catch (error) {
+      if (!isCurrent()) return;
       if (error instanceof SyllabusParseError) {
         setProcessingError(error.message);
       } else {
@@ -140,7 +168,10 @@ function Planner() {
       }
     } finally {
       parseInFlight.current = false;
-      setLoading(false);
+      if (mounted.current && activeRequest.current === request) {
+        activeRequest.current = null;
+        setLoading(false);
+      }
     }
   };
 
