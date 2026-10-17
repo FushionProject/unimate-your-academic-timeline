@@ -33,6 +33,11 @@ function Upgrade() {
   const [confirming, setConfirming] = useState(false);
   const billing = useBillingStatus({ refetchInterval: confirming ? 2000 : false });
   const status = billing.data;
+  const needsBillingRecovery = Boolean(
+    status &&
+    !status.isPro &&
+    ["past_due", "unpaid", "paused", "incomplete"].includes(status.state),
+  );
   const companionStoreUrl = getCompanionStoreUrl(import.meta.env.VITE_COMPANION_STORE_URL);
 
   useEffect(() => {
@@ -45,13 +50,13 @@ function Upgrade() {
 
   useEffect(() => {
     if (!confirming) return;
-    if (status?.isPro) {
+    if (status?.isPro || needsBillingRecovery) {
       setConfirming(false);
       return;
     }
     const timeout = window.setTimeout(() => setConfirming(false), 30_000);
     return () => window.clearTimeout(timeout);
-  }, [confirming, status?.isPro]);
+  }, [confirming, status?.isPro, needsBillingRecovery]);
 
   const authenticatedRequest = async (path: string) => {
     if (!session) throw new Error("Sign in to manage UniMate Pro.");
@@ -70,6 +75,8 @@ function Upgrade() {
       checkoutLoading ||
       confirming ||
       !status ||
+      status.isPro ||
+      needsBillingRecovery ||
       status.state === "not_configured" ||
       status.temporarilyUnavailable
     )
@@ -103,6 +110,7 @@ function Upgrade() {
   };
 
   const handleManageBilling = async () => {
+    if (portalLoading || !status?.canManage) return;
     setError("");
     setPortalLoading(true);
     try {
@@ -129,6 +137,21 @@ function Upgrade() {
         year: "numeric",
       })
     : null;
+  const manageBillingButton = status?.canManage && (
+    <button
+      type="button"
+      onClick={handleManageBilling}
+      disabled={portalLoading}
+      className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground hover:border-primary/50 disabled:opacity-50"
+    >
+      {portalLoading ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <ExternalLink className="h-4 w-4" />
+      )}
+      Manage billing
+    </button>
+  );
 
   return (
     <main className="flex min-h-[calc(100vh-73px)] items-center justify-center bg-background px-4 py-12">
@@ -182,7 +205,7 @@ function Upgrade() {
           </div>
         ) : (
           <>
-            {success && confirming && !status?.isPro && (
+            {success && confirming && !status?.isPro && !needsBillingRecovery && (
               <div
                 className="mb-5 rounded-xl bg-primary/10 px-4 py-3 text-left"
                 role="status"
@@ -196,7 +219,7 @@ function Upgrade() {
                 </p>
               </div>
             )}
-            {success && !confirming && !status?.isPro && (
+            {success && !confirming && !status?.isPro && !needsBillingRecovery && (
               <div className="mb-5 rounded-xl bg-muted px-4 py-3 text-left" role="status">
                 <p className="text-sm font-medium text-foreground">
                   Confirmation is taking longer than expected.
@@ -217,8 +240,9 @@ function Upgrade() {
 
             {status?.state === "past_due" && (
               <BillingWarning>
-                Your latest payment failed. Pro remains available during the recovery period; update
-                your payment method to avoid interruption.
+                {status.isPro
+                  ? "Your latest payment failed. Pro remains available during the recovery period; update your payment method to avoid interruption."
+                  : "Your latest payment failed. Pro access is paused until payment is resolved. Update your payment method to restore access."}
               </BillingWarning>
             )}
             {status?.state === "canceling" && (
@@ -247,21 +271,7 @@ function Upgrade() {
                     Current billing period ends {renewalDate}.
                   </p>
                 )}
-                {status.canManage && (
-                  <button
-                    type="button"
-                    onClick={handleManageBilling}
-                    disabled={portalLoading}
-                    className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground hover:border-primary/50 disabled:opacity-50"
-                  >
-                    {portalLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ExternalLink className="h-4 w-4" />
-                    )}
-                    Manage billing
-                  </button>
-                )}
+                {manageBillingButton}
                 <Link
                   to="/ask"
                   className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"
@@ -275,11 +285,30 @@ function Upgrade() {
                   Set up the optional Browser Companion
                 </Link>
               </div>
+            ) : needsBillingRecovery ? (
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Your Pro access is not active.
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {status.canManage
+                    ? "Manage your existing subscription in Stripe to resolve billing and restore access. You don’t need to start a new subscription."
+                    : "Billing management isn’t available right now. Check your billing status again before making any changes."}
+                </p>
+                {manageBillingButton}
+                <button
+                  type="button"
+                  onClick={() => void billing.refetch()}
+                  disabled={billing.isFetching}
+                  className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 text-sm text-muted-foreground underline underline-offset-4 disabled:opacity-50"
+                >
+                  {billing.isFetching && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Check billing status
+                </button>
+              </div>
             ) : (
               <>
-                {(["canceled", "unpaid", "paused", "incomplete"] as const).includes(
-                  status?.state as "canceled" | "unpaid" | "paused" | "incomplete",
-                ) && (
+                {status.state === "canceled" && (
                   <BillingWarning>
                     Your previous subscription is not active. You can restart Pro securely through
                     Stripe.
@@ -316,7 +345,7 @@ function Upgrade() {
                   {checkoutLoading && <Loader2 className="h-4 w-4 animate-spin" />}
                   {status.state === "not_configured" || status.temporarilyUnavailable
                     ? "Subscriptions temporarily unavailable"
-                    : status?.state === "canceled" || status?.state === "unpaid"
+                    : status?.state === "canceled"
                       ? "Restart Pro"
                       : "Upgrade to Pro"}
                 </button>

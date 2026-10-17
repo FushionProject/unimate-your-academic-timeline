@@ -199,7 +199,47 @@ for (const plan of ["active", "canceling", "past_due"]) {
   assert.deepEqual(f.state.requests, ["/api/create-portal-session"]);
   assert.deepEqual(f.state.redirects, ["https://billing.stripe.com/synthetic"]);
 }
-for (const plan of ["unpaid", "canceled"]) {
+for (const plan of ["past_due", "unpaid", "paused", "incomplete"]) {
+  const f = harness({ isPro: false, state: plan, canManage: true });
+  const html = f.html();
+  assert.match(html, /Your Pro access is not active/);
+  assert.match(html, /Manage your existing subscription/);
+  assert.match(html, /don’t need to start a new subscription/);
+  assert.doesNotMatch(html, /href="\/ask"|href="\/companion-setup"|UniMate Pro is active/);
+  assert.doesNotMatch(html, />Restart Pro|>Upgrade to Pro|Pro remains available/);
+  if (plan === "past_due") {
+    assert.match(html, /latest payment failed\. Pro access is paused until payment is resolved/);
+    assert.match(html, /Update your payment method to restore access/);
+  }
+  f.state.respond = async () => json({ url: "https://billing.stripe.com/existing" });
+  await f.click("Manage billing");
+  assert.deepEqual(f.state.requests, ["/api/create-portal-session"]);
+  assert.deepEqual(f.state.redirects, ["https://billing.stripe.com/existing"]);
+  await f.click("Check billing status");
+  assert.equal(f.state.refetches, 1);
+  f.state.query.data = { isPro: true, state: "active", canManage: true };
+  assert.match(f.html(), /UniMate Pro is active/);
+  assert.doesNotMatch(f.html(), /Your Pro access is not active/);
+}
+for (const plan of ["past_due", "unpaid", "paused", "incomplete"]) {
+  const f = harness({ isPro: false, state: plan, canManage: false });
+  assert.match(f.html(), /Billing management isn’t available right now/);
+  assert.doesNotMatch(f.html(), />Manage billing|>Restart Pro|>Upgrade to Pro/);
+  await f.click("Check billing status");
+  assert.equal(f.state.refetches, 1);
+  assert.deepEqual(f.state.requests, []);
+  f.state.query.isFetching = true;
+  assert.equal(f.button("Check billing status").props.disabled, true);
+}
+{
+  const f = harness({ isPro: false, state: "past_due", canManage: true }, "?success=true");
+  assert.match(f.html(), /Pro access is paused/);
+  assert.doesNotMatch(f.html(), /Checking your checkout result|Confirmation is taking longer/);
+  assert.equal(f.state.queryOptions.refetchInterval, false);
+  assert.equal(f.timerCount(), 0);
+  assert.deepEqual(f.state.requests, []);
+}
+for (const plan of ["canceled"]) {
   const f = harness({ isPro: false, state: plan, canManage: true });
   assert.match(f.html(), /previous subscription is not active/);
   assert.doesNotMatch(f.html(), /href="\/ask"|UniMate Pro is active/);
@@ -236,8 +276,12 @@ for (const isPro of [false, true]) {
   f.state.query.isError = false;
   assert.equal(Boolean(f.button("Upgrade to Pro").props.disabled), false);
 }
-for (const portal of [false, true]) {
-  const f = harness({ isPro: portal, state: portal ? "active" : "free", canManage: portal });
+for (const [plan, isPro, portal] of [
+  ["free", false, false],
+  ["active", true, true],
+  ["past_due", false, true],
+]) {
+  const f = harness({ isPro, state: plan, canManage: portal });
   const label = portal ? "Manage billing" : "Upgrade to Pro";
   let reject;
   f.state.respond = () =>
@@ -312,5 +356,5 @@ for (const resolves of [false, true]) {
   assert.doesNotMatch(f.html(), />Upgrade to Pro/);
 }
 console.log(
-  "PASS actual upgrade route: billing states, rendered warnings, safe retries/redirects and bounded confirmation (offline)",
+  "PASS actual upgrade route: grace-on/off recovery, existing-subscription Portal actions, billing states, safe retries/redirects and bounded confirmation (offline)",
 );

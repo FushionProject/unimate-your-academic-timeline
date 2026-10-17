@@ -604,6 +604,34 @@ function fixture() {
   );
 }
 
+// Read-only, authenticated status reports the effective non-secret grace policy
+// without reconciling Stripe or changing the persisted entitlement.
+{
+  const f = fixture();
+  for (const [setting, expected] of [
+    [undefined, true],
+    ["true", true],
+    ["false", false],
+  ]) {
+    if (setting === undefined) delete f.env.STRIPE_PAST_DUE_GRACE_ENABLED;
+    else f.env.STRIPE_PAST_DUE_GRACE_ENABLED = setting;
+    const priorWrites = f.state.writes.length;
+    const response = await f.api.handleBillingStatus(
+      f.request("/api/billing-status?reconcile=false"),
+    );
+    assert.equal(response.status, 200);
+    const status = await response.json();
+    assert.equal(status.pastDueGraceEnabled, expected);
+    assert.equal(status.isPro, false);
+    assert.equal(f.state.writes.length, priorWrites);
+  }
+  const unauthenticated = await f.api.handleBillingStatus(
+    new Request("https://unimate.test/api/billing-status?reconcile=false"),
+  );
+  assert.equal(unauthenticated.status, 401);
+  assert.equal((await unauthenticated.json()).pastDueGraceEnabled, undefined);
+}
+
 // Failed renewal grace needs a genuinely paid subscription. Existing policy
 // remains configurable; initial unpaid subscriptions do not inherit grace.
 {

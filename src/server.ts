@@ -2616,6 +2616,10 @@ async function handleBillingStatusInner(request: Request): Promise<Response> {
       isPro: profile.is_pro,
       state: profile.is_pro ? "active" : "free",
       canManage: Boolean(profile.stripe_customer_id),
+      // Non-secret effective policy, returned only after authentication and
+      // valid billing configuration. Diagnostics need not reconcile or mutate
+      // entitlements just to establish this deployment's recovery policy.
+      pastDueGraceEnabled: process.env.STRIPE_PAST_DUE_GRACE_ENABLED !== "false",
     });
   }
   if (!profile.stripe_customer_id) {

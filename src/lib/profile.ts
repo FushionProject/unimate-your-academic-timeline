@@ -19,6 +19,7 @@ export interface BillingStatus {
   isPro: boolean;
   state: BillingState;
   canManage: boolean;
+  pastDueGraceEnabled?: boolean;
   cancelAtPeriodEnd?: boolean;
   currentPeriodEnd?: number | null;
   temporarilyUnavailable?: boolean;
