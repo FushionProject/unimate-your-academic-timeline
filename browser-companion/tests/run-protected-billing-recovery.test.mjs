@@ -29,7 +29,9 @@ import {
   assertNoRecoveryPaymentClaim,
   assertFreshRecoveryV2Run,
   createRecoveryReconciliationFence,
+  navigatePortalContinuationSelection,
 } from "../../scripts/run-protected-billing-recovery.mjs";
+import { PORTAL_NAVIGATION_CONTINUATION } from "../../scripts/protected-portal-navigation-continuation.mjs";
 import {
   PROTECTED_BILLING_RECOVERY as C,
   PROTECTED_BILLING_RECOVERY_V2,
@@ -39,6 +41,19 @@ import { TARGET, SetupError } from "../../scripts/prepare-stripe-sandbox.mjs";
 
 // Import and rejected invocation must not read credentials or contact services.
 await assert.rejects(runProtectedBillingRecovery(), /RECOVERY_EXPLICIT_PRIVATE_APPROVAL_REQUIRED/);
+await assert.rejects(
+  runProtectedBillingRecovery({ approved: true, runVersion: 1, resumePortalNavigation: true }),
+  /RECOVERY_RUN_VERSION_REQUIRED/,
+);
+await assert.rejects(
+  runProtectedBillingRecovery({
+    approved: true,
+    runVersion: 2,
+    resumePortalNavigation: true,
+    resumeUnpaid: true,
+  }),
+  /RECOVERY_UNPAID_RESUME_NOT_ELIGIBLE/,
+);
 {
   const calls = [];
   let ready = false;
@@ -1366,6 +1381,210 @@ for (const mutate of [
   );
 }
 const directory = await fs.mkdtemp(path.join(os.tmpdir(), "unimate-recovery-offline-"));
+{
+  const C = PROTECTED_BILLING_RECOVERY_V2;
+  const portal = {
+    id: "bps_fixture",
+    customer: C.customer,
+    livemode: false,
+    return_url: `${C.origin}/upgrade`,
+    url: "https://billing.stripe.com/p/session/fixture",
+  };
+  const surface = {
+    surface: "stripe-portal",
+    inspectionOnly: true,
+    truncated: false,
+    inputs: [{ type: "radio", visible: false }],
+    controls: [
+      { tag: "button", text: "Add payment method", visible: true, disabled: false },
+      { tag: "button", text: "ContinueContinuing…", visible: true, disabled: true },
+      { tag: "button", text: "Go back", visible: true, disabled: false },
+    ],
+  };
+  for (const variant of [
+    "okay",
+    "external",
+    "wrong-sub",
+    "duplicate",
+    "hidden",
+    "redirected",
+    "wrong-screen",
+  ]) {
+    let url = portal.url,
+      clicks = 0;
+    const destination = `${portal.url}/subscriptions/${variant === "wrong-sub" ? "sub_other" : "sub_fixture"}/update`;
+    const page = {
+      url: () => url,
+      getByRole: () => ({
+        count: async () => (variant === "duplicate" ? 2 : 1),
+        isVisible: async () => variant !== "hidden",
+        isEnabled: async () => true,
+        getAttribute: async () =>
+          variant === "external" ? "https://example.test/sub_fixture" : destination,
+        click: async () => {
+          clicks++;
+          url = variant === "redirected" ? `${portal.url}/other` : destination;
+        },
+      }),
+      waitForURL: async (expected) => assert.equal(url, expected),
+      waitForLoadState: async () => {},
+      waitForTimeout: async () => {},
+    };
+    const run = () =>
+      navigatePortalContinuationSelection({
+        page,
+        portal,
+        subscriptionId: "sub_fixture",
+        inspect: async () => (variant === "wrong-screen" ? { ...surface, controls: [] } : surface),
+      });
+    if (variant === "okay") {
+      assert.deepEqual(await run(), surface);
+      assert.equal(clicks, 1);
+    } else {
+      await assert.rejects(run());
+      assert.equal(clicks, ["redirected", "wrong-screen"].includes(variant) ? 1 : 0);
+    }
+  }
+  const baseline = { evidenceSha256: "baseline" },
+    failure = { evidenceSha256: "failure" };
+  const receipt = {
+    baselineSha256: "baseline",
+    failureSha256: "failure",
+    portalId: portal.id,
+    subscriptionId: "sub_fixture",
+    billingRevision: 75,
+  };
+  function continuationHarness({ failStep, missing, changed, noClaim, badResult } = {}) {
+    const writes = [],
+      calls = [];
+    const pending = {
+      baseline,
+      purchase: { evidenceSha256: "purchase" },
+      failure,
+      portalAttemptedAt: 1,
+      portalUpdateArmedAt: 2,
+      phase: "portal-update-pending",
+      portalUpdateAttempted: true,
+    };
+    const original = JSON.stringify(pending);
+    const controller = createRecoveryController({
+      record: { userId: "fixture" },
+      baseline,
+      recoveryPolicy: { config: C },
+      graceVerified: false,
+      portalContinuation: {
+        receipt,
+        pending,
+        portal,
+        lockedCompanion: {
+          action: "expect-recovery-locked",
+          billingRevision: 75,
+          samePanelTransition: false,
+          originalPanelContinuity: false,
+        },
+      },
+      continuationPolicy: { assertReceipt: (value) => assert.deepEqual(value, receipt) },
+      verifyContinuationState: async () => {
+        calls.push("verify");
+        return { billingRevision: changed ? 76 : 75 };
+      },
+      page: { url: () => `${portal.url}/subscriptions/sub_fixture/update` },
+      persist: async (value) => {
+        writes.push(structuredClone(value));
+      },
+      hold: () => {},
+      now: () => 100,
+      snapshot: async () => {
+        throw new Error("not needed");
+      },
+      loadContinuationHelper: async () => {
+        if (missing) throw new Error("missing fixed module");
+        return Object.fromEntries(
+          [
+            ["navigateVerifiedRecoveryAdd", "NAVIGATE_ADD", "navigated"],
+            ["fillVerifiedRecoveryCard", "FILL", "filled"],
+            ["continueVerifiedRecoveryCard", "CONTINUE", "continued"],
+            ["confirmVerifiedRecoveryPaymentMethod", "CONFIRM", "submitted"],
+          ].map(([method, command, key]) => [
+            method,
+            async ({ claimAction }) => {
+              if (!noClaim) await claimAction();
+              calls.push(command);
+              if (failStep === command) throw new Error("uncertain action");
+              return { [key]: !badResult, paymentOutcomeUnverified: true };
+            },
+          ]),
+        );
+      },
+    });
+    return { controller, writes, calls, pending, original };
+  }
+  const h = continuationHarness();
+  assert.equal(h.controller.initialJournal().phase, "portal-selection-ready");
+  assert.equal(h.controller.initialJournal().portalUpdateAttempted, undefined);
+  for (const command of [
+    "CHECKOUT",
+    "SELECT_CARD",
+    "PAY_SUBMIT",
+    "PAY_CARD_FILL",
+    "PAY_CARD_SUBMIT",
+    "EXPECT_PRO",
+    "ARM_RENEWAL",
+    "EXPECT_PAST_DUE",
+    "PORTAL",
+    "ARM_PORTAL_UPDATE",
+    "PORTAL_UPDATE",
+  ])
+    await assert.rejects(h.controller.run(command), /RECOVERY_CONTINUATION_COMMAND_REJECTED/);
+  for (const command of ["FILL", "CONTINUE", "CONFIRM", "EXPECT_RECOVERED", "ARM_REVOCATION"])
+    await assert.rejects(h.controller.run(command), /RECOVERY_COMMAND_PHASE_REJECTED/);
+  for (const command of ["NAVIGATE_ADD", "FILL", "CONTINUE", "CONFIRM"]) {
+    const result = await h.controller.run(command);
+    assert.equal(result.paymentOutcomeUnverified, true);
+    await assert.rejects(h.controller.run(command), /RECOVERY_COMMAND_PHASE_REJECTED/);
+  }
+  assert.equal(
+    JSON.stringify(h.pending),
+    h.original,
+    "Never overwrite/reset original pending evidence",
+  );
+  assert.equal(h.writes.at(-1).portalUpdateBillingRevision, 75);
+  assert.equal(h.writes.at(-1).phase, "portal-update-submitted");
+  assert.deepEqual(h.calls, [
+    "verify",
+    "NAVIGATE_ADD",
+    "verify",
+    "FILL",
+    "verify",
+    "CONTINUE",
+    "verify",
+    "CONFIRM",
+  ]);
+  for (const options of [{ missing: true }, { changed: true }]) {
+    const rejected = continuationHarness(options);
+    await assert.rejects(rejected.controller.run("NAVIGATE_ADD"));
+    assert.equal(rejected.writes.length, 0);
+  }
+  for (const options of [{ failStep: "NAVIGATE_ADD" }, { badResult: true }]) {
+    const rejected = continuationHarness(options);
+    await assert.rejects(rejected.controller.run("NAVIGATE_ADD"));
+    assert.equal(rejected.writes.at(-1).phase, "portal-selection-ready-pending");
+    await assert.rejects(
+      rejected.controller.run("NAVIGATE_ADD"),
+      /RECOVERY_UNCERTAIN_ACTION_NO_RETRY/,
+    );
+  }
+  const noClaim = continuationHarness({ noClaim: true });
+  await assert.rejects(
+    noClaim.controller.run("NAVIGATE_ADD"),
+    /RECOVERY_PORTAL_ACTION_RESULT_REQUIRED/,
+  );
+  assert.equal(noClaim.writes.length, 0);
+  await assert.rejects(
+    noClaim.controller.run("NAVIGATE_ADD"),
+    /RECOVERY_UNCERTAIN_ACTION_NO_RETRY/,
+  );
+}
 try {
   await fs.chmod(directory, 0o700);
   const sessionId = "cs_test_resumeFixture";
@@ -1486,6 +1705,38 @@ try {
     2,
   );
   await assert.rejects(createRecoveryJournal(directory, { runVersion: 2 }));
+  const originalPending = await fs.readFile(path.join(directory, RECOVERY_V2_JOURNAL), "utf8");
+  await assert.rejects(
+    createRecoveryJournal(directory, { runVersion: 1, portalContinuationText: originalPending }),
+  );
+  await assert.rejects(
+    createRecoveryJournal(directory, {
+      runVersion: 2,
+      portalContinuationText: originalPending + " ",
+    }),
+  );
+  const continuePersist = await createRecoveryJournal(directory, {
+    runVersion: 2,
+    portalContinuationText: originalPending,
+  });
+  await continuePersist({ phase: "portal-selection-ready" });
+  await continuePersist({ phase: "portal-card-continued" });
+  assert.equal(
+    await fs.readFile(path.join(directory, RECOVERY_V2_JOURNAL), "utf8"),
+    originalPending,
+  );
+  assert.equal(
+    (await fs.stat(path.join(directory, PORTAL_NAVIGATION_CONTINUATION.journal))).mode & 0o077,
+    0,
+  );
+  await assert.rejects(
+    createRecoveryJournal(directory, { runVersion: 2, portalContinuationText: originalPending }),
+  );
+  await fs.writeFile(path.join(directory, RECOVERY_V2_JOURNAL), originalPending + " ");
+  await assert.rejects(
+    continuePersist({ phase: "changed" }),
+    /RECOVERY_PORTAL_CONTINUATION_JOURNAL_CHANGED/,
+  );
   await assert.rejects(createRecoveryJournal(directory, { runVersion: 3 }));
   assert.equal((await fs.stat(path.join(directory, RECOVERY_JOURNAL))).mode & 0o077, 0);
   assert.equal(

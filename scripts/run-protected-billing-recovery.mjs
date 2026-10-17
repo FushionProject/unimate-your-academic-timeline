@@ -45,6 +45,15 @@ import {
   createRecoveryPolicy,
   assertRecoveryProof,
 } from "./protected-billing-recovery-policy.mjs";
+import {
+  PORTAL_NAVIGATION_CONTINUATION,
+  createPortalNavigationContinuationPolicy,
+  inspectPortalNavigationContinuation,
+} from "./protected-portal-navigation-continuation.mjs";
+import {
+  assertRecoveryPortalLocation,
+  recoveryPortalInspectionStage,
+} from "./protected-stripe-browser-recovery.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const PROJECT = "prj_5XZ4ulni13tNLCvNzdL1gUPvashI";
@@ -71,12 +80,47 @@ const COMMANDS = new Set([
   "ARM_REVOCATION",
   "EXPECT_REVOKED",
   "STOP",
+  "NAVIGATE_ADD",
+  "FILL",
+  "CONTINUE",
+  "CONFIRM",
+]);
+const CONTINUATION_COMMANDS = new Set([
+  "STATUS",
+  "INSPECT_STRIPE",
+  "NAVIGATE_ADD",
+  "FILL",
+  "CONTINUE",
+  "CONFIRM",
+  "EXPECT_RECOVERED",
+  "RETURN",
+  "ARM_REVOCATION",
+  "EXPECT_REVOKED",
+  "STOP",
 ]);
 const fail = (code) => {
   throw new SetupError(code);
 };
 const id = (value) => (typeof value === "string" ? value : value?.id);
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+async function loadPortalContinuationForm() {
+  const filename = path.join(ROOT, "scripts/protected-stripe-browser-recovery-form.mjs");
+  const stat = await fs.lstat(filename);
+  if (
+    !stat.isFile() ||
+    stat.isSymbolicLink() ||
+    stat.nlink !== 1 ||
+    stat.uid !== process.getuid() ||
+    stat.mode & 0o022 ||
+    stat.size > 128 * 1024
+  )
+    fail("RECOVERY_REVIEWED_PORTAL_HELPER_REQUIRED");
+  const digest = hash(await fs.readFile(filename));
+  const module = await import(`${pathToFileURL(filename).href}?reviewed=${digest}`);
+  if (hash(await fs.readFile(filename)) !== digest)
+    fail("RECOVERY_REVIEWED_PORTAL_HELPER_REQUIRED");
+  return module;
+}
 export const parseRecoveryCommand = (line) =>
   typeof line === "string" && line.length <= 80 && COMMANDS.has(line.trim()) ? line.trim() : null;
 export const recoveryErrorCode = (error) =>
@@ -534,6 +578,67 @@ export async function verifySavedTestMethod(page, inspect = inspectStripeSurface
     fail("RECOVERY_SAVED_TEST_METHOD_REQUIRED");
 }
 
+export async function readPortalContinuationState({ snapshot, stripe, pending }) {
+  if (
+    !/^in_[A-Za-z0-9]+$/.test(pending?.failure?.invoiceId || "") ||
+    !/^pm_[A-Za-z0-9]+$/.test(pending.failure.declineMethodId || "") ||
+    !/^pm_[A-Za-z0-9]+$/.test(pending.purchase?.originalMethodId || "") ||
+    !/^bps_[A-Za-z0-9]+$/.test(pending.portalId || "")
+  )
+    fail("RECOVERY_PORTAL_CONTINUATION_REQUIRED");
+  const state = await snapshot();
+  const events = await recentProtectedPortalEvents(stripe, pending.portalAttemptedAt);
+  const matches = events.filter((event) => event.data?.object?.id === pending.portalId);
+  if (matches.length !== 1) fail("RECOVERY_PORTAL_CUSTOMER_NOT_VERIFIED");
+  return {
+    ...state,
+    reconciliationHeld: true,
+    graceEnabled: false,
+    invoice: await stripe(`/invoices/${pending.failure.invoiceId}`),
+    paymentMethod: await stripe(`/payment_methods/${pending.failure.declineMethodId}`),
+    originalPaymentMethod: await stripe(`/payment_methods/${pending.purchase.originalMethodId}`),
+    portal: matches[0].data.object,
+    events,
+  };
+}
+
+// The original verified Portal is navigated once into its inspected selection
+// screen. This never fills or submits a payment form, and no bearer URL escapes.
+export async function navigatePortalContinuationSelection({
+  page,
+  portal,
+  subscriptionId,
+  inspect = inspectStripeSurface,
+}) {
+  assertRecoveryPortalLocation(page.url(), portal, true);
+  if (!/^sub_[A-Za-z0-9]+$/.test(subscriptionId || ""))
+    fail("RECOVERY_PORTAL_CONTINUATION_REQUIRED");
+  const update = page.getByRole("link", { name: "Update payment method", exact: true });
+  if ((await update.count()) !== 1 || !(await update.isVisible()) || !(await update.isEnabled()))
+    fail("RECOVERY_OBSERVED_PORTAL_UPDATE_REQUIRED");
+  const href = await update.getAttribute("href");
+  if (typeof href !== "string" || !href || /[\\\s]/.test(href))
+    fail("RECOVERY_OBSERVED_PORTAL_UPDATE_REQUIRED");
+  const destination = new URL(href, portal.url);
+  assertRecoveryPortalLocation(destination.href, portal);
+  if (
+    !destination.pathname.split("/").includes(subscriptionId) &&
+    ![...destination.searchParams.values()].includes(subscriptionId)
+  )
+    fail("RECOVERY_PORTAL_SUBSCRIPTION_ROUTE_REQUIRED");
+  await update.click();
+  await page.waitForURL(destination.href, { timeout: 15000 });
+  await page.waitForLoadState("domcontentloaded");
+  for (let attempt = 0; attempt < 60; attempt++) {
+    assertRecoveryPortalLocation(page.url(), portal);
+    if (page.url() !== destination.href) fail("RECOVERY_PORTAL_SUBSCRIPTION_ROUTE_REQUIRED");
+    const surface = await inspect(page);
+    if (recoveryPortalInspectionStage(surface) === "payment-method-selection") return surface;
+    await page.waitForTimeout(250);
+  }
+  fail("RECOVERY_PORTAL_SELECTION_REQUIRED");
+}
+
 // All supplied ports are local dependency injection for offline tests. The CLI
 // below fixes every real service, identity, path and reviewed browser helper.
 export function createRecoveryController({
@@ -549,6 +654,9 @@ export function createRecoveryController({
   graceVerified,
   recoveryPolicy = createRecoveryPolicy(C),
   resumeJournal,
+  portalContinuation,
+  continuationPolicy,
+  verifyContinuationState,
   inspectSurface = inspectStripeSurface,
   inspectFields = inspectContinuationFields,
   inspectCard = inspectCheckoutCardStructure,
@@ -560,6 +668,7 @@ export function createRecoveryController({
   inspectWarning = verifyRecoveryWarning,
   assertReconciliationSettled = () => {},
   loadPortalHelper = () => import("./protected-stripe-browser-recovery.mjs"),
+  loadContinuationHelper = loadPortalContinuationForm,
   now = Date.now,
 }) {
   const C = recoveryPolicy.config;
@@ -572,23 +681,68 @@ export function createRecoveryController({
   } = recoveryPolicy;
   if (graceVerified !== (C.graceEnabled ?? true)) fail("RECOVERY_VERIFIED_GRACE_REQUIRED");
   const readSnapshot = async () => assertRecoverySnapshotLists(await snapshot(), record);
-  let journal = resumeJournal
-    ? structuredClone(resumeJournal)
-    : {
-        version: C.kind === PROTECTED_BILLING_RECOVERY_V2.kind ? 2 : 1,
-        kind: C.kind,
+  if (portalContinuation) {
+    if (
+      resumeJournal ||
+      C.graceEnabled !== false ||
+      !continuationPolicy ||
+      !verifyContinuationState
+    )
+      fail("RECOVERY_PORTAL_CONTINUATION_REQUIRED");
+    continuationPolicy.assertReceipt(portalContinuation.receipt);
+    if (
+      portalContinuation.receipt.baselineSha256 !== baseline.evidenceSha256 ||
+      portalContinuation.pending.failure?.evidenceSha256 !==
+        portalContinuation.receipt.failureSha256 ||
+      portalContinuation.portal.id !== portalContinuation.receipt.portalId ||
+      portalContinuation.lockedCompanion?.action !== "expect-recovery-locked" ||
+      portalContinuation.lockedCompanion.billingRevision !==
+        portalContinuation.receipt.billingRevision ||
+      portalContinuation.lockedCompanion.samePanelTransition !== false ||
+      portalContinuation.lockedCompanion.originalPanelContinuity !== false
+    )
+      fail("RECOVERY_PORTAL_CONTINUATION_REQUIRED");
+  }
+  let journal = portalContinuation
+    ? {
+        version: 1,
+        kind: "unimate-protected-portal-navigation-continuation-v1",
         account: C.account,
         origin: C.origin,
         source: C.source,
         userId: record.userId,
         customerId: C.customer,
         baseline,
-        phase: "ready",
-      };
+        continuation: portalContinuation.receipt,
+        purchase: portalContinuation.pending.purchase,
+        failure: portalContinuation.pending.failure,
+        portalId: portalContinuation.portal.id,
+        portalAttemptedAt: portalContinuation.pending.portalAttemptedAt,
+        portalUpdateArmedAt: portalContinuation.pending.portalUpdateArmedAt,
+        companionInitialLocked: portalContinuation.lockedCompanion,
+        phase: "portal-selection-ready",
+      }
+    : resumeJournal
+      ? structuredClone(resumeJournal)
+      : {
+          version: C.kind === PROTECTED_BILLING_RECOVERY_V2.kind ? 2 : 1,
+          kind: C.kind,
+          account: C.account,
+          origin: C.origin,
+          source: C.source,
+          userId: record.userId,
+          customerId: C.customer,
+          baseline,
+          phase: "ready",
+        };
   let held = false,
     uncertain = false,
     busy = false,
-    portal;
+    portal = portalContinuation?.portal;
+  if (portalContinuation) {
+    held = true;
+    hold(true);
+  }
   let cardObserved = false;
   if (resumeJournal) {
     if (
@@ -693,6 +847,10 @@ export function createRecoveryController({
   const run = async (line) => {
     const command = parseRecoveryCommand(line);
     if (!command) fail("RECOVERY_FIXED_COMMAND_REQUIRED");
+    if (portalContinuation && !CONTINUATION_COMMANDS.has(command))
+      fail("RECOVERY_CONTINUATION_COMMAND_REJECTED");
+    if (!portalContinuation && ["NAVIGATE_ADD", "FILL", "CONTINUE", "CONFIRM"].includes(command))
+      fail("RECOVERY_CONTINUATION_COMMAND_REJECTED");
     if (busy) fail("RECOVERY_CONCURRENT_COMMAND_REJECTED");
     busy = true;
     try {
@@ -723,6 +881,79 @@ export function createRecoveryController({
         return { kind: "checkout-controls", fields, structure, selectionAvailable: cardObserved };
       }
       if (uncertain) fail("RECOVERY_UNCERTAIN_ACTION_NO_RETRY");
+      if (portalContinuation && ["NAVIGATE_ADD", "FILL", "CONTINUE", "CONFIRM"].includes(command)) {
+        const stages = {
+          NAVIGATE_ADD: [
+            "portal-selection-ready",
+            "portal-add-ready",
+            "navigateVerifiedRecoveryAdd",
+            "navigated",
+          ],
+          FILL: ["portal-add-ready", "portal-card-ready", "fillVerifiedRecoveryCard", "filled"],
+          CONTINUE: [
+            "portal-card-ready",
+            "portal-card-continued",
+            "continueVerifiedRecoveryCard",
+            "continued",
+          ],
+          CONFIRM: [
+            "portal-card-continued",
+            "portal-update-submitted",
+            "confirmVerifiedRecoveryPaymentMethod",
+            "submitted",
+          ],
+        };
+        const [before, after, method, resultKey] = stages[command];
+        requirePhase(before);
+        if (!held) fail("RECOVERY_RECONCILIATION_HOLD_REQUIRED");
+        assertRecoveryPortalLocation(page.url(), portal);
+        const helper = await loadContinuationHelper();
+        if (typeof helper[method] !== "function") fail("RECOVERY_REVIEWED_PORTAL_HELPER_REQUIRED");
+        let claimed = false;
+        const claimAction = async () => {
+          if (claimed) fail("RECOVERY_PORTAL_UPDATE_ALREADY_CLAIMED");
+          assertRecoveryPortalLocation(page.url(), portal);
+          assertReconciliationSettled();
+          const current = await verifyContinuationState();
+          if (current.billingRevision !== portalContinuation.receipt.billingRevision)
+            fail("RECOVERY_PORTAL_CONTINUATION_STATE_CHANGED");
+          await save({
+            ...journal,
+            phase: `${before}-pending`,
+            continuationActions: {
+              ...journal.continuationActions,
+              [command]: { attemptedAt: now() },
+            },
+            ...(["CONTINUE", "CONFIRM"].includes(command)
+              ? {
+                  portalUpdateAttempted: true,
+                  portalUpdateClaimedAt: now(),
+                  portalUpdateBillingRevision: current.billingRevision,
+                }
+              : {}),
+          });
+          claimed = true;
+          uncertain = true;
+        };
+        // Once a helper begins executing, a missing claim/result is not proof
+        // that nothing happened. Any thrown/ambiguous outcome stops this run.
+        uncertain = true;
+        const result = await helper[method]({
+          page,
+          portal: structuredClone(portal),
+          subscriptionId: portalContinuation.receipt.subscriptionId,
+          claimAction,
+        });
+        if (
+          !claimed ||
+          result?.[resultKey] !== true ||
+          (command === "CONTINUE" && result.paymentOutcomeUnverified !== true)
+        )
+          fail("RECOVERY_PORTAL_ACTION_RESULT_REQUIRED");
+        await save({ ...journal, phase: after });
+        uncertain = false;
+        return { kind: "portal-continuation", step: command, paymentOutcomeUnverified: true };
+      }
       if (command === "CHECKOUT") {
         requirePhase("ready");
         const current = verifyRecoveryBaseline(await readSnapshot());
@@ -918,7 +1149,10 @@ export function createRecoveryController({
         };
       }
       if (command === "EXPECT_RECOVERED") {
-        requirePhase("portal-update-submitted");
+        requirePhase(
+          "portal-update-submitted",
+          ...(portalContinuation ? ["portal-card-continued"] : []),
+        );
         const completion = await evidence("recovered");
         const result = await companion.expectRecoveredPro(completion);
         await save({ ...journal, phase: "recovered", completion, companionRecovery: result });
@@ -991,7 +1225,13 @@ export function createRecoveryController({
 
 export async function createRecoveryJournal(
   directory,
-  { resumeText, inspectedOriginalText, startupInspectedText, runVersion = 1 } = {},
+  {
+    resumeText,
+    inspectedOriginalText,
+    startupInspectedText,
+    runVersion = 1,
+    portalContinuationText,
+  } = {},
 ) {
   if (
     ![1, 2].includes(runVersion) ||
@@ -1009,7 +1249,24 @@ export async function createRecoveryJournal(
     stat.mode & 0o077
   )
     fail("RECOVERY_PRIVATE_DIRECTORY_REQUIRED");
-  const filename = path.join(directory, runVersion === 2 ? RECOVERY_V2_JOURNAL : RECOVERY_JOURNAL);
+  if (
+    portalContinuationText !== undefined &&
+    (runVersion !== 2 ||
+      typeof portalContinuationText !== "string" ||
+      [resumeText, inspectedOriginalText, startupInspectedText].some(
+        (value) => value !== undefined,
+      ) ||
+      (await readPrivate(path.join(directory, RECOVERY_V2_JOURNAL))) !== portalContinuationText)
+  )
+    fail("RECOVERY_PORTAL_CONTINUATION_JOURNAL_CHANGED");
+  const filename = path.join(
+    directory,
+    portalContinuationText !== undefined
+      ? PORTAL_NAVIGATION_CONTINUATION.journal
+      : runVersion === 2
+        ? RECOVERY_V2_JOURNAL
+        : RECOVERY_JOURNAL,
+  );
   if (
     startupInspectedText !== undefined &&
     (typeof startupInspectedText !== "string" ||
@@ -1048,6 +1305,11 @@ export async function createRecoveryJournal(
   await handle.close();
   let expected = resumeText ?? "";
   return async (value) => {
+    if (
+      portalContinuationText !== undefined &&
+      (await readPrivate(path.join(directory, RECOVERY_V2_JOURNAL))) !== portalContinuationText
+    )
+      fail("RECOVERY_PORTAL_CONTINUATION_JOURNAL_CHANGED");
     const current = await fs.lstat(filename);
     if (
       !current.isFile() ||
@@ -1077,20 +1339,31 @@ export async function runProtectedBillingRecovery({
   resumeUnpaid = false,
   resumeInspectedUnpaid = false,
   resumeStartupFailure = false,
+  resumePortalNavigation = false,
 } = {}) {
   assertRecoveryStart({ approved });
   if (
     typeof resumeUnpaid !== "boolean" ||
     typeof resumeInspectedUnpaid !== "boolean" ||
     typeof resumeStartupFailure !== "boolean" ||
-    [resumeUnpaid, resumeInspectedUnpaid, resumeStartupFailure].filter(Boolean).length > 1
+    typeof resumePortalNavigation !== "boolean" ||
+    [resumeUnpaid, resumeInspectedUnpaid, resumeStartupFailure, resumePortalNavigation].filter(
+      Boolean,
+    ).length > 1
   )
     fail("RECOVERY_UNPAID_RESUME_NOT_ELIGIBLE");
   const resuming = resumeUnpaid || resumeInspectedUnpaid || resumeStartupFailure;
-  if (![1, 2].includes(runVersion) || (runVersion === 2 && resuming))
+  if (
+    ![1, 2].includes(runVersion) ||
+    (runVersion === 2 && resuming) ||
+    (resumePortalNavigation && runVersion !== 2)
+  )
     fail("RECOVERY_RUN_VERSION_REQUIRED");
   const recoveryPolicy = createRecoveryPolicy(runVersion === 2 ? PROTECTED_BILLING_RECOVERY_V2 : C);
   const recoveryConfig = recoveryPolicy.config;
+  const continuationPolicy = resumePortalNavigation
+    ? createPortalNavigationContinuationPolicy({ recoveryPolicy })
+    : undefined;
   // No operator-supplied baseline, origin, source or journal path is accepted.
   const selectedOrigin = recoveryConfig.origin;
   const deferredStart = runVersion === 2 || resumeStartupFailure;
@@ -1149,7 +1422,7 @@ export async function runProtectedBillingRecovery({
     )
       fail("RECOVERY_PRIVATE_DIRECTORY_REQUIRED");
     lock = await fs.open(path.join(directory, "protected-billing-run.lock"), "wx", 0o600);
-    if (runVersion === 2) await assertFreshRecoveryV2Run(directory);
+    if (runVersion === 2 && !resumePortalNavigation) await assertFreshRecoveryV2Run(directory);
     const record = JSON.parse(await readPrivate(path.join(ROOT, ARTIFACT)));
     validateRecord(record);
     const setup = JSON.parse(
@@ -1243,6 +1516,19 @@ export async function runProtectedBillingRecovery({
     stage("baseline");
     const initial = await snapshot();
     let resumeJournal, resumeTarget, originalJournal;
+    let portalContinuation, portalPending, portalPendingText, continuationState;
+    const inspectContinuation = async () => {
+      const state = await readPortalContinuationState({ snapshot, stripe, pending: portalPending });
+      const inspected = await inspectPortalNavigationContinuation({ root: ROOT, state });
+      if (portalPendingText !== inspected.pendingText)
+        fail("RECOVERY_PORTAL_CONTINUATION_JOURNAL_CHANGED");
+      return { ...inspected, state };
+    };
+    if (resumePortalNavigation) {
+      portalPendingText = await readPrivate(path.join(directory, RECOVERY_V2_JOURNAL));
+      portalPending = JSON.parse(portalPendingText);
+      continuationState = await inspectContinuation();
+    }
     const resumeText = resuming
       ? await readPrivate(path.join(directory, RECOVERY_JOURNAL))
       : undefined;
@@ -1297,14 +1583,22 @@ export async function runProtectedBillingRecovery({
         },
       };
     }
-    const baseline = resumeTarget?.baseline || recoveryPolicy.verifyBaseline(initial);
+    const baseline = continuationState
+      ? portalPending.baseline
+      : resumeTarget?.baseline || recoveryPolicy.verifyBaseline(initial);
     if (
       runVersion === 2
         ? baseline.billingRevision < recoveryConfig.baselineRevision
         : baseline.billingRevision !== 62
     )
       fail("RECOVERY_EXACT_BASELINE_REVISION_REQUIRED");
-    const journalOptions = { resumeText, inspectedOriginalText, startupInspectedText, runVersion };
+    const journalOptions = {
+      resumeText,
+      inspectedOriginalText,
+      startupInspectedText,
+      runVersion,
+      ...(resumePortalNavigation ? { portalContinuationText: portalPendingText } : {}),
+    };
     let persist;
     if (!deferredStart) {
       persist = await createRecoveryJournal(directory, journalOptions);
@@ -1476,14 +1770,22 @@ export async function runProtectedBillingRecovery({
       modulePath,
       recoveryBaseline: baseline,
       recoveryPolicy,
+      ...(resumePortalNavigation
+        ? { recoveryContinuation: continuationState.receipt, continuationPolicy }
+        : {}),
     });
-    const freeEvidence = await companion.expectFree();
+    const freeEvidence = resumePortalNavigation
+      ? await companion.expectInitialRecoveryLocked(portalPending.failure)
+      : await companion.expectFree();
     report({
       kind: "companion",
       ...freeEvidence,
       ...(resuming ? { freshSessionAfterUnpaidResume: true } : {}),
       ...(resumeInspectedUnpaid ? { freshSessionAfterInspectionOnlyStop: true } : {}),
       ...(resumeStartupFailure ? { freshSessionAfterSetupFailure: true } : {}),
+      ...(resumePortalNavigation
+        ? { freshSessionAfterNavigationStop: true, originalPanelContinuity: false }
+        : {}),
     });
     if (resuming) {
       resumeTarget = verifyResume({
@@ -1523,7 +1825,38 @@ export async function runProtectedBillingRecovery({
         createWriter: () => createRecoveryJournal(directory, journalOptions),
       });
     }
-    if (runVersion === 2) {
+    if (resumePortalNavigation) {
+      held = true;
+      initialReadOnly = false;
+      stage("portal-selection-readiness");
+      await page.goto(continuationState.state.portal.url, { waitUntil: "domcontentloaded" });
+      const inspection = await navigatePortalContinuationSelection({
+        page,
+        portal: continuationState.state.portal,
+        subscriptionId: continuationState.receipt.subscriptionId,
+      });
+      report({ kind: "stripe-controls", ...inspection });
+      const fresh = await inspectContinuation();
+      portalContinuation = {
+        receipt: continuationState.receipt,
+        pending: portalPending,
+        portal: fresh.state.portal,
+        lockedCompanion: freeEvidence,
+      };
+      persist = deferRecoveryJournal({
+        verifyReady: async () => {
+          active();
+          await inspectContinuation();
+          assertRecoveryPortalLocation(page.url(), portalContinuation.portal);
+          if (
+            recoveryPortalInspectionStage(await inspectStripeSurface(page)) !==
+            "payment-method-selection"
+          )
+            fail("RECOVERY_PORTAL_SELECTION_REQUIRED");
+        },
+        createWriter: () => createRecoveryJournal(directory, journalOptions),
+      });
+    } else if (runVersion === 2) {
       persist = deferRecoveryJournal({
         verifyReady: async () => {
           active();
@@ -1569,6 +1902,31 @@ export async function runProtectedBillingRecovery({
       graceVerified,
       recoveryPolicy,
       resumeJournal,
+      portalContinuation,
+      continuationPolicy,
+      verifyContinuationState: resumePortalNavigation
+        ? async () => {
+            if (
+              (await readPrivate(path.join(directory, RECOVERY_V2_JOURNAL))) !== portalPendingText
+            )
+              fail("RECOVERY_PORTAL_CONTINUATION_JOURNAL_CHANGED");
+            return continuationPolicy.verifyState({
+              receipt: portalContinuation.receipt,
+              pendingText: await readPrivate(path.join(directory, RECOVERY_V2_JOURNAL)),
+              claimText: await readPrivate(
+                path.join(
+                  directory,
+                  `portal-recovery-form-${hash(portalPending.portalId)}.claim.json`,
+                ),
+              ),
+              state: await readPortalContinuationState({
+                snapshot,
+                stripe,
+                pending: portalPending,
+              }),
+            });
+          }
+        : undefined,
       assertReconciliationSettled: reconciliation.assertSettled,
       hold: (value) => {
         initialReadOnly = false;
@@ -1585,7 +1943,14 @@ export async function runProtectedBillingRecovery({
       Math.max(1, Math.min(45 * 60_000, access.expiresAt - Date.now() - 5000)),
     );
     timer.unref?.();
-    report({ kind: "ready", commands: [...COMMANDS], portalUpdateSubmissionEnabled: false });
+    report({
+      kind: "ready",
+      commands: [...(resumePortalNavigation ? CONTINUATION_COMMANDS : COMMANDS)],
+      portalUpdateSubmissionEnabled: false,
+      ...(resumePortalNavigation
+        ? { freshLockedContinuation: true, originalPanelContinuity: false }
+        : {}),
+    });
     input = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
     let count = 0;
     for await (const line of input) {
@@ -1628,15 +1993,19 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const resumeUnpaid = process.argv[3] === "--resume-unpaid";
   const resumeInspectedUnpaid = process.argv[3] === "--resume-inspected-unpaid";
   const resumeStartupFailure = process.argv[3] === "--resume-startup-failure";
+  const resumePortalNavigation = process.argv[3] === "--resume-portal-navigation";
   runProtectedBillingRecovery({
     approved:
       process.argv.length ===
-        (resumeUnpaid || resumeInspectedUnpaid || resumeStartupFailure ? 4 : 3) &&
+        (resumeUnpaid || resumeInspectedUnpaid || resumeStartupFailure || resumePortalNavigation
+          ? 4
+          : 3) &&
       ["--recovery-v1", "--recovery-v2"].includes(process.argv[2]) &&
       process.env.UNIMATE_PROTECTED_BILLING_RECOVERY === "approved",
     resumeUnpaid,
     resumeInspectedUnpaid,
     resumeStartupFailure,
+    resumePortalNavigation,
     runVersion,
   }).catch((error) => {
     console.error(JSON.stringify({ code: recoveryErrorCode(error) }));

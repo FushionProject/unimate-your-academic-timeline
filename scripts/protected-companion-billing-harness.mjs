@@ -16,6 +16,42 @@ const fail = (code) => {
   throw new Error(code);
 };
 
+// A stopped browser is never revived as continuous evidence. The explicit
+// navigation-only receipt permits one fresh, already-locked entry checkpoint.
+export function protectedInitialRecoveryLockedCheckpoint({
+  baseline,
+  failure,
+  receipt,
+  origin,
+  userId,
+  recoveryPolicy,
+  continuationPolicy,
+}) {
+  continuationPolicy.assertReceipt(receipt);
+  recoveryPolicy.assertProof(baseline, "baseline");
+  recoveryPolicy.assertProof(failure, "past-due");
+  if (
+    recoveryPolicy.config.graceEnabled !== false ||
+    receipt.origin !== origin ||
+    receipt.userId !== userId ||
+    receipt.baselineSha256 !== baseline.evidenceSha256 ||
+    receipt.failureSha256 !== failure.evidenceSha256 ||
+    failure.baselineSha256 !== baseline.evidenceSha256 ||
+    baseline.userId !== userId ||
+    failure.userId !== userId ||
+    baseline.origin !== origin ||
+    failure.clockId !== baseline.clockId ||
+    receipt.purchaseSha256 !== failure.purchaseSha256 ||
+    receipt.subscriptionId !== failure.subscriptionId ||
+    receipt.clockId !== baseline.clockId ||
+    receipt.billingRevision < failure.billingRevision ||
+    receipt.newCompanionSession !== true ||
+    receipt.originalPanelContinuity !== false
+  )
+    fail("COMPANION_INITIAL_LOCKED_PROOF_MISMATCH");
+  return receipt.billingRevision;
+}
+
 // Optional fixed recovery sequence; ordinary purchase/cancel runs keep their
 // original three checkpoints. A caller cannot substitute a UI observation for
 // the independently sealed pre-return provider/persisted-state proof.
@@ -248,6 +284,8 @@ export async function startProtectedCompanionBillingHarness({
   modulePath,
   recoveryBaseline = null,
   recoveryPolicy = DEFAULT_RECOVERY_POLICY,
+  recoveryContinuation = null,
+  continuationPolicy,
 } = {}) {
   const assertRecoveryProof = recoveryPolicy.assertProof;
   validateRecord(record);
@@ -503,10 +541,22 @@ export async function startProtectedCompanionBillingHarness({
     let checking = false;
     async function expect(action, previous, isPro, recoveryProof, recoveryPhase) {
       if (checking || phase !== previous || closed) fail("COMPANION_EXPECTATION_ORDER_INVALID");
+      if (recoveryContinuation && previous === "created" && action !== "expect-recovery-locked")
+        fail("COMPANION_INITIAL_LOCKED_RECEIPT_REQUIRED");
       checking = true;
       try {
-        const proofRevision =
-          recoveryBaseline && previous !== "created"
+        const initialLocked = previous === "created" && action === "expect-recovery-locked";
+        const proofRevision = initialLocked
+          ? protectedInitialRecoveryLockedCheckpoint({
+              baseline: recoveryBaseline,
+              failure: recoveryProof,
+              receipt: recoveryContinuation,
+              origin: app,
+              userId: record.userId,
+              recoveryPolicy,
+              continuationPolicy,
+            })
+          : recoveryBaseline && previous !== "created"
             ? protectedRecoveryCompanionCheckpoint({
                 baseline: recoveryBaseline,
                 proof: recoveryProof,
@@ -554,7 +604,10 @@ export async function startProtectedCompanionBillingHarness({
           return (
             persisted.isPro === isPro &&
             persisted.apiPro === isPro &&
-            (proofRevision === null || persisted.revision >= proofRevision)
+            (proofRevision === null ||
+              (initialLocked
+                ? persisted.revision === proofRevision
+                : persisted.revision >= proofRevision))
           );
         });
         if (lastRevision !== undefined && persisted.revision <= lastRevision)
@@ -603,6 +656,9 @@ export async function startProtectedCompanionBillingHarness({
           samePanelTransition: previous !== "created",
           sameOpenPanelTransition: previous !== "created",
           sessionReused: previous !== "created",
+          ...(initialLocked
+            ? { freshSessionAfterNavigationStop: true, originalPanelContinuity: false }
+            : {}),
           aiRequests: 0,
           captures: 0,
           extractions: 0,
@@ -619,6 +675,11 @@ export async function startProtectedCompanionBillingHarness({
     }
     return {
       expectFree: () => expect("expect-free", "created", false),
+      expectInitialRecoveryLocked: (proof) => {
+        if (!recoveryContinuation || !continuationPolicy)
+          fail("COMPANION_INITIAL_LOCKED_RECEIPT_REQUIRED");
+        return expect("expect-recovery-locked", "created", false, proof, "past-due");
+      },
       expectPro: (proof) => expect("expect-pro", "expect-free", true, proof, "purchased"),
       expectRecoveryPro: (proof) => {
         if (!recoveryBaseline || recoveryPolicy.config.graceEnabled !== true)

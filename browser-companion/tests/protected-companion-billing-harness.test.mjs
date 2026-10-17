@@ -6,7 +6,12 @@ import {
   installProtectedBillingGuard,
   startProtectedCompanionBillingHarness,
   protectedRecoveryCompanionCheckpoint,
+  protectedInitialRecoveryLockedCheckpoint,
 } from "../../scripts/protected-companion-billing-harness.mjs";
+import {
+  createPortalNavigationContinuationPolicy,
+  PORTAL_NAVIGATION_CONTINUATION as P,
+} from "../../scripts/protected-portal-navigation-continuation.mjs";
 import { installPreviewFetch } from "../../scripts/protected-companion-preview.mjs";
 import { TARGET } from "../../scripts/prepare-stripe-sandbox.mjs";
 import {
@@ -400,6 +405,58 @@ const failureBody2 = {
   purchaseSha256: purchase2.evidenceSha256,
 };
 const failure2 = seal(failureBody2);
+const continuationPolicy = createPortalNavigationContinuationPolicy({ recoveryPolicy: policy2 });
+const receiptBody = {
+  version: 1,
+  kind: P.kind,
+  phase: "navigation-only-eligible",
+  origin: v2Config.origin,
+  source: v2Config.source,
+  account: v2Config.account,
+  customerId: v2Config.customer,
+  userId: record.userId,
+  clockId: baseline2.clockId,
+  billingRevision: 75,
+  observedAt: 1800000000000,
+  subscriptionId: failure2.subscriptionId,
+  invoiceId: "in_fixture",
+  baselineSha256: baseline2.evidenceSha256,
+  purchaseSha256: purchase2.evidenceSha256,
+  failureSha256: failure2.evidenceSha256,
+  pendingSha256: P.pendingSha256,
+  claimSha256: P.claimSha256,
+  portalId: "bps_fixture",
+  claimAttemptId: "30000000-0000-4000-8000-000000000003",
+  noSubmissionCapability: true,
+  newCompanionSession: true,
+  originalPanelContinuity: false,
+};
+const initialLocked = {
+  baseline: baseline2,
+  failure: failure2,
+  receipt: seal(receiptBody),
+  origin: v2Config.origin,
+  userId: record.userId,
+  recoveryPolicy: policy2,
+  continuationPolicy,
+};
+assert.equal(protectedInitialRecoveryLockedCheckpoint(initialLocked), 75);
+for (const altered of [
+  { ...initialLocked, origin: "https://example.test" },
+  { ...initialLocked, userId: "other" },
+  { ...initialLocked, baseline: recoveryBaseline },
+  { ...initialLocked, failure: purchase2 },
+  ...[
+    { originalPanelContinuity: true },
+    { newCompanionSession: false },
+    { failureSha256: "0".repeat(64) },
+    { purchaseSha256: "0".repeat(64) },
+    { subscriptionId: "sub_other" },
+    { billingRevision: 74 },
+    { clockId: "clock_other" },
+  ].map((change) => ({ ...initialLocked, receipt: seal({ ...receiptBody, ...change }) })),
+])
+  assert.throws(() => protectedInitialRecoveryLockedCheckpoint(altered));
 const recoveredBody2 = {
   ...purchaseBody2,
   phase: "recovered",

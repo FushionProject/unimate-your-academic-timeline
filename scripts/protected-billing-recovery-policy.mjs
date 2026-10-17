@@ -510,6 +510,47 @@ export function createRecoveryPolicy(config = PROTECTED_BILLING_RECOVERY) {
     });
   }
 
+  // Read-only continuation check. This is NOT a second failure/webhook proof:
+  // the original sealed failure stays intact and no delivery is invented.
+  function verifyUnchangedFailure(input = {}) {
+    require(v2, "RECOVERY_GRACE_OFF_CONTINUATION_REQUIRED");
+    const { scope, sub } = current(input, input.purchase, "purchased", false);
+    assertRecoveryProof(input.failure, "past-due");
+    invoiceScope(input.invoice, sub, "subscription_cycle", "open");
+    const methodId = effectiveMethod(sub, input.customer);
+    methodScope(input.paymentMethod, methodId);
+    methodScope(input.originalPaymentMethod, input.purchase.originalMethodId);
+    require(input.failure.baselineSha256 === input.baseline.evidenceSha256 &&
+      input.failure.purchaseSha256 === input.purchase.evidenceSha256 &&
+      input.failure.userId === scope.userId &&
+      input.failure.clockId === scope.clockId &&
+      input.failure.subscriptionId === sub.id &&
+      input.failure.invoiceId === input.invoice.id &&
+      input.failure.originalMethodId === input.purchase.originalMethodId &&
+      input.failure.declineMethodId === methodId &&
+      input.invoice.id !== input.purchase.initialInvoiceId &&
+      input.invoice.attempt_count === 1 &&
+      sub.status === "past_due" &&
+      methodId !== input.purchase.originalMethodId &&
+      input.paymentMethod.card?.last4 === "0341" &&
+      id(input.customer.invoice_settings?.default_payment_method) ===
+        input.purchase.originalMethodId &&
+      scope.billingRevision >= input.failure.billingRevision &&
+      input.actionStartedAt >=
+        input.failure.observedAt, "RECOVERY_UNCHANGED_FAILED_INVOICE_REQUIRED");
+    return seal({
+      ...scope,
+      phase: "unchanged-past-due",
+      baselineSha256: input.baseline.evidenceSha256,
+      purchaseSha256: input.purchase.evidenceSha256,
+      failureSha256: input.failure.evidenceSha256,
+      subscriptionId: sub.id,
+      invoiceId: input.invoice.id,
+      declineMethodId: methodId,
+      originalMethodId: input.purchase.originalMethodId,
+    });
+  }
+
   function verifyRecoveryRevocation(input = {}) {
     const scope = snapshot(input);
     assertRecoveryProof(input.baseline, "baseline");
@@ -566,6 +607,7 @@ export function createRecoveryPolicy(config = PROTECTED_BILLING_RECOVERY) {
     verifyPurchase: verifyRecoveryPurchase,
     verifyFailure: verifyRecoveryFailure,
     verifyCompletion: verifyRecoveryCompletion,
+    verifyUnchangedFailure,
     verifyRevocation: verifyRecoveryRevocation,
   });
 }
