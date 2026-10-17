@@ -89,6 +89,57 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [x] Remove the vulnerable development dependency chain and verify both build targets (October 14)
 - [ ] Complete production-origin, legal, support, and Chrome Web Store gates
 
+### Isolated grace-off Portal recovery — October 16
+
+**Payment recovery, terminal cancellation and cleanup passed.** The separate protected,
+unaliased Preview `https://unimate-lcm4fn7i3-resumejuice-s-projects.vercel.app/`
+uses pushed website source `6a6e39fa417819b0334fcb14adcac6d5fdbb2d28`, including
+the fix that keeps Manage billing available for lapsed Free accounts and explains
+locked access truthfully. Guarded tooling checkpoints `bc4d12d` and `a8cb64d`
+are also pushed.
+Authenticated read-only runtime verification confirmed grace off for this test
+deployment only; the normal project grace policy is unchanged.
+
+The marked synthetic account moved Free 67 → one USD 5.99 sandbox purchase →
+persisted Pro 70 → genuine failed renewal/HTTP 200 → persisted Free 74. The
+original same open Companion panel unlocked, then locked; the website showed
+the accurate payment warning and Manage billing. Billing return produced Free
+75. The original Portal navigation stopped without form fill or submission;
+its pending evidence was retained. A separate reviewed continuation verified
+the unchanged failed invoice/subscription/Portal and started a **new** locked
+Companion panel at revision 75, not a continuation of the original panel.
+
+The real Portal form used Stripe's published successful `4242` test card with
+Link off and one claimed Continue click. Genuine `invoice.paid` returned HTTP
+200 through the signed Stripe CLI relay to the protected hosted handler. Strict
+readback verified the same failed USD 5.99 invoice paid with a new payment method
+through InvoicePayment → PaymentIntent, an active subscription, and persisted
+Pro revision 78 **before website return**. The continuation's same open panel
+and signed-in session recovered from locked Free 75 to Pro 78; its screenshot
+was visually inspected. AI requests, captures and page extractions stayed zero.
+
+The exact recovered subscription was canceled once without proration or a final
+invoice. Genuine `customer.subscription.deleted` returned HTTP 200, and the
+continuation's same panel/session revoked access at persisted Free revision 79
+before website return. Its screenshot was visually inspected. Proof-gated return
+succeeded; final independent readback showed Free revision 80, the same USD 5.99
+invoice paid, all seven synthetic subscriptions canceled, zero active
+subscriptions and zero open Checkouts. Prior Checkout v1/v2, recovery v1,
+original pending recovery v2 and claim evidence were unchanged. Continuity is
+verified only for the new panel's Free 75 → Pro 78 → Free 79;
+`originalPanelContinuity:false` is retained. AI/capture/extraction counts stayed
+zero. The owned runner exited 0, and its port 8789 relay listener was closed.
+
+Final deployment readback confirmed protected `READY` Preview (`target:null`,
+no aliases), the exact source above, no persistent bypasses or Production
+environment variables, custom-domain auto-assignment off and live Stripe mode
+false. Full offline tests, typecheck, focused form tests and the 359-file secret
+scan passed; lint had zero errors/eight existing warnings. This does
+not certify direct public/production webhook delivery or an uninterrupted
+purchase → failure → recovery panel session. No public signup, Store submission,
+live charge or tax collection was enabled. See `STRIPE_SANDBOX_MANUAL_TESTS.md`
+for the separate evidence boundaries.
+
 ### Current-Preview purchase → immediate cancellation — October 16
 
 The purchase → installed Companion unlock check **passed** on protected Preview
@@ -128,7 +179,8 @@ revision 67, the original Checkout paid for USD 5.99 in sandbox mode,
 all six synthetic subscriptions canceled, and zero active subscriptions or
 open Checkouts. The original v1/v2 journals were unchanged. The owned runner
 stopped with exit 0 and its relay listener was closed. The failed-renewal →
-Portal payment-method update → recovery journey remains **NOT PASSED**. The older
+Portal payment-method update → recovery journey was not tested in this run;
+the later isolated grace-off evidence above is separate. The older
 period-end cancellation evidence is unchanged. This Preview remains private: no live
 charges, public signup, domain launch, direct production-webhook certification,
 or Store submission is implied. See `STRIPE_SANDBOX_MANUAL_TESTS.md` for scope.
