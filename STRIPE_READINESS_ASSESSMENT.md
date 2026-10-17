@@ -1,5 +1,85 @@
 # Stripe and Entitlement Readiness Assessment
 
+## Current assessment — October 16, 2026
+
+**Keep public launch and live billing disabled. Core sandbox billing and
+Companion lifecycle behavior are now proven; the August implementation gaps
+below are historical, not a description of the current code.**
+
+Evidence is recorded in [Stripe sandbox manual tests](./STRIPE_SANDBOX_MANUAL_TESTS.md).
+No provider actions, private journals, credentials or deployment settings were
+changed during this offline assessment.
+
+### Proven engineering work
+
+- Checkout customer ownership, duplicate-purchase prevention, recurring-price
+  validation, Customer Portal ownership, lifecycle reconciliation, signed
+  webhooks and bounded customer-facing recovery states are implemented and have
+  offline regression coverage. The additive customer uniqueness/revision
+  prerequisite was backed up, applied and verified in the dated October record;
+  do not reapply historical SQL based on the August section.
+- Real sandbox runs cover purchase, initial decline, monthly renewal, failed
+  renewal, duplicate/stale events, concurrent Checkout, period-end/immediate
+  cancellation, partial/full refunds, disputes and Portal isolation. These have
+  different local/hosted scopes; the dated evidence does not certify every
+  scenario on every deployment.
+- On private website source `6a6e39f`, a separate grace-off test proved failed
+  renewal locking. An actual Portal card update then paid the same failed
+  USD 5.99 invoice with a new payment method and genuine signed hosted delivery.
+  A fresh installed Companion session continuously moved Free 75 → Pro 78 →
+  Free 79 after exact cancellation; independent final readback was Free 80,
+  seven canceled subscriptions and no active subscriptions/open Checkouts.
+  Original-panel continuity across the earlier navigation stop is explicitly
+  **not** claimed. AI, captures and extractions were zero.
+
+### Highest-value remaining engineering verification
+
+1. Test the **direct deployed webhook destination** with sandbox credentials
+   when the owner approves an appropriately reachable endpoint. Current hosted
+   evidence uses a signed local relay; it does not prove direct production
+   delivery, its retry behavior, or production Portal returns.
+2. Complete the real authentication-required/3DS and enabled delayed-payment
+   method matrix before live acceptance. Async success/failure handlers have
+   offline coverage, but that is not proof of the provider's hosted UI flow.
+   Do not disable payment methods or change provider settings without approval.
+3. Close the broader hosted website/Companion state matrix: terminal `unpaid`
+   and paused access, transient auth/network recovery, draft preservation and
+   new-install/account-linking flows. Existing successful entitlement tests do
+   not claim an AI-answer or draft-retention result.
+4. Complete production-origin/email, Store publication, monitoring/alert and
+   rollback gates. A syntactically valid configured Store URL or credential is
+   not external verification. Prefer a restricted Stripe test key where the
+   needed permissions are available; do not rotate credentials as part of an
+   offline check.
+
+### Owner decisions, not missing implementation
+
+- **Launch price:** the current public catalog, server defaults and verified
+  test Price are **USD $5.99/month**. A different price or higher-tier plan needs
+  an explicit product decision, corresponding quotas/unit economics, and
+  coordinated catalog/server/Stripe changes. No price was changed here.
+- **Failed-payment grace:** normal configuration remains grace-on; the isolated
+  test deployment used grace-off. Choose the customer-facing launch policy
+  explicitly. Tests of both behaviors are not approval to change the normal
+  policy. Active/trialing grant access; canceled/unpaid/paused/incomplete states
+  revoke it under the existing implementation.
+- **Refunds and disputes:** current access follows subscription state; a refund
+  or dispute alone does not cancel access. Approve the support/refund policy and
+  whether cancellation should accompany those actions. No policy was changed.
+- **Live billing and tax:** production activation still requires explicit owner
+  approval, legal/support review and applicable tax-registration decisions.
+  Stripe Tax must not be enabled speculatively; no tax collection or live
+  charges are authorized by the sandbox results.
+
+`npm run release:readiness` is now labeled a **configuration-only preflight**.
+It rejects development entitlement overrides, price/currency drift from the
+advertised plan, unsafe canonical origins and missing explicit grace/live-lock
+flags. Its reports contain no supplied credential values and never certify
+provider access, published Store listings or public launch. It reads only the
+existing `.env.local` plus process environment, not separate sandbox key files.
+
+## Historical assessment — August 1, 2026 (superseded implementation findings)
+
 Date: August 1, 2026
 Target: August 10, 2026 soft launch
 Scope: read-only/test-mode billing review; no real charges, live activation, schema changes, RLS changes, or secret changes were performed.

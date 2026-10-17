@@ -1,15 +1,26 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-Readiness updated: October 16, 2026, including post-`ffbae91` checks on
-`codex/unimate-premium-revival`. The current protected Preview runs application
-commit `561ecc2`. Sandbox purchase → same-panel Pro unlock → period-end
-revocation was reverified October 16 on `72a0e29` with the latest installed
-Companion; that proof does not automatically certify the newer website deployment.
+Readiness updated: October 16, 2026, after protected sandbox recovery cleanup on
+`codex/unimate-premium-revival`. The standard private study Preview runs
+application commit `561ecc2`; a separate isolated grace-off billing Preview runs
+`6a6e39f`. Purchase → same-panel Pro unlock → immediate cancellation/revocation
+passed on `561ecc2`. Real failed-renewal → Portal repair → cancellation passed
+on the isolated build, with an explicitly new Companion session for recovery;
+it is not continuous-panel proof from the original purchase. Earlier period-end
+revocation evidence on `72a0e29` remains scoped to that deployment.
 Screenshot/AI/save/readback/reload passed October 16 on the current `561ecc2`
 Preview using the owner Pro session and fictional coursework. Full evidence: [LAUNCH.md](../LAUNCH.md)
 and [Stripe sandbox manual tests](../STRIPE_SANDBOX_MANUAL_TESTS.md).
 No custom domain was assigned and nothing was submitted to or published in the
 Chrome Web Store.
+
+Latest offline Store audit: the package/consent readiness test passed using only
+synthetic public configuration, including the 13-entry ZIP, canonical privacy
+origin, file-boundary and unsafe-config checks. No real local configuration was
+read and no production ZIP or Store artwork was created. This audit corrected
+the outdated billing summary below; it did not approve policy commitments,
+publisher identity, asset rights or reviewer access. No browser was launched and
+the owner's stop on further browser-compatibility testing remains in force.
 
 Latest source-only follow-up: configuration generation now rejects linked or
 special-file destinations and linked extension directories. Atomic replacement
@@ -127,6 +138,27 @@ tests passed; these public-release gates remain:
 
 ## Protected hosted-test progress
 
+- **Separate isolated grace-off billing Preview — October 16:**
+  `https://unimate-lcm4fn7i3-resumejuice-s-projects.vercel.app/`, website source
+  `6a6e39fa417819b0334fcb14adcac6d5fdbb2d28`. Authenticated read-only runtime
+  verification confirmed grace off only here; normal project policy is unchanged.
+  Real sandbox purchase unlocked the original panel (Free 67 → Pro 70), and a
+  failed renewal locked it at Free 74. The website correctly retained Manage
+  billing for the lapsed account. An observation-only Portal navigation stop
+  preserved its pending evidence; the separate continuation started a **new**
+  locked panel at Free 75. One Link-off published-test-card Continue repaired
+  the same failed USD 5.99 invoice, with its new-method InvoicePayment →
+  PaymentIntent graph and persisted Pro 78 verified before website return.
+  The new same panel unlocked, then revoked to Free 79 after exact-subscription
+  cancellation. Genuine signed Stripe CLI-relayed hosted deliveries returned
+  HTTP 200. Final readback after return was Free 80, all seven synthetic
+  subscriptions canceled, zero active subscriptions/open Checkouts, unchanged
+  prior journals/claim and zero AI requests/captures/extractions. The owned
+  runner and relay stopped cleanly. This is not direct public-webhook or
+  uninterrupted original-panel recovery proof. The deployment remained protected,
+  `READY`, Preview (`target:null`), without aliases, persistent bypasses or
+  Production variables; live Stripe mode and custom-domain auto-assignment
+  stayed off. Full details: `../STRIPE_SANDBOX_MANUAL_TESTS.md`.
 - **Current protected Preview — October 16:**
   `https://unimate-rvrhmln07-resumejuice-s-projects.vercel.app/`, deployment
   `dpl_8vko5jDM9b6LonH8bSdtJjqJQ2Mq`, source `561ecc2`, `READY`, Preview,
@@ -138,7 +170,13 @@ tests passed; these public-release gates remain:
   and specific recovery guidance for unsupported screenshot numbers; the live
   image-only measurement limitation remains recorded in `../LAUNCH.md`.
   No public signup, persistent bypass, Production keys, custom domain, or live
-  Stripe was enabled. A full billing journey was not repeated on this build.
+  Stripe was enabled. A later sandbox purchase → same-open-panel Pro unlock →
+  immediate cancellation → same-panel revocation passed on this exact build
+  (Free 62 → Pro 65 → Free 66 before return; final Free 67). Genuine events used
+  the signed local relay; all six synthetic subscriptions ended canceled, with
+  zero active subscriptions/open Checkouts and zero AI/capture/extraction. This
+  is not direct production-webhook proof; the isolated recovery run above is
+  separate, and the earlier period-end test remains on `72a0e29`.
   With separate owner approval on October 16, the Auth Site URL and exactly three
   email return paths (`/dashboard`, `/upgrade`, `/reset-password`) were moved to
   this origin. The previous entries were removed and the new configuration
