@@ -1,18 +1,29 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
 Readiness updated: October 16, 2026, after protected sandbox recovery cleanup on
-`codex/unimate-premium-revival`. The standard private study Preview runs
+`codex/unimate-premium-revival`. The previously verified private study Preview runs
 application commit `561ecc2`; a separate isolated grace-off billing Preview runs
 `6a6e39f`. Purchase → same-panel Pro unlock → immediate cancellation/revocation
 passed on `561ecc2`. Real failed-renewal → Portal repair → cancellation passed
 on the isolated build, with an explicitly new Companion session for recovery;
 it is not continuous-panel proof from the original purchase. Earlier period-end
 revocation evidence on `72a0e29` remains scoped to that deployment.
-Screenshot/AI/save/readback/reload passed October 16 on the current `561ecc2`
+Screenshot/AI/save/readback/reload passed October 16 on the recorded `561ecc2`
 Preview using the owner Pro session and fictional coursework. Full evidence: [LAUNCH.md](../LAUNCH.md)
 and [Stripe sandbox manual tests](../STRIPE_SANDBOX_MANUAL_TESTS.md).
 No custom domain was assigned and nothing was submitted to or published in the
 Chrome Web Store.
+
+The newest private application candidate is now `1767708` at
+<https://unimate-qgsyqq9d7-resumejuice-s-projects.vercel.app>, with account-local
+privacy fixes for Notes, Bulletin and syllabus drafts. Full offline tests,
+typecheck, lint, secret/dependency checks and both builds passed in GitHub.
+The protected hosted build is READY; read-only checks confirmed signup closed,
+app/operator authentication gates, legal/support pages and zero persistent
+hosting bypass tokens. No live charge, paid AI call, Store submission or browser
+compatibility run was made. The older study/billing evidence above was not rerun
+on this candidate; email callbacks remain on the previously approved study
+Preview. See the latest candidate section in [LAUNCH.md](../LAUNCH.md).
 
 Latest offline Store audit: the package/consent readiness test passed using only
 synthetic public configuration, including the 13-entry ZIP, canonical privacy

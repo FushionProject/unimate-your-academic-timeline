@@ -42,8 +42,9 @@ Owner decisions/access still needed:
    share owner or Vercel credentials with reviewers. These are future gates,
    not permission to make the current preview public.
 
-Engineering work remains: isolate all account-local drafts; keep the complete
-offline/GitHub checks green; deploy and verify the final private candidate;
+The scoped Notes, Bulletin and syllabus-draft account-isolation fixes are now
+pushed, with a newly built and read-only-verified private candidate. Full offline
+and GitHub checks passed for that application source. Engineering work remains:
 complete authentication-required/delayed-payment and remaining hosted lifecycle
 checks; verify direct deployed webhook delivery when a reachable endpoint is
 approved; prepare final Store images/package; verify alerts, release rollback,
@@ -61,6 +62,41 @@ unguarded `vercel curl` here: use the existing origin-scoped short-lived OIDC
 transport and verify protection before/after. No token was printed or committed.
 The previous pushed checkpoint `beebaaa` passed all
 [GitHub checks](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38990695725).
+
+### Latest protected private candidate — October 16
+
+Preview: <https://unimate-qgsyqq9d7-resumejuice-s-projects.vercel.app>
+
+- Deployment: `dpl_GQopTdPu6dYJaJ1Aouk35cVY7cAe`, `READY`, Preview target.
+- Exact application source: `176770813505473b3ce6f556f17641c8a7913240`, pushed
+  on `codex/unimate-premium-revival`; `main` was not changed.
+- The source passed its complete
+  [GitHub verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38991436339),
+  including clean install, offline tests, typecheck, lint, secret/dependency
+  checks and both hosting builds. The hosted build also succeeded.
+- Guarded upload: 139 reviewed application/configuration files, 9,095,661 bytes;
+  the actual upload dry-run matched the allowlist. Private environment files,
+  test/browser data and local journals were excluded.
+- Read-only smoke checks verified the exact project/team/source, no aliases,
+  Vercel Authentication enabled, zero persistent bypass tokens, no Production
+  variables and custom-domain auto-assignment off. Protection was checked again
+  after the requests. Preview `STRIPE_LIVE_MODE_ENABLED` remains `false`.
+- With short-lived, origin-scoped hosting access, `/api/health` returned 200
+  and configuration `ready`; `/api/signup-status` returned `enabled: false`.
+  Operator-only readiness returned 404 without operator authorization; billing
+  status returned 401 without app authentication. Privacy, Terms and Support
+  returned 200 with expected page content. API responses were `no-store` and
+  all checked responses disallowed framing.
+- This smoke test used no app accounts, made no paid AI/payment requests, and
+  changed no database, billing, signup or hosting-access policy.
+
+Email callbacks were **not moved**: the previously approved
+`unimate-rvrhmln07-resumejuice-s-projects.vercel.app` origin and its exact
+`/dashboard`, `/upgrade`, `/reset-password` paths remain in place. Existing live
+tutoring and sandbox billing evidence below is scoped to its recorded older
+deployments; those flows were not rerun on this new candidate. The new account
+privacy regressions are offline executable evidence, not new browser or deployed
+database proof. This preview is not a production release or Store submission.
 
 ### Account-local privacy and release-preflight follow-up
 
@@ -116,8 +152,9 @@ Preview billing-return origin), `5694bdb` (protected sandbox setup and test
 tooling), and `72a0e29` (account-boundary, pending-work access and packaging
 protections). GitHub
 `main` was not changed. This branch is still under verification, not frozen or
-approved for public release. The current protected Preview is the October 16
-deployment recorded below. The owner bought `askunimate.com` through Vercel;
+approved for public release. The newest protected Preview is `1767708`, recorded
+above; the older deployments below retain their own verification scope. The
+owner bought `askunimate.com` through Vercel;
 registration is separate from connecting or launching the website. Earlier
 protected-Preview records remain historical evidence. No public domain
 assignment, Store submission, live payment, or public launch was performed.
@@ -172,7 +209,7 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [ ] Freeze and record the exact new release commit and rollback point
 - [x] Protected Preview purchase unlocks the same open Companion panel/session (reverified October 16)
 - [x] Protected Preview period-end cancellation revokes the same open Companion panel/session (reverified October 16)
-- [x] Verify latest protected Preview `561ecc2`'s live Companion study flow end to end (October 16)
+- [x] Verify protected study Preview `561ecc2`'s live Companion study flow end to end (October 16; not a rerun on latest `1767708`)
 - [ ] Complete the remaining real Stripe sandbox lifecycle matrix
 - [x] Verify custom SMTP delivery and private-preview recovery-link landing (October 16)
 - [x] Owner completes isolated test-account password update; saved state and recovery cleanup verified (October 16)
