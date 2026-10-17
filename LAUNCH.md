@@ -56,7 +56,7 @@ The email-confirmation recovery checkpoint `e0415b2` also passed its complete
 The fresh hosted-billing checkpoint `076c427` passed its complete
 [GitHub/Linux verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38964427458).
 
-Latest hosted billing evidence: the core sandbox purchase → Companion unlock →
+Earlier October 16 hosted billing evidence: the core sandbox purchase → Companion unlock →
 Portal period-end cancellation → access revocation flow **passed again October
 16** on the private Preview at `72a0e29`, using the latest installed Companion.
 Signed events reached the real hosted handler through the local relay; persisted
@@ -89,6 +89,56 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [x] Remove the vulnerable development dependency chain and verify both build targets (October 14)
 - [ ] Complete production-origin, legal, support, and Chrome Web Store gates
 
+### Current-Preview purchase → immediate cancellation — October 16
+
+The purchase → installed Companion unlock check **passed** on protected Preview
+`561ecc27764debc97f9c96f3a7fb93410b40f717`
+(`https://unimate-rvrhmln07-resumejuice-s-projects.vercel.app/`). The repaired
+startup reached a fresh signed-in Companion session showing Free at billing
+revision 62. It resumed the **same original unpaid USD 5.99 sandbox Checkout**;
+no replacement Checkout was created. Stripe's observed Card control was selected,
+the published successful test card was filled with Link off, and payment was
+submitted once. Genuine `invoice.paid`, `checkout.session.completed` and
+`customer.subscription.created` events each returned HTTP 200 from the hosted
+handler through the signed local relay.
+
+The persisted Pro revision was 65. The same continuously open Companion panel
+and session displayed the Pro composer, with zero AI requests, captures or page
+extractions. The Free and Pro screenshots were visually inspected. This proves
+the paid-access transition, not an AI answer or passive-push delivery.
+
+The narrowly scoped startup continuation validates the exact unpaid Checkout
+and both immutable resume-backup hashes, rejects any recorded payment/selection/
+fill attempt, and preserves prior journals. Its new checkpoint is deferred until
+website sign-in, fresh Companion Free proof, exact Checkout navigation, and a
+final read-only state/payment-claim check succeed. Startup failures before that
+boundary do not consume the continuation; uncertain checkpoint writes stop
+without retry. The earlier startup failure's exact cause remains unproven.
+
+Immediate cancellation of that exact purchased sandbox subscription **passed**:
+one guarded cancellation used no proration or final invoice, and genuine
+`customer.subscription.deleted` delivery returned HTTP 200. Before app return,
+persisted Free revision 66 was verified; the same open panel and signed-in
+session removed the composer and showed the Pro gate. The revoked screenshot
+was visually inspected. AI requests, captures and extractions remained zero.
+The proof-gated website return succeeded; runner status remained Free/revision
+66, phase `revoked`, with no uncertain action, active subscription or open
+Checkout. Final independent readback after website return confirmed Free
+revision 67, the original Checkout paid for USD 5.99 in sandbox mode,
+all six synthetic subscriptions canceled, and zero active subscriptions or
+open Checkouts. The original v1/v2 journals were unchanged. The owned runner
+stopped with exit 0 and its relay listener was closed. The failed-renewal →
+Portal payment-method update → recovery journey remains **NOT PASSED**. The older
+period-end cancellation evidence is unchanged. This Preview remains private: no live
+charges, public signup, domain launch, direct production-webhook certification,
+or Store submission is implied. See `STRIPE_SANDBOX_MANUAL_TESTS.md` for scope.
+
+Startup continuation and exact-subscription cancellation safeguards are committed
+in `8edc06e`. Full offline tests, typecheck, lint (zero errors/eight existing
+warnings), secret scan and diff checks passed. Final read-only deployment checks
+confirmed the Preview remains protected, live Stripe mode is disabled, no
+production environment variables exist, and custom-domain auto-assignment is off.
+
 ### Latest source and installed-browser checks — October 16
 
 Cross-browser follow-up: browser-restricted-page copy and error classification
@@ -113,7 +163,8 @@ npm `_cacache` download cache: 6.8 GiB reclaimed and 7.9 GiB free afterward.
 Projects, personal files, installed apps, browser profiles, `_npx`, and Playwright
 were preserved. This did not authorize restarting browser-compatibility testing.
 
-Hosted recovery testing on `561ecc2` is **not passed**. The original saved-card
+The full hosted recovery journey on `561ecc2` remains **not passed**. Earlier in
+this attempt, the original saved-card
 guard stopped before payment because Stripe's Card selector was collapsed. The
 first strictly unpaid continuation reached fresh Companion Free/revision-62
 proof and read-only Card inspection, then stopped without clicks or payment.
@@ -121,8 +172,9 @@ A separate read-only inspection found the visible Card container at ancestor
 11, beyond the helper's cap of eight. The bounded search was corrected to 20
 with regression tests. A second continuation from that observation-only
 checkpoint stopped during website startup, before new Companion proof or
-commands. Both resume backups are intact, and the current guards permit no
-additional resume.
+commands. Both resume backups were intact; the guards at that checkpoint
+permitted no additional resume. The separately reviewed startup continuation
+and subsequent purchase/cancellation proof are recorded above.
 
 A separate, one-attempt startup diagnostic then passed: protected sign-in
 document HTTP 200, exact marked test-account password grant HTTP 200, arrival
@@ -131,13 +183,13 @@ signed-out auth-readiness marker before filling; the recovery runner now uses
 the same wait and finer fixed stage labels. The original generic startup
 failure was not reproduced, so hydration timing is a possible cause, not a
 proven diagnosis. This diagnostic made no Checkout, payment, AI, or entitlement
-reconciliation calls, and did not modify the recovery checkpoints. Continuing
-the stopped payment test still requires a reviewed checkpoint-recovery path;
-no third resume or fresh Checkout was attempted.
+reconciliation calls, and did not modify the recovery checkpoints. At that
+checkpoint no third resume or fresh Checkout had been attempted; the later
+reviewed continuation reused the original Checkout as recorded above.
 
-A subsequent read-only recheck passed: Free revision 62, five canceled
+A pre-continuation read-only recheck passed: Free revision 62, five canceled
 subscriptions, zero active subscriptions, and the same one unpaid USD 5.99
-sandbox Checkout. No payment, Card-selection, or fill attempt is recorded;
+sandbox Checkout. No payment, Card-selection, or fill attempt was recorded then;
 the prior v1/v2 journals are unchanged. No duplicate purchase or payment was
 submitted. The Preview remains private; public launch and live charges remain
 closed.
@@ -152,7 +204,8 @@ sandbox controls are inspected; that command currently stops safely rather than
 claiming the whole recovery journey works. Full offline tests (including these
 regressions), typecheck, lint (zero errors/eight existing warnings), secret scan
 (351 repository files) and diff checks passed. These are not a hosted recovery
-pass; the stopped continuations and latest read-only state are recorded above.
+pass; the stopped continuations and later basic purchase/cancellation proof are
+recorded above.
 
 The owner confirmed that the fresh confirmation message reached Gmail's Inbox,
 not Spam. The existing confirmation/activation evidence below is now complete

@@ -2,7 +2,59 @@
 
 Status: **test mode only**. Do not use live keys, enable `STRIPE_LIVE_MODE_ENABLED`, or make live charges while following this checklist.
 
-## Fresh protected Preview billing → installed Companion — passed October 16, 2026
+## Current-Preview purchase → immediate cancellation — October 16, 2026
+
+Tested the protected Preview
+`https://unimate-rvrhmln07-resumejuice-s-projects.vercel.app/`, website source
+`561ecc27764debc97f9c96f3a7fb93410b40f717`. This is separate from the earlier
+period-end cancellation run below. Public access and live payments stay closed.
+
+- **Startup and exact Checkout reuse — passed:** the repaired startup reached a
+  fresh Companion session showing Free at billing revision 62. It resumed the
+  original unpaid USD 5.99 sandbox Checkout, without creating another one.
+  The observed Card control was selected, Stripe's published successful test
+  card was filled with Link off, and payment was submitted exactly once.
+- **Purchase and Companion unlock — passed:** genuine `invoice.paid`,
+  `checkout.session.completed` and `customer.subscription.created` events each
+  returned HTTP 200 through the signed relay to the hosted handler. Persisted
+  Pro revision 65 was verified; the same continuously open installed Companion
+  panel and session displayed the Pro composer. Free and Pro screenshots were
+  visually inspected. AI requests, captures and page extractions remained zero.
+- **Immediate cancellation and Companion revocation — passed:** the exact
+  purchased sandbox subscription was canceled once through the target guard,
+  without proration or a final invoice. Genuine `customer.subscription.deleted`
+  delivery returned HTTP 200. Before app return, persisted Free revision 66 was
+  verified; the same open panel and signed-in session removed the composer and
+  showed the Pro gate. The revoked screenshot was visually inspected. AI
+  requests, captures and page extractions remained zero.
+- **Proof-gated return — passed:** website return succeeded only after hosted
+  webhook proof. Runner status remained Free at revision 66, phase `revoked`,
+  with no uncertain action, zero active subscriptions and zero open Checkouts.
+- **Final independent readback and cleanup — passed:** after website return,
+  the profile was Free at revision 67 (purchase proof 65; pre-return revocation
+  proof 66). The original Checkout was paid for USD 5.99 in sandbox mode,
+  all six synthetic subscriptions were canceled, and there were zero active
+  subscriptions or open Checkouts. The same-open-panel evidence remained true,
+  prior v1/v2 journals were unchanged, and AI requests remained zero. The owned
+  runner stopped with exit 0 and its relay listener was closed.
+- **Failed-renewal/Portal recovery — NOT PASSED:** no failed-renewal or Portal
+  payment-method recovery result is claimed. The earlier period-end cancellation
+  evidence below remains unchanged.
+
+The startup continuation validates both immutable resume-backup hashes and the
+exact same unpaid Checkout, and rejects recorded payment, Card-selection or fill
+attempts. It defers its new checkpoint/backup until website sign-in, fresh
+Companion Free proof, exact Checkout navigation and a final read-only state/
+payment-claim check succeed. Startup failures before that boundary cannot consume
+the continuation; uncertain checkpoint writes fail closed without retry. The
+earlier generic startup failure's exact cause remains unproven.
+
+This is sandbox purchase/cancellation evidence through a signed local relay, not
+direct production-webhook, AI-answer, draft-retention or public-launch proof.
+Prior test journals are preserved; no uncertain payment was retried. Secrets,
+private Checkout URLs and screenshots remain excluded from Git.
+
+## Earlier protected Preview billing → installed Companion — passed October 16, 2026
 
 Tested the exact private deployment
 https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app/
