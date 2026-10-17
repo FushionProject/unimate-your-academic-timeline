@@ -12,12 +12,13 @@ const COUNTRY = "payment-countryInput";
 const LINK = "payment-linkOptInInput";
 const LINK_LABEL = /^Save my information for faster checkout$/;
 const CONTINUE = /^Continue(?:\s*Continuing(?:…|\.\.\.))?$/;
+const claimedFillPortals = new Set();
 const claimedPortals = new Set();
 const fail = () => {
   throw new Error("VERIFIED_RECOVERY_CARD_CONTROLS_REQUIRED");
 };
 
-async function controls(page, portal, { allowLinkOptOut = false } = {}) {
+async function controls(page, portal, { allowLinkOptOut = false, claimBeforeWrite } = {}) {
   assertRecoveryPortalLocation(page.url(), portal);
   if (page.isClosed() || claimedPortals.has(portal.id)) fail();
   const location = page.url();
@@ -75,7 +76,11 @@ async function controls(page, portal, { allowLinkOptOut = false } = {}) {
     unchanged();
     // Recheck immediately before the single normal label click so an already
     // unchecked control is never toggled on by this helper.
-    if (await fields[LINK].isChecked()) await label.click();
+    if (await fields[LINK].isChecked()) {
+      await claimBeforeWrite();
+      unchanged();
+      if (await fields[LINK].isChecked()) await label.click();
+    }
     unchanged();
     if (await fields[LINK].isChecked()) fail();
   }
@@ -94,10 +99,28 @@ async function verifyValues(fields) {
   }
 }
 
-export async function fillRecoveryCard({ page, portal }) {
+export async function fillRecoveryCard({ page, portal, claimFill }) {
   try {
-    const { fields, unchanged } = await controls(page, portal, { allowLinkOptOut: true });
+    if (typeof claimFill !== "function" || claimedFillPortals.has(portal?.id)) fail();
+    let claimed = false;
+    const claimOnce = async () => {
+      if (claimed) return;
+      if (claimedFillPortals.has(portal.id)) fail();
+      // Consume only after the control preflight, immediately before the first
+      // UI write. A failed durable claim cannot trigger a write or a retry.
+      claimedFillPortals.add(portal.id);
+      claimed = true;
+      await claimFill();
+    };
+    const { fields, unchanged } = await controls(page, portal, {
+      allowLinkOptOut: true,
+      claimBeforeWrite: claimOnce,
+    });
     unchanged();
+    if (await fields[LINK].isChecked()) fail();
+    await claimOnce();
+    unchanged();
+    if (await fields[LINK].isChecked()) fail();
     await fields[COUNTRY].selectOption("US");
     for (const [id, value] of Object.entries(VALUES)) {
       unchanged();

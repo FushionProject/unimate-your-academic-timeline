@@ -43,10 +43,12 @@ function fixture(options = {}) {
       selectOption: async (value) => {
         assert.equal(id, "payment-countryInput");
         assert.equal(value, "US");
+        assert.equal(trace.includes("fill-claim"), true);
         trace.push("country");
         values.set(id, value);
       },
       fill: async (value) => {
+        assert.equal(trace.includes("fill-claim"), true);
         trace.push(id);
         values.set(id, value);
         if (state.navigateOnFill) state.url = "https://other.test/";
@@ -73,6 +75,7 @@ function fixture(options = {}) {
     },
     click: async (...args) => {
       assert.deepEqual(args, [], "Link opt-out must never force-click");
+      assert.equal(trace.includes("fill-claim"), true);
       trace.push("link-opt-out");
       if (!state.optOutFails) state.link = false;
     },
@@ -127,7 +130,13 @@ function fixture(options = {}) {
     if (state.claimThrows) throw new Error("private claim details");
     if (state.changeAfterClaim) state.link = true;
   };
-  return { page, portal, state, values, trace, claimSubmit };
+  const claimFill = async () => {
+    trace.push("fill-claim");
+    if (state.fillClaimThrows) throw new Error("private fill claim details");
+    if (state.navigateAfterFillClaim) state.url = "https://other.test/";
+    if (state.enableLinkAfterFillClaim) state.link = true;
+  };
+  return { page, portal, state, values, trace, claimSubmit, claimFill };
 }
 
 const f = fixture();
@@ -140,6 +149,8 @@ assert.deepEqual(Object.fromEntries(f.values), {
   "payment-postalCodeInput": "94107",
 });
 assert.equal(f.trace.includes("click"), false);
+assert.deepEqual(f.trace.slice(0, 2), ["fill-claim", "country"]);
+assert.equal(f.trace.filter((item) => item === "fill-claim").length, 1);
 assert.equal(f.state.link, false);
 f.values.set("payment-numberInput", "4242 4242 4242 4242");
 f.values.set("payment-expiryInput", "12 / 34");
@@ -178,7 +189,8 @@ for (const wrappedLabel of [false, true]) {
   const checked = fixture({ link: true, wrappedLabel });
   assert.deepEqual(await fillRecoveryCard(checked), { filled: true, submitted: false });
   assert.equal(checked.state.link, false);
-  assert.equal(checked.trace[0], "link-opt-out");
+  assert.deepEqual(checked.trace.slice(0, 2), ["fill-claim", "link-opt-out"]);
+  assert.equal(checked.trace.filter((item) => item === "fill-claim").length, 1);
   assert.equal(checked.trace.filter((item) => item === "link-opt-out").length, 1);
   assert.equal(checked.trace.includes("claim"), false);
 }
@@ -193,13 +205,31 @@ for (const options of [
 ]) {
   const bad = fixture({ link: true, ...options });
   await assert.rejects(fillRecoveryCard(bad), /VERIFIED_RECOVERY_CARD_CONTROLS_REQUIRED/);
-  assert.deepEqual(bad.trace, options.optOutFails ? ["link-opt-out"] : []);
+  assert.deepEqual(bad.trace, options.optOutFails ? ["fill-claim", "link-opt-out"] : []);
   assert.equal(bad.values.size, 0);
 }
 {
   const changed = fixture({ navigateOnFill: true });
   await assert.rejects(fillRecoveryCard(changed));
-  assert.deepEqual(changed.trace, ["country", "payment-numberInput"]);
+  assert.deepEqual(changed.trace, ["fill-claim", "country", "payment-numberInput"]);
+}
+for (const link of [false, true]) {
+  const missingClaim = fixture({ link });
+  await assert.rejects(fillRecoveryCard({ ...missingClaim, claimFill: undefined }));
+  assert.deepEqual(missingClaim.trace, []);
+  for (const options of [{ fillClaimThrows: true }, { navigateAfterFillClaim: true }]) {
+    const failedClaim = fixture({ link, ...options });
+    await assert.rejects(fillRecoveryCard(failedClaim));
+    assert.deepEqual(failedClaim.trace, ["fill-claim"]);
+    assert.equal(failedClaim.values.size, 0);
+    await assert.rejects(fillRecoveryCard(failedClaim));
+    assert.deepEqual(failedClaim.trace, ["fill-claim"]);
+  }
+}
+{
+  const changedAfterClaim = fixture({ enableLinkAfterFillClaim: true });
+  await assert.rejects(fillRecoveryCard(changedAfterClaim));
+  assert.deepEqual(changedAfterClaim.trace, ["fill-claim"]);
 }
 for (const options of [
   { duplicateButton: true },

@@ -41,19 +41,34 @@ import { TARGET, SetupError } from "../../scripts/prepare-stripe-sandbox.mjs";
 
 // Import and rejected invocation must not read credentials or contact services.
 await assert.rejects(runProtectedBillingRecovery(), /RECOVERY_EXPLICIT_PRIVATE_APPROVAL_REQUIRED/);
-await assert.rejects(
-  runProtectedBillingRecovery({ approved: true, runVersion: 1, resumePortalNavigation: true }),
-  /RECOVERY_RUN_VERSION_REQUIRED/,
-);
-await assert.rejects(
-  runProtectedBillingRecovery({
-    approved: true,
-    runVersion: 2,
-    resumePortalNavigation: true,
-    resumeUnpaid: true,
-  }),
-  /RECOVERY_UNPAID_RESUME_NOT_ELIGIBLE/,
-);
+{
+  // The full offline suite supplies NODE_OPTIONS for TypeScript fixtures. Only
+  // these early CLI-shape checks need a clean environment; the runtime guard
+  // remains unchanged and is separately tested against every blocked option.
+  const keys = ["DEBUG", "PWDEBUG", "NODE_OPTIONS", "NODE_INSPECT_RESUME_ON_START"];
+  const inherited = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  try {
+    for (const key of keys) delete process.env[key];
+    await assert.rejects(
+      runProtectedBillingRecovery({ approved: true, runVersion: 1, resumePortalNavigation: true }),
+      /RECOVERY_RUN_VERSION_REQUIRED/,
+    );
+    await assert.rejects(
+      runProtectedBillingRecovery({
+        approved: true,
+        runVersion: 2,
+        resumePortalNavigation: true,
+        resumeUnpaid: true,
+      }),
+      /RECOVERY_UNPAID_RESUME_NOT_ELIGIBLE/,
+    );
+  } finally {
+    for (const key of keys) {
+      if (inherited[key] === undefined) delete process.env[key];
+      else process.env[key] = inherited[key];
+    }
+  }
+}
 {
   const calls = [];
   let ready = false;
@@ -1409,14 +1424,26 @@ const directory = await fs.mkdtemp(path.join(os.tmpdir(), "unimate-recovery-offl
     "hidden",
     "redirected",
     "wrong-screen",
+    "readiness-timeout",
+    "readiness-redirect",
   ]) {
     let url = portal.url,
-      clicks = 0;
+      clicks = 0,
+      ready = false;
     const destination = `${portal.url}/subscriptions/${variant === "wrong-sub" ? "sub_other" : "sub_fixture"}/update`;
     const page = {
       url: () => url,
       getByRole: () => ({
-        count: async () => (variant === "duplicate" ? 2 : 1),
+        waitFor: async (options) => {
+          assert.deepEqual(options, { state: "visible", timeout: 15000 });
+          if (variant === "readiness-timeout") throw new Error("fixture readiness timeout");
+          if (variant === "readiness-redirect") url = `${portal.url}/other`;
+          ready = true;
+        },
+        count: async () => {
+          assert.equal(ready, true, "Wait for the hydrated link before counting or inspecting it");
+          return variant === "duplicate" ? 2 : 1;
+        },
         isVisible: async () => variant !== "hidden",
         isEnabled: async () => true,
         getAttribute: async () =>

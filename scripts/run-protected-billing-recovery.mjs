@@ -614,6 +614,8 @@ export async function navigatePortalContinuationSelection({
   if (!/^sub_[A-Za-z0-9]+$/.test(subscriptionId || ""))
     fail("RECOVERY_PORTAL_CONTINUATION_REQUIRED");
   const update = page.getByRole("link", { name: "Update payment method", exact: true });
+  await update.waitFor({ state: "visible", timeout: 15000 });
+  assertRecoveryPortalLocation(page.url(), portal, true);
   if ((await update.count()) !== 1 || !(await update.isVisible()) || !(await update.isEnabled()))
     fail("RECOVERY_OBSERVED_PORTAL_UPDATE_REQUIRED");
   const href = await update.getAttribute("href");

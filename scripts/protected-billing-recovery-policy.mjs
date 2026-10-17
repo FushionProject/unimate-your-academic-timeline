@@ -533,8 +533,11 @@ export function createRecoveryPolicy(config = PROTECTED_BILLING_RECOVERY) {
       sub.status === "past_due" &&
       methodId !== input.purchase.originalMethodId &&
       input.paymentMethod.card?.last4 === "0341" &&
-      id(input.customer.invoice_settings?.default_payment_method) ===
-        input.purchase.originalMethodId &&
+      // This fixed Checkout fixture has no customer-level default. Its exact
+      // subscription override is the installed declining method; do not allow
+      // a different customer default or silently fall back to one.
+      id(sub.default_payment_method) === input.failure.declineMethodId &&
+      input.customer.invoice_settings?.default_payment_method === null &&
       scope.billingRevision >= input.failure.billingRevision &&
       input.actionStartedAt >=
         input.failure.observedAt, "RECOVERY_UNCHANGED_FAILED_INVOICE_REQUIRED");
