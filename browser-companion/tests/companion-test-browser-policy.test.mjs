@@ -160,7 +160,7 @@ for (const browserChoice of choices) {
     options: {
       ...browserChoice.launchOptions,
       headless: true,
-      viewport: { width: 1280, height: 900 },
+      viewport: { width: 1280, height: 800 },
       args: [
         "--disable-extensions-except=/synthetic/extension",
         "--load-extension=/synthetic/extension",

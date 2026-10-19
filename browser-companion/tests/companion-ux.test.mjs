@@ -1070,7 +1070,7 @@ for (const phase of ["AUTH_STATE", "SEND_CHAT", "LOAD_MESSAGES"]) {
 }
 
 {
-  const { state, api } = harness({
+  const { state, events, api } = harness({
     onSend: (request) =>
       request.type === "LOAD_CHAT_STATE" ? Promise.reject(new Error("Offline")) : undefined,
   });
@@ -1083,6 +1083,129 @@ for (const phase of ["AUTH_STATE", "SEND_CHAT", "LOAD_MESSAGES"]) {
   );
   assert.equal(state.messages[0].message, "Existing answer");
   assert.equal(state.draft, "Explain this");
+  assert.ok(
+    events.some(
+      ([name, message]) =>
+        name === "render" &&
+        message === "We couldn’t refresh your Companion. Please try again in a moment.",
+    ),
+    "Existing Pro access retains its chat-specific recovery message",
+  );
+  assert.equal(
+    events.some(([name]) => name === "upgrade"),
+    false,
+  );
+}
+
+// A failed explicit plan check must stay gated and explain how to retry. Use
+// the real renderers: renderChat's Free-account redirect used to drop the error.
+// Plain fetch failures are serialized by the worker as COMPANION_ERROR.
+for (const code of ["AUTH_TIMEOUT", "BACKEND_UNAVAILABLE", "COMPANION_ERROR"]) {
+  let offline = true;
+  const { state, context, events, api } = harness({
+    onSend: (request) =>
+      request.type === "AUTH_STATE" && offline
+        ? Promise.reject(Object.assign(new Error("Private diagnostic detail"), { code }))
+        : undefined,
+  });
+  state.auth = { configured: true, authenticated: true, isPro: false, userId: "student" };
+  state.messages = [{ role: "assistant", message: "Earlier answer awaiting sync" }];
+  state.pendingSave = "keep-unsaved-request";
+  const controls = new Map();
+  context.body = {
+    innerHTML: "",
+    contains: () => false,
+    querySelector: (selector) => {
+      if (!controls.has(selector))
+        controls.set(selector, {
+          style: {},
+          scrollHeight: 40,
+          addEventListener(type, listener) {
+            this[type] = listener;
+          },
+        });
+      return controls.get(selector);
+    },
+  };
+  context.escapeHtml = String;
+  context.formatAssistantMessage = String;
+  context.handleChat = () => {};
+  context.retrySaving = () => {};
+  context.queueMicrotask = () => {};
+  vm.runInContext(functionSource("renderNotPro", "rememberReadingPosition"), context);
+  vm.runInContext(functionSource("renderChat", "retrySaving"), context);
+  await api.initialize();
+  assert.match(context.body.innerHTML, /role="alert"/);
+  assert.match(context.body.innerHTML, /couldn’t check your Pro access.*try again/i);
+  assert.doesNotMatch(context.body.innerHTML, /Private diagnostic|class="um-input"/);
+  assert.match(context.body.innerHTML, /I’ve upgraded · Check access/);
+  assert.equal(state.view, "upgrade");
+  assert.equal(state.auth.isPro, false);
+  assert.equal(state.auth.authenticated, true);
+  assert.equal(state.auth.userId, "student");
+  assert.equal(state.draft, "Explain this");
+  assert.equal(state.pendingSave, "keep-unsaved-request");
+  assert.equal(state.messages[0].message, "Earlier answer awaiting sync");
+  assert.equal(events.filter(([name]) => name === "AUTH_STATE").length, 1);
+  assert.equal(
+    events.some(([name]) => name === "LOAD_CHAT_STATE"),
+    false,
+  );
+
+  // Recovery uses the existing button, not an automatic retry or sign-in flow.
+  offline = false;
+  await controls.get(".um-check-plan").click();
+  assert.equal(events.filter(([name]) => name === "AUTH_STATE").length, 2);
+  assert.equal(state.auth.isPro, true);
+  assert.equal(state.view, "chat");
+  assert.equal(state.auth.userId, "student");
+  assert.equal(state.draft, "Explain this");
+  assert.equal(state.pendingSave, "keep-unsaved-request");
+  assert.equal(state.messages[0].message, "Earlier answer awaiting sync");
+  assert.doesNotMatch(context.body.innerHTML, /couldn’t check your Pro access/);
+  assert.equal(
+    events.some(([name]) =>
+      ["SIGN_IN", "SIGN_OUT", "OPEN_SIGN_IN", "OPEN_UPGRADE", "SEND_CHAT", "extract"].includes(
+        name,
+      ),
+    ),
+    false,
+  );
+}
+
+// A failed consent lookup must keep the disclosure ahead of the upgrade gate,
+// even if the last known account was signed in and Free.
+for (const consent of [null, { accepted: false }]) {
+  const { state, context, events, api } = harness({
+    onSend: (request) =>
+      request.type === "PRIVACY_CONSENT_STATE"
+        ? Promise.reject(new Error("Storage unavailable"))
+        : undefined,
+  });
+  state.auth = { configured: true, authenticated: true, isPro: false, userId: "student" };
+  state.privacyConsent = consent;
+  state.pendingSave = "keep-unsaved-request";
+  context.body = {
+    innerHTML: "",
+    contains: () => false,
+    querySelector: () => ({ addEventListener() {} }),
+  };
+  context.escapeHtml = String;
+  context.queueMicrotask = () => {};
+  vm.runInContext(functionSource("renderPrivacyConsent", "rememberReadingPosition"), context);
+  vm.runInContext(functionSource("renderChat", "retrySaving"), context);
+  await api.initialize();
+  assert.equal(state.view, "privacy");
+  assert.match(context.body.innerHTML, /Allow and continue/);
+  assert.doesNotMatch(context.body.innerHTML, /Explore UniMate Pro|class="um-input"/);
+  assert.equal(state.auth.userId, "student");
+  assert.equal(state.auth.isPro, false);
+  assert.equal(state.pendingSave, "keep-unsaved-request");
+  assert.equal(state.draft, "Explain this");
+  assert.deepEqual(
+    events.map(([name]) => name),
+    ["PRIVACY_CONSENT_STATE"],
+  );
 }
 
 {

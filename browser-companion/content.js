@@ -1264,6 +1264,8 @@
       if (!isCurrent()) return;
       if (handleAccessRequired(error)) return;
       if (state.auth?.authenticated) {
+        if (!state.auth.isPro && state.privacyConsent?.accepted)
+          return renderNotPro("We couldn’t check your Pro access. Please try again in a moment.");
         return renderChat(
           "We couldn’t refresh your Companion. Please try again in a moment.",
           true,

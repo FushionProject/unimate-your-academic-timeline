@@ -18,6 +18,13 @@ Companion unlock/revocation. Do not repeat the completed payment journals or
 interpret old unchecked production boxes as missing implementation. Detailed
 evidence and its separate scopes are below.
 
+**Owner-requested deferral:** leave publisher/trader/identity/contact setup alone
+until October 20. A one-time follow-up is scheduled for October 20 at 10 AM
+America/Chicago. Continue only work that needs no new personal details or owner
+decisions in the meantime. The approved `UniMate` publisher name remains unsaved;
+registration is verified, but the legal declaration is not complete. This does
+not pause independent product work or authorize Store upload/publication.
+
 Owner decisions/access still needed:
 
 1. **Store registration verified; publisher setup incomplete:** the October 19
@@ -66,6 +73,14 @@ tests are planned, following the owner's instruction.
 
 ### October 19 Store preparation follow-up
 
+- While owner-information setup is deferred, fixed silent failure of the
+  Companion's explicit “I've upgraded · Check access” action. A temporary
+  access-check error now stays Pro-gated and shows retry guidance, retaining the
+  same account, draft and unsaved answer. Actual-render regressions cover
+  timeout/backend/network errors, explicit retry recovery and privacy-consent
+  precedence. No entitlement rules or automatic payment/AI retry changed.
+  The isolated screenshot runner now uses the Store's 1280x800 image size;
+  this changes test capture dimensions, not the product design.
 - Latest recheck: the full offline `npm test` suite passed and the production
   dependency advisory scan (`npm audit --omit=dev`) reported zero vulnerabilities.
   This is not a new hosted payment, provider-AI or installed-browser test. The

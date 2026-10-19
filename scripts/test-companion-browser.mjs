@@ -160,7 +160,7 @@ try {
   context = await chromium.launchPersistentContext(profile, {
     ...browserChoice.launchOptions,
     headless: process.env.COMPANION_HEADED !== "true",
-    viewport: { width: 1280, height: 900 },
+    viewport: { width: 1280, height: 800 },
     args: [`--disable-extensions-except=${extensionDir}`, `--load-extension=${extensionDir}`],
   });
   await context.route(/^https?:\/\//, (route) =>
@@ -793,7 +793,7 @@ try {
     true,
     "Small-window save retry must remain reachable",
   );
-  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.setViewportSize({ width: 1280, height: 800 });
   const requestsBeforeSaveRetry = aiRequests.length;
   const rowsBeforeSaveRetry = messages.size;
   await shadowCall(".um-retry-save", "click");
