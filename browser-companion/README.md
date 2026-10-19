@@ -7,12 +7,12 @@ attestation, not independent legal clearance. The later October 19 read-only
 Store settings inspection verifies registration and that account's Admin
 membership, not a payment receipt or completed security setup. Display name is
 currently `unimatesupport`; contact email/address are missing and trader
-declaration requires action. The unsaved Non-Trader selection is not a legal
-declaration. The owner confirmed personal operation and approved `UniMate` as
-the public display name; applying it is blocked by the trader-declaration dialog,
-and no name edit or Save was attempted. Personal operation does
+declaration still requires action after a fresh reload. The owner confirmed
+personal operation and approved `UniMate` as the public display name. The name
+was entered but not saved because the declaration dialog reappeared; neither
+declaration option is selected and Next is disabled. Personal operation does
 not establish trader classification, and identity/contact details remain pending.
-No settings, terms, payment, upload or submission action was
+No settings were saved and no terms, payment, upload or submission action was
 taken by the agent. Contact/security, legal disclosures, reviewer access and submission
 approval remain separate gates. Historical USD 5.99 sandbox evidence is preserved, not reclassified as
 USD 9.99 purchase proof. The synthetic Store package/consent test passed again

@@ -25,11 +25,11 @@ Owner decisions/access still needed:
    as the UNIMATE Admin member joined October 19. Registration is complete;
    this does not verify a payment receipt or required security setup. Current
    display name is `unimatesupport`; contact email and address are missing.
-   Trader declaration says “Action required”; an unsaved Non-Trader selection
-   is not a completed declaration. The owner confirmed personal operation and
+   Trader declaration still says “Action required” after a fresh reload; neither
+   option is selected and Next is disabled. The owner confirmed personal operation and
    approved the public display name `UniMate`; those choices are recorded, but
-   applying the name is blocked by the persistent trader-declaration dialog.
-   No name edit or Save was attempted. Personal operation does not determine
+   the name was entered but not saved because the trader-declaration dialog
+   reappeared. No Save was attempted. Personal operation does not determine
    Trader/Non-Trader status. Identity/contact details, the owner's truthful
    declaration and security verification remain pending. The agent changed no settings,
    accepted no terms, made no payment and performed no upload/submission.
@@ -66,6 +66,18 @@ tests are planned, following the owner's instruction.
 
 ### October 19 Store preparation follow-up
 
+- Latest recheck: the full offline `npm test` suite passed and the production
+  dependency advisory scan (`npm audit --omit=dev`) reported zero vulnerabilities.
+  This is not a new hosted payment, provider-AI or installed-browser test. The
+  owner was given a plain-language explanation of Google's trader declaration;
+  no classification, identity details or name change were submitted.
+- Added 15 offline refund/dispute ownership regressions against the actual
+  webhook handler. Canonical charge ownership overrides misleading event fields;
+  an unbound customer cannot alter another account, and failed charge retrieval
+  returns a retryable error without profile writes. Focused tests and lint pass.
+  The existing handler already behaved correctly; no production code, billing
+  policy or provider settings changed. The independent Companion consent/privacy
+  audit found no new reproducible blocker; its targeted offline fixtures passed.
 - Registration is verified in the publisher settings; contact, operator/trader
   declaration and security details still require the owner. No Store settings
   were changed, and nothing was uploaded or submitted.

@@ -12,16 +12,16 @@ The later October 19 read-only inspection verified registration at
 Publisher ID `db3cd9d7-8d64-4e0d-9b8a-8c43117a6baa` and the UNIMATE member
 `unimatesupport@gmail.com` (Admin, joined October 19) were shown. Current display
 name is `unimatesupport`; contact email (“Add email required”) and address are
-missing. Trader declaration says “Action required”; a selected but unsaved
-Non-Trader radio option is not a declaration. The Save button was untouched.
+missing. Trader declaration still says “Action required” after a fresh reload;
+neither option is selected and Next is disabled. The Save button was untouched.
 The owner confirmed personal operation and explicitly approved public display
-name `UniMate`; these choices are recorded but applying the name is blocked by
-the persistent trader-declaration dialog. Escape did not dismiss it and no
-dismiss control was available; no name edit or Save was attempted. The owner
+name `UniMate`; the approved name was entered after reload but the declaration
+dialog reappeared before saving. The saved name remains `unimatesupport` and no
+Save was attempted. The owner
 must complete the truthful declaration before the approved name can be applied.
 Personal operation does not establish Trader/Non-Trader classification;
 identity/contact details and the owner's declaration remain pending.
-No settings, terms, payment, upload or
+No settings were saved and no terms, payment, upload or
 submission action was taken by the agent. This verifies registration, not a
 paid receipt or required security setup. The earlier same-day inspection had
 stopped at the unchecked Developer Agreement and displayed one-time $5 fee;
@@ -630,14 +630,14 @@ Use commitments before certification.
 2. Personal operation and public display name `UniMate` are owner-approved;
    the current saved name is still `unimatesupport`. Applying the approved name
    is blocked by the persistent trader-declaration dialog and remains separate
-   from identity/contact verification. No name edit or Save was attempted.
+   from identity/contact verification. The approved name was entered but not saved.
    Confirm the missing operator address appropriate for this paid-subscription product.
    Google requires every publisher to declare Trader or Non-Trader status; the
    owner must determine this truthfully. Trader legal name, contact address and
    phone are displayed publicly. Enter sensitive verification details directly
    in Google's form, not in this repository or chat. Do not choose Non-Trader
-   merely to avoid disclosure. The current “Action required” dialog has an
-   unsaved Non-Trader selection; no selection was saved or certified by the agent.
+   merely to avoid disclosure. The refreshed “Action required” dialog has neither
+   option selected; no selection was saved or certified by the agent.
 3. Logo/mascot authorship confirmation is complete: the owner said “I created
    it” on October 19. Retain that attestation with the release assets; identify
    any additional third-party elements if present and review final Store artwork.

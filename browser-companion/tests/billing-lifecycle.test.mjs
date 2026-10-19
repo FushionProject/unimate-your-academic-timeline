@@ -88,6 +88,7 @@ function fixture() {
     historical: new Map(),
     paidInvoices: new Map(),
     invoices: new Map(),
+    charge: { id: "ch_synthetic", customer: customerId },
     calls: [],
     writes: [],
     sessions: new Map(),
@@ -180,7 +181,7 @@ function fixture() {
     }
     if (path.startsWith("/invoices/"))
       return json(state.invoices.get(path.split("/").at(-1)) || {}, 200);
-    if (path.startsWith("/charges/")) return json({ id: "ch_synthetic", customer: customerId });
+    if (path.startsWith("/charges/")) return json(state.charge);
     if (path.startsWith("/prices/"))
       return json({
         active: true,
@@ -602,6 +603,67 @@ function fixture() {
     403,
     "empty authoritative list never falls back to an old active event",
   );
+}
+
+// Refund/dispute payloads are not ownership authority. Resolve the canonical
+// charge customer before looking up an owner, even when event fields disagree.
+{
+  for (const type of ["charge.refunded", "charge.dispute.created", "charge.dispute.closed"]) {
+    const payload = (customer) => ({
+      id: type === "charge.refunded" ? "ch_synthetic" : "dp_synthetic",
+      charge: { id: "ch_synthetic", customer },
+      customer,
+      invoice: "in_payload_decoy",
+      metadata: { user_id: userId },
+    });
+    for (const canonicalCustomer of [customerId, { id: customerId }]) {
+      const f = fixture();
+      f.state.charge.customer = canonicalCustomer;
+      f.state.subscriptions = [subscription()];
+      assert.equal((await f.event(type, payload("cus_payload_decoy"))).status, 200, type);
+      assert.equal(f.state.calls[0].url.pathname, "/v1/charges/ch_synthetic");
+      const owners = f.state.calls.filter(
+        (call) =>
+          call.url.searchParams.has("stripe_customer_id") &&
+          call.url.searchParams.get("select") === "id",
+      );
+      assert.equal(owners.length, 1);
+      assert.equal(owners[0].url.searchParams.get("stripe_customer_id"), `eq.${customerId}`);
+      assert.equal(f.state.writes.length, 1, `${type} reconciles the retrieved charge owner`);
+      assert.equal(f.state.profile.stripe_customer_id, customerId);
+      assert.equal(f.state.profile.is_pro, true);
+      assert(
+        !f.state.calls.some((call) => /cus_payload_decoy|in_payload_decoy/.test(call.url.href)),
+        "event ownership and obsolete invoice hints never drive provider or profile lookups",
+      );
+    }
+
+    // A genuine charge without an application owner cannot affect the current
+    // account, even when its event explicitly names that account's customer.
+    for (const canonicalCustomer of ["cus_unbound", { id: "cus_unbound" }]) {
+      const f = fixture();
+      f.state.profile.is_pro = true;
+      const before = structuredClone(f.state.profile);
+      f.state.charge.customer = canonicalCustomer;
+      assert.equal((await f.event(type, payload(customerId))).status, 200, type);
+      assert.equal(f.state.calls[0].url.pathname, "/v1/charges/ch_synthetic");
+      assert.equal(f.state.calls.length, 2, "unbound charge stops after its owner lookup");
+      assert.equal(f.state.calls[1].url.searchParams.get("stripe_customer_id"), "eq.cus_unbound");
+      assert.equal(f.state.writes.length, 0);
+      assert.deepEqual(f.state.profile, before, "another customer's event never changes access");
+    }
+
+    const f = fixture();
+    f.state.profile.is_pro = true;
+    const before = structuredClone(f.state.profile);
+    f.state.failure = (url) => url.pathname === "/v1/charges/ch_synthetic";
+    const failed = await f.event(type, payload(customerId));
+    assert.ok(failed.status >= 500 && failed.status < 600, `${type} lookup failure is retryable`);
+    assert.equal(f.state.calls.length, 1, "failed charge lookup never guesses an owner");
+    assert.equal(f.state.calls[0].url.pathname, "/v1/charges/ch_synthetic");
+    assert.equal(f.state.writes.length, 0);
+    assert.deepEqual(f.state.profile, before);
+  }
 }
 
 // Read-only, authenticated status reports the effective non-secret grace policy
