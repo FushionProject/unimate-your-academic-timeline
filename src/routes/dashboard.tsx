@@ -41,6 +41,7 @@ import {
 import { useSemesterEndDate } from "../hooks/use-semester-end-date";
 import { formatSemesterEndDate } from "../lib/semester-date";
 import { useIsPro } from "../lib/profile";
+import { getCompanionStoreUrl } from "../lib/companion-store";
 import { ExperienceSwitch } from "../components/journey-experience";
 import { askJourneyHref, useJourneyExperience } from "../lib/journey-experience";
 import { SemesterStart } from "../components/semester-start";
@@ -79,21 +80,6 @@ const itemTypeLabels: Record<AcademicItemType, string> = {
   exam: "Exam",
 };
 
-function companionStoreUrl(): string | null {
-  const configured = import.meta.env.VITE_COMPANION_STORE_URL?.trim();
-  if (!configured) return null;
-  try {
-    const url = new URL(configured);
-    return url.protocol === "https:" &&
-      url.hostname === "chromewebstore.google.com" &&
-      /^\/detail\/[^/]+\/[a-p]{32}\/?$/.test(url.pathname)
-      ? url.toString()
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 function Dashboard() {
   const { classic } = useJourneyExperience();
   const coursesQuery = useCourses();
@@ -128,7 +114,7 @@ function Dashboard() {
   const [companionInstalled, setCompanionInstalled] = useState(false);
   const [semesterEndInput, setSemesterEndInput] = useState(semesterEndDate ?? "");
   const [semesterDateMessage, setSemesterDateMessage] = useState("");
-  const storeUrl = companionStoreUrl();
+  const storeUrl = getCompanionStoreUrl(import.meta.env.VITE_COMPANION_STORE_URL);
   const { data: isPro, isLoading: proLoading, isError: proError } = useIsPro();
 
   useEffect(() => setSemesterEndInput(semesterEndDate ?? ""), [semesterEndDate]);

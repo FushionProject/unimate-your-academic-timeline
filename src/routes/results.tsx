@@ -16,6 +16,7 @@ import { useAuth } from "../lib/auth-context";
 import { ProtectedRoute } from "../components/protected-route";
 import { syllabusResultStorageKey } from "../lib/syllabus-results";
 import { askJourneyHref } from "../lib/journey-experience";
+import { inferAcademicItemType } from "../lib/semester-pressure";
 import { removeBrowserStorage, writeBrowserStorage } from "../lib/browser-storage";
 import {
   saveReviewedItems,
@@ -288,6 +289,10 @@ function Results() {
                       {items.length} {items.length === 1 ? "item" : "items"}
                     </span>
                   </div>
+                  <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
+                    Categories follow each item’s title, just like in Today. Edit a title to update
+                    its automatic category.
+                  </p>
                   <div className="max-h-[650px] space-y-3 overflow-y-auto pr-1">
                     {items.map((item, index) => (
                       <div
@@ -305,22 +310,12 @@ function Results() {
                             aria-invalid={!item.title.trim()}
                             className="min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                           />
-                          <select
-                            value={item.type}
-                            onChange={(event) =>
-                              updateItem(index, {
-                                type: event.target.value as SyllabusItem["type"],
-                              })
-                            }
-                            aria-label={`Type for ${item.title}`}
-                            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          <output
+                            aria-label={`Automatic category for extracted item ${index + 1}`}
+                            className="rounded-lg bg-secondary/50 px-3 py-2 text-sm capitalize text-muted-foreground"
                           >
-                            <option value="assignment">Assignment</option>
-                            <option value="project">Project</option>
-                            <option value="quiz">Quiz</option>
-                            <option value="exam">Exam</option>
-                            <option value="deadline">Other date</option>
-                          </select>
+                            {inferAcademicItemType(item.title)}
+                          </output>
                           <input
                             type="date"
                             value={item.due_date}

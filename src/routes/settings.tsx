@@ -125,7 +125,7 @@ function Settings() {
                     : planError
                       ? "We couldn't check your Companion access right now. Your plan is unchanged — refresh to try again."
                       : isPro
-                        ? "Your Pro account can install the extension and sign in with this same UniMate account."
+                        ? "Your Pro account includes Companion access. Open setup to check installation availability and connect this same account."
                         : "Browser Companion is available with UniMate Pro."}
                 </p>
               </div>

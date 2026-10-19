@@ -177,9 +177,12 @@ export function ClassicHome() {
                 Support
               </Link>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <MonitorCheck className="h-4 w-4" /> Browser Companion ready
-            </div>
+            <Link
+              to="/companion-setup"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <MonitorCheck className="h-4 w-4" aria-hidden="true" /> Browser Companion setup · Pro
+            </Link>
           </div>
         </footer>
       </main>

@@ -330,6 +330,153 @@ setup.context.storeValue = "https://example.test/not-the-store";
 assert.doesNotMatch(setup.html(), />Add to Chrome/);
 assert.match(setup.html(), /Store link pending/);
 
+// Exercise the real Dashboard install CTA, including its actual configured-URL
+// initializer. A separate local validator previously accepted credentials/ports
+// rejected by Setup and hid the shared validator's valid slugless detail form.
+{
+  const path = "src/routes/dashboard.tsx";
+  const source = ts.createSourceFile(
+    path,
+    read(path),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const dashboard = source.statements.find((node) => node.name?.text === "Dashboard");
+  const declaration = dashboard.body.statements.find(
+    (node) =>
+      ts.isVariableStatement(node) &&
+      node.declarationList.declarations.some((entry) => entry.name.getText(source) === "storeUrl"),
+  );
+  assert.ok(declaration, "Dashboard must derive its Store destination explicitly");
+  assert.match(read(path), /import \{ getCompanionStoreUrl \} from "\.\.\/lib\/companion-store"/);
+  assert.match(
+    declaration.getText(source),
+    /getCompanionStoreUrl\(import\.meta\.env\.VITE_COMPANION_STORE_URL\)/,
+  );
+  const candidates = [];
+  function visit(node) {
+    if (ts.isConditionalExpression(node) && node.condition.getText(source) === "proLoading")
+      candidates.push(node);
+    ts.forEachChild(node, visit);
+  }
+  visit(dashboard);
+  assert.equal(candidates.length, 1, "Test the exact Dashboard Companion access/install branch");
+  const context = vm.createContext({
+    exports: {},
+    require: () => jsx,
+    URL,
+    Link: link,
+    Loader2: icon,
+    Puzzle: icon,
+    CheckCircle2: icon,
+    proLoading: false,
+    proError: false,
+    isPro: true,
+    companionInstalled: false,
+    storeValue: undefined,
+  });
+  const code = `${functions("src/lib/companion-store.ts", ["getCompanionStoreUrl"])}
+function DashboardInstall() {
+  ${declaration.getText(source).replace("import.meta.env.VITE_COMPANION_STORE_URL", "globalThis.storeValue")}
+  return (${candidates[0].getText(source)});
+}`;
+  vm.runInContext(
+    ts.transpileModule(code, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+    }).outputText + "\nglobalThis.Target = DashboardInstall;",
+    context,
+  );
+  const html = () => renderToStaticMarkup(createElement(context.Target));
+  const detail = "https://chromewebstore.google.com/detail/";
+  const id = "a".repeat(32);
+  for (const value of [
+    undefined,
+    "",
+    "https://example.test/listing",
+    `https://chromewebstore.google.com:444/detail/unimate/${id}`,
+    `https://fixture:fixture@chromewebstore.google.com/detail/unimate/${id}`,
+  ]) {
+    context.storeValue = value;
+    assert.match(html(), /href="\/companion-setup"/);
+    assert.doesNotMatch(html(), /Add Browser Companion|href="https:/);
+  }
+  for (const value of [`${detail}unimate/${id}`, `${detail}${id}`]) {
+    context.storeValue = value;
+    assert.ok(html().includes(`href="${value}"`));
+    assert.match(html(), /Add Browser Companion/);
+  }
+  for (const field of ["proLoading", "proError", "companionInstalled"]) {
+    context[field] = true;
+    assert.doesNotMatch(html(), /Add Browser Companion|href="https:/);
+    context[field] = false;
+  }
+  context.isPro = false;
+  assert.match(html(), /href="\/upgrade"/);
+  assert.doesNotMatch(html(), /Add Browser Companion|href="https:/);
+}
+
+// Render the actual informational screens without providers or a browser.
+// They must point to Setup, not promise an already published/verified listing.
+for (const [path, name] of [
+  ["src/routes/settings.tsx", "Settings"],
+  ["src/components/classic-home.tsx", "ClassicHome"],
+  ["src/routes/support.tsx", "Support"],
+]) {
+  const source = ts.createSourceFile(
+    path,
+    read(path),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const context = vm.createContext({
+    exports: {},
+    require: () => jsx,
+    Link: link,
+    LogoMark: icon,
+    useAuth: () => ({ user: { email: "student@example.test" } }),
+    useTheme: () => ({ theme: "light" }),
+    useIsPro: () => ({ data: true, isLoading: false, isError: false }),
+    useNavigate: () => () => {},
+    useState: (initial) => [initial, () => {}],
+    LegalPage: ({ children }) => createElement("main", null, children),
+    LegalSection: ({ children }) => createElement("section", null, children),
+  });
+  for (const node of source.statements) {
+    if (ts.isImportDeclaration(node) && node.moduleSpecifier.text === "lucide-react")
+      for (const binding of node.importClause.namedBindings.elements)
+        context[binding.name.text] = icon;
+  }
+  const walkthrough =
+    name === "ClassicHome"
+      ? source.statements
+          .find(
+            (node) =>
+              ts.isVariableStatement(node) &&
+              node.declarationList.declarations.some(
+                (entry) => entry.name.getText(source) === "walkthrough",
+              ),
+          )
+          ?.getText(source)
+      : "";
+  vm.runInContext(
+    ts.transpileModule(`${walkthrough}\n${functions(path, [name])}`, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+    }).outputText + `\nglobalThis.Target = ${name};`,
+    context,
+  );
+  const html = renderToStaticMarkup(createElement(context.Target));
+  assert.match(html, /href="\/companion-setup"/, `${name} keeps a working Setup path`);
+  assert.doesNotMatch(
+    html,
+    /Browser Companion ready|verified Chrome Web Store|can install the extension/,
+  );
+  if (name === "Settings") assert.match(html, /check installation availability/);
+  if (name === "Support") assert.match(html, /When a Chrome Web Store link is available/);
+  if (name === "ClassicHome") assert.match(html, /Browser Companion setup · Pro/);
+}
+
 console.log(
-  "PASS rendered Free/unknown/Pro boundaries, explicit upgrade-return recheck, network recovery, live status and honest Store-link state",
+  "PASS rendered Free/unknown/Pro boundaries, explicit upgrade-return recheck, network recovery, shared safe Store links and truthful installation guidance",
 );

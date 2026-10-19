@@ -54,19 +54,29 @@ export async function extractPdfText(file: File): Promise<string> {
   pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  if (pdf.numPages > MAX_PDF_PAGES) {
-    await pdf.destroy();
-    throw new Error(`PDF exceeds the ${MAX_PDF_PAGES}-page limit.`);
-  }
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  try {
+    const pdf = await loadingTask.promise;
+    if (pdf.numPages > MAX_PDF_PAGES) {
+      throw new Error(`PDF exceeds the ${MAX_PDF_PAGES}-page limit.`);
+    }
 
-  const pageTexts: string[] = [];
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
-    const content = await page.getTextContent();
-    const text = reconstructPdfPageText(content.items);
-    pageTexts.push(`--- Page ${pageNum} of ${pdf.numPages} ---\n${text}`);
-  }
+    const pageTexts: string[] = [];
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const content = await page.getTextContent();
+      const text = reconstructPdfPageText(content.items);
+      pageTexts.push(`--- Page ${pageNum} of ${pdf.numPages} ---\n${text}`);
+    }
 
-  return pageTexts.join("\n\n").trim();
+    return pageTexts.join("\n\n").trim();
+  } finally {
+    // The loading task owns the worker even when document loading fails. Always
+    // release it, without replacing the extracted text or original parse error.
+    try {
+      await loadingTask.destroy();
+    } catch {
+      console.warn("PDF resources could not be fully released.");
+    }
+  }
 }

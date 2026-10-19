@@ -19,9 +19,10 @@ function Support() {
 
       <LegalSection title="Browser Companion">
         <p>
-          Companion AI requires Pro. Open Settings or Browser Companion Setup, install from the
-          verified Chrome Web Store listing, and sign in with the same UniMate account. Chrome
-          blocks extensions on internal pages, the Chrome Web Store, and some embedded documents.
+          Companion AI requires Pro. Open Browser Companion Setup to check installation
+          availability. When a Chrome Web Store link is available there, install the extension and
+          sign in with the same UniMate account. Chrome blocks extensions on internal pages, the
+          Chrome Web Store, and some embedded documents.
         </p>
         <Link to="/companion-setup" className="inline-block underline underline-offset-4">
           Open Browser Companion setup

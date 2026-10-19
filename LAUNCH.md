@@ -73,6 +73,29 @@ tests are planned, following the owner's instruction.
 
 ### October 19 Store preparation follow-up
 
+- Independent checks while publisher setup is deferred found and fixed three
+  local issues: Dashboard now uses the shared safe Store-URL validator;
+  Settings/Support/classic home route students to Setup without claiming the
+  listing is already available; syllabus review now shows title-derived
+  categories matching Today instead of an editable category that was discarded
+  during save. Title/date editing is preserved, with no database/API migration.
+  PDF extraction now releases its owning loading task after success, load/page/
+  text errors and the page-limit rejection, preserving the original result/error
+  if cleanup itself fails. Actual-render and synthetic extraction regressions
+  passed, including a reproduced failing cleanup check before the fix.
+  Full offline tests, typecheck, lint (zero errors/eight existing warnings),
+  the 374-file secret scan and the full dependency advisory scan (zero reported
+  vulnerabilities) passed. These changes are source/test fixes, not new hosted
+  payment or installed-browser evidence; the private deployed source remains
+  the separate `cb8a296` checkpoint below.
+- Remaining billing-test preparation was audited without provider access:
+  historical paid helpers are intentionally pinned to $5.99 and terminal
+  journals, while the current $9.99 helper verifies only an unpaid quote.
+  A fresh 3DS purchase/unlock/cancellation run needs a separately journaled,
+  exact-current-price harness and read-only sandbox/fixture/access preflight.
+  Do not repoint old runners or replay completed journals. Delayed methods must
+  be confirmed eligible before testing; no method, grace or tax settings were
+  changed. This audit does not claim current remote access or new payment proof.
 - Captured three real installed-UI screenshot drafts at 1280x800 from clean
   source `b6ddbf0c5950295f354a7501a1c6126b43a2df22`: page-sharing consent,
   Free/Pro access gate and a study explanation. All 30 isolated Chromium
