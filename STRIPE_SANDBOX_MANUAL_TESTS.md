@@ -2,6 +2,31 @@
 
 Status: **test mode only**. Do not use live keys, enable `STRIPE_LIVE_MODE_ENABLED`, or make live charges while following this checklist.
 
+## Approved $9.99 hosted unpaid quote — October 18, 2026
+
+**Quote and exact unpaid expiry passed; no payment submitted.** On the protected
+Preview <https://unimate-8kp8pqpcg-resumejuice-s-projects.vercel.app> (application
+source `cb8a296362a743f58e6eb31511bdab2eb122ae15`), the marked synthetic account
+created one Checkout through the real application endpoint. Stripe readback
+confirmed the new sandbox Price `price_1US7nEIxB8W4eFUhI9C4RuJa`, USD 999 cents,
+monthly recurrence, one item, exact customer/user and return-origin binding,
+and no tax, discount, payment or subscription. The exact unpaid Checkout was
+expired once and verified expired. Zero open Checkouts remained; all prior
+subscriptions and the Free profile revision were unchanged.
+
+The write-only deployed key was not exposed or changed. Trusted pre-build
+settings and audited source enforce the test lock and account-scoped Price
+lookup before billing writes; this is not a deployed/local key-equality claim.
+The first preflight stopped before sign-in/claim while requiring key readback;
+the reviewed guard-based alternative completed with a new exclusive claim.
+`current-price-quote-cb8a296-v1.jsonl` is private, ignored and terminal: do not
+replay or delete it. Historical $5.99 records remain unchanged.
+
+This check does not replace a paid $9.99 lifecycle run or prove hosted 3DS,
+delayed settlement, direct webhook delivery or newly installed Companion access.
+Protection, signup closure and live-billing lock remain unchanged. See the
+latest candidate evidence in [LAUNCH.md](./LAUNCH.md).
+
 ## Isolated grace-off Portal recovery — October 16, 2026
 
 **Payment recovery, terminal cancellation and final cleanup passed.**

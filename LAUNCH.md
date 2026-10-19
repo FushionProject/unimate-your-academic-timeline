@@ -29,7 +29,7 @@ Owner decisions/access still needed:
    after that confirmation, not an asset the owner must design.
 3. **Price approved; billing policy pending:** the owner confirmed **USD
    $9.99/month** on October 18. The catalog, server expectation and current
-   sandbox Price are being aligned together; historical $5.99 records remain
+   sandbox Price are aligned together; historical $5.99 records remain
    unchanged. Still choose the failed-payment grace policy (normal configuration
    is still grace-on), and refund/dispute policy. The strict grace-off test was isolated;
    it did not change the normal policy. Review applicable tax registrations
@@ -65,7 +65,70 @@ transport and verify protection before/after. No token was printed or committed.
 The previous pushed checkpoint `beebaaa` passed all
 [GitHub checks](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38990695725).
 
-### Latest protected private candidate — October 16
+### Latest protected private candidate and approved price — October 18
+
+Preview: <https://unimate-8kp8pqpcg-resumejuice-s-projects.vercel.app>
+
+- Application source `cb8a296362a743f58e6eb31511bdab2eb122ae15` is pushed on
+  `codex/unimate-premium-revival`; `main` is unchanged. The complete
+  [GitHub verification](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/39198045305)
+  passed, including both hosting builds. Local full offline tests, typecheck,
+  lint (zero errors/eight existing warnings), and 364-file secret scan passed.
+- Deployment `dpl_8n8fDcJhc1SwUjaFHtgYfHZntuGF` is READY, Preview, protected
+  by Vercel Authentication, with no aliases/persistent bypass tokens/Production
+  variables. Custom-domain auto-assignment and live Stripe remain off. The
+  139-file, 9,096,238-byte upload matched the guarded dry run; no private env,
+  journals or browser data were uploaded. Hosted build completed in 23 seconds.
+- `/pricing` and `/upgrade` both returned the approved **$9.99** and not $5.99.
+  Read-only smoke checks also passed health, signup-closed, unauthenticated
+  app/operator gates, Privacy, Terms and Support, `no-store` API responses and
+  framing protection. No app account or paid request was used for this smoke.
+- The new sandbox Price `price_1US7nEIxB8W4eFUhI9C4RuJa` was created and read
+  back under the exact UniMate sandbox account/product: active, 999 USD cents,
+  licensed monthly/one-month interval, `livemode: false`. Product default and
+  historical Price remain unchanged. Read-only inventory included test-clock
+  subscriptions: all seven historical subscriptions were terminal, with zero
+  nonterminal old-price subscriptions and zero open Checkouts before switching.
+- Only Preview's Price ID and expected amount were updated. The amount entry
+  was recreated with the same 999 value as readable Config after the CLI first
+  stored it as write-only Secret; no credentials were changed. Exact readback
+  confirmed 999 USD, the new Price, live mode false, unchanged grace-on source
+  default, and protection enabled. No production or local historical env was
+  edited. Current-price verification is configuration proof, not paid Checkout
+  or entitlement-recovery evidence.
+- Checkout now rejects stale $5.99 configuration before creating a customer or
+  reusing a session. Synthetic production-handler tests additionally cover
+  authentication-required/expired payments, delayed settlement, invoice lookup
+  outages, paused/resumed/unpaid states, and stale events. Direct billing
+  management remains available when new-purchase pricing is misconfigured.
+  Independent review and the full offline suite passed. These are not actual
+  hosted 3DS/delayed-rail or newly installed Companion proofs.
+- **Current-price hosted unpaid Checkout — passed:** the marked synthetic Free
+  account created one Checkout through this exact protected deployment. Stripe
+  readback verified the new monthly Price, one item, USD 999-cent subtotal/total,
+  correct account/customer/user and return-origin binding, no tax/discount, and
+  no payment or subscription. That exact unpaid session was expired once and
+  read back as expired. Final checks found zero open Checkouts, unchanged
+  terminal subscriptions and unchanged Free profile revision. The private
+  one-shot journal is `current-price-quote-cb8a296-v1.jsonl`; never replay it.
+- The initial preflight stopped before sign-in or Checkout because the deployed
+  Stripe key is write-only. The completed run left that secret untouched and
+  used independently reviewed source-bound enforcement: verified pre-build
+  Price/999/live-off settings, no deployment overrides, and the exact sandbox
+  Price lookup before any billing mutation. It does **not** claim deployed/local
+  key equality. Adversarial fixtures verify locked live keys and failed Price
+  lookup cannot reach billing writes. Both proof variants and unknown-outcome
+  stops pass offline tests; final protection remained on with zero persistent
+  bypasses. The 366-file secret scan passed. This is unpaid quote/expiry proof,
+  not a new paid purchase, webhook, 3DS or installed Companion lifecycle test.
+
+Email callbacks remain on the previously approved `unimate-rvrhmln07` study
+Preview; they were not moved. Normal grace policy, quotas, public signup, AI
+keys, database schema, public domain and Store submission status were not changed.
+The Store owner is now approved, not yet verified as a registered publisher.
+Final artwork still awaits the owner's logo/mascot rights confirmation.
+
+### Previous protected private candidate — October 16
 
 Preview: <https://unimate-qgsyqq9d7-resumejuice-s-projects.vercel.app>
 
@@ -154,7 +217,7 @@ Preview billing-return origin), `5694bdb` (protected sandbox setup and test
 tooling), and `72a0e29` (account-boundary, pending-work access and packaging
 protections). GitHub
 `main` was not changed. This branch is still under verification, not frozen or
-approved for public release. The newest protected Preview is `1767708`, recorded
+approved for public release. The newest protected Preview is `cb8a296`, recorded
 above; the older deployments below retain their own verification scope. The
 owner bought `askunimate.com` through Vercel;
 registration is separate from connecting or launching the website. Earlier

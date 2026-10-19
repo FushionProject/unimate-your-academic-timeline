@@ -9,8 +9,16 @@ USD 9.99 purchase proof. The synthetic Store package/consent test passed again
 without a browser, provider call or production ZIP; see
 [Store readiness](./CHROME_WEB_STORE_READINESS.md) for the exact handoff.
 
-Implementation notes updated October 16, 2026, including post-`ffbae91` checks.
-The current protected Preview runs application commit `561ecc2` at
+Latest private application candidate: `cb8a296` at
+<https://unimate-8kp8pqpcg-resumejuice-s-projects.vercel.app>, with the approved
+$9.99 price, passed offline/GitHub verification and protected HTTP smoke checks.
+One hosted unpaid Checkout quoted exactly $9.99 and was expired with no payment
+or subscription change; the synthetic account stayed Free.
+Historical installed tutoring/billing proof remains scoped to its original
+deployments; email callbacks have not moved. See [LAUNCH.md](../LAUNCH.md).
+
+Historical implementation notes updated October 16, including post-`ffbae91` checks.
+The previously verified study/email Preview runs application commit `561ecc2` at
 `https://unimate-rvrhmln07-resumejuice-s-projects.vercel.app/`. Protected smoke
 checks passed. The live installed study
 journey also passed on that exact deployment: consent/Pro access, fictional-page

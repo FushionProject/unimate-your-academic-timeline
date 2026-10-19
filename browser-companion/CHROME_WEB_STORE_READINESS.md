@@ -33,8 +33,17 @@ and [Stripe sandbox manual tests](../STRIPE_SANDBOX_MANUAL_TESTS.md).
 No custom domain was assigned and nothing was submitted to or published in the
 Chrome Web Store.
 
-The newest private application candidate is now `1767708` at
-<https://unimate-qgsyqq9d7-resumejuice-s-projects.vercel.app>, with account-local
+The newest private application candidate is `cb8a296` at
+<https://unimate-8kp8pqpcg-resumejuice-s-projects.vercel.app>. Website price and
+Preview billing configuration now match the approved $9.99 sandbox Price.
+Full offline/GitHub verification and protected HTTP smoke checks passed; no live
+payment or Store submission occurred. A hosted unpaid Checkout quoted exactly
+$9.99 and was expired; the test account stayed Free with no subscription changes.
+Historical installed study/billing tests were not rerun on this candidate, and
+email callbacks were not moved.
+
+The earlier private application candidate `1767708` at
+<https://unimate-qgsyqq9d7-resumejuice-s-projects.vercel.app> includes account-local
 privacy fixes for Notes, Bulletin and syllabus drafts. Full offline tests,
 typecheck, lint, secret/dependency checks and both builds passed in GitHub.
 The protected hosted build is READY; read-only checks confirmed signup closed,

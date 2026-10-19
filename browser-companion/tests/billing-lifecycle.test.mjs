@@ -1144,6 +1144,46 @@ for (const price of [
 
 // A price migration must not relabel historical $5.99 sessions or let stale
 // deployment env override the current $9.99 customer-facing contract.
+// This is also the exact source's pre-write sandbox boundary when the deployed
+// key is sensitive/write-only: live keys are rejected under the lock; a key
+// that cannot retrieve the configured account-scoped test Price never reaches
+// customer creation, checkout reuse, profile writes or any Stripe mutation.
+for (const key of ["sk_live_synthetic", "rk_live_synthetic"]) {
+  const f = fixture();
+  f.env.STRIPE_SECRET_KEY = key;
+  f.env.STRIPE_LIVE_MODE_ENABLED = "false";
+  const response = await f.api.handleCreateCheckoutSession(
+    f.request("/api/create-checkout-session", "POST"),
+  );
+  assert.equal(response.status, 503);
+  assert.equal(
+    f.state.calls.filter((call) => call.url.origin === "https://api.stripe.com").length,
+    0,
+  );
+  assert.equal(f.state.writes.length, 0);
+}
+for (const existingCustomer of [false, true]) {
+  const f = fixture();
+  f.state.failure = (url) => url.pathname.startsWith("/v1/prices/");
+  f.state.exposeSession = true;
+  if (!existingCustomer) f.state.profile.stripe_customer_id = null;
+  const response = await f.api.handleCreateCheckoutSession(
+    f.request("/api/create-checkout-session", "POST"),
+  );
+  assert.equal(response.status, 503);
+  assert.equal(f.state.customerCreates.size, 0);
+  assert.equal(f.state.writes.length, 0);
+  assert.equal(
+    f.state.calls.filter(
+      (call) => call.url.origin === "https://api.stripe.com" && call.method === "POST",
+    ).length,
+    0,
+  );
+  assert.equal(
+    f.state.calls.filter((call) => call.url.pathname === "/v1/checkout/sessions").length,
+    0,
+  );
+}
 for (const config of [
   { STRIPE_PRO_MONTHLY_AMOUNT_CENTS: "599" },
   { STRIPE_PRO_MONTHLY_AMOUNT_CENTS: "1000" },
