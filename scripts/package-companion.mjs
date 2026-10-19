@@ -7,6 +7,18 @@ import { isChromeExtensionVersion, isPublicCompanionOrigin } from "./companion-c
 const root = process.cwd();
 const source = path.join(root, "browser-companion");
 const configPath = path.join(source, "config.local.js");
+const packageFiles = [
+  "manifest.json",
+  "background.js",
+  "content.js",
+  "context-extractor.js",
+  "signin.html",
+  "signin.js",
+  "signin.css",
+  "config.local.js",
+  "assets/mascot.png",
+  ...[16, 32, 48, 128].map((size) => `assets/icons/icon${size}.png`),
+];
 function readPackageFile(relative) {
   let directory = source;
   for (const part of [
@@ -37,9 +49,53 @@ function readPackageFile(relative) {
     fs.closeSync(descriptor);
   }
 }
-const manifest = JSON.parse(readPackageFile("manifest.json").toString("utf8"));
+const manifestBytes = readPackageFile("manifest.json");
+const manifest = JSON.parse(manifestBytes.toString("utf8"));
 if (!isChromeExtensionVersion(manifest.version)) {
   throw new Error("Companion manifest must declare a valid numeric Chrome extension version.");
+}
+// The ZIP uses an explicit file allowlist. Fail before replacing a release if
+// the manifest drifts to an entry point or asset that cannot ship in that ZIP.
+function requireManifestResource(value) {
+  if (typeof value !== "string" || !packageFiles.includes(value))
+    throw new Error("Every manifest resource must name an approved Store package file.");
+}
+function requireManifestResources(values) {
+  if (!Array.isArray(values))
+    throw new Error("Every manifest resource list must contain approved Store package files.");
+  values.forEach(requireManifestResource);
+}
+function requireManifestIcons(icons) {
+  if (typeof icons === "string") return requireManifestResource(icons);
+  if (!icons || typeof icons !== "object" || Array.isArray(icons))
+    throw new Error("Every manifest resource icon must name an approved Store package file.");
+  Object.values(icons).forEach(requireManifestResource);
+}
+if (manifest.manifest_version !== 3)
+  throw new Error("Store packaging requires the reviewed Manifest V3 extension.");
+requireManifestResource(manifest.background?.service_worker);
+if (manifest.icons !== undefined) requireManifestIcons(manifest.icons);
+if (manifest.action?.default_icon !== undefined) requireManifestIcons(manifest.action.default_icon);
+for (const resource of [
+  manifest.action?.default_popup,
+  manifest.options_page,
+  manifest.options_ui?.page,
+  manifest.devtools_page,
+  manifest.side_panel?.default_path,
+  ...Object.values(manifest.chrome_url_overrides ?? {}),
+]) {
+  if (resource !== undefined) requireManifestResource(resource);
+}
+if (manifest.sandbox?.pages !== undefined) requireManifestResources(manifest.sandbox.pages);
+for (const script of manifest.content_scripts ?? []) {
+  if (script.js !== undefined) requireManifestResources(script.js);
+  if (script.css !== undefined) requireManifestResources(script.css);
+}
+for (const resource of manifest.web_accessible_resources ?? []) {
+  requireManifestResources(resource.resources);
+}
+for (const rules of manifest.declarative_net_request?.rule_resources ?? []) {
+  requireManifestResource(rules.path);
 }
 
 if (!fs.existsSync(configPath)) {
@@ -120,22 +176,13 @@ if (anonKey.split(".").length === 3) {
 
 const stage = fs.mkdtempSync(path.join(os.tmpdir(), "unimate-companion-"));
 const packageRoot = path.join(stage, "unimate-browser-companion");
-const packageFiles = [
-  "manifest.json",
-  "background.js",
-  "content.js",
-  "context-extractor.js",
-  "signin.html",
-  "signin.js",
-  "signin.css",
-  "config.local.js",
-  "assets/mascot.png",
-  ...[16, 32, 48, 128].map((size) => `assets/icons/icon${size}.png`),
-];
 try {
   fs.mkdirSync(path.join(packageRoot, "assets", "icons"), { recursive: true });
   for (const file of packageFiles) {
-    if (file === "config.local.js") {
+    if (file === "manifest.json") {
+      // Use the exact manifest snapshot whose version and references we checked.
+      fs.writeFileSync(path.join(packageRoot, file), manifestBytes);
+    } else if (file === "config.local.js") {
       // Ship only the values we validated, not the original source text.
       fs.writeFileSync(
         path.join(packageRoot, file),
@@ -162,11 +209,9 @@ try {
   ) {
     throw new Error("Unexpected Store package entries or missing root manifest.");
   }
-  const archivedManifest = JSON.parse(
-    execFileSync("unzip", ["-p", stagedArchive, "manifest.json"], { encoding: "utf8" }),
-  );
-  if (archivedManifest.version !== manifest.version)
-    throw new Error("Packaged manifest does not match the release version.");
+  const archivedManifest = execFileSync("unzip", ["-p", stagedArchive, "manifest.json"]);
+  if (!archivedManifest.equals(manifestBytes))
+    throw new Error("Packaged manifest does not match the validated release manifest.");
   const releaseDir = path.join(root, "release-artifacts");
   fs.mkdirSync(releaseDir, { recursive: true });
   if (fs.lstatSync(releaseDir).isSymbolicLink() || !fs.lstatSync(releaseDir).isDirectory())

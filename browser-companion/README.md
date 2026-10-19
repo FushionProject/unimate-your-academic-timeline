@@ -3,16 +3,25 @@
 Store owner update — October 19, 2026: the publisher account and launch price
 approved October 18 remain `unimatesupport@gmail.com` and USD 9.99/month. The
 owner confirmed “I created it” for the UniMate logo/mascot; this is an authorship
-attestation, not independent legal clearance. Read-only Store inspection
-verified that account is signed in but remains on the Developer Agreement
-registration page, with the agreement unchecked and a one-time $5 fee button.
-The owner must personally review the terms/fee and decide whether to register;
-no acceptance, payment, upload or submission is authorized by sign-in.
-Registration/security, legal disclosures, reviewer access and submission
+attestation, not independent legal clearance. The later October 19 read-only
+Store settings inspection verifies registration and that account's Admin
+membership, not a payment receipt or completed security setup. Display name is
+currently `unimatesupport`; contact email/address are missing and trader
+declaration requires action. The unsaved Non-Trader selection is not a legal
+declaration. Operator details and the proposed `UniMate` display name await the
+owner's response; no settings, terms, payment, upload or submission action was
+taken by the agent. Contact/security, legal disclosures, reviewer access and submission
 approval remain separate gates. Historical USD 5.99 sandbox evidence is preserved, not reclassified as
 USD 9.99 purchase proof. The synthetic Store package/consent test passed again
 without a browser, provider call or production ZIP; see
 [Store readiness](./CHROME_WEB_STORE_READINESS.md) for the exact handoff.
+
+October 19 preparation: packaging now rejects missing/unpackaged manifest
+resources and verifies the exact manifest snapshot in the ZIP. Offline regression
+tests and independent review pass. A [promotional tile draft](./store-artwork/promo-tile-v1.png)
+is ready for owner review; its editable layout and provenance retain the original
+logo unchanged. It is not a real-UI screenshot, production package or submitted
+listing. No product theme, hosting, billing or Store settings were changed.
 
 Latest private application candidate: `cb8a296` at
 <https://unimate-8kp8pqpcg-resumejuice-s-projects.vercel.app>, with the approved
@@ -498,13 +507,14 @@ write the database, or prove current hosted billing behavior.
    The core protected-hosted sandbox purchase/cancellation path now passes;
    production billing and the remaining lifecycle matrix are still separate.
 2. Confirm the canonical domain, published privacy/terms/support pages, monitored
-   support mailbox, exact release-asset provenance, and registration/security/listing details for
+   support mailbox, exact release-asset provenance, and security/contact/listing details for
    the approved publisher account, `unimatesupport@gmail.com`. Verify release
    pricing matches the approved USD 9.99/month across the listing, app and billing
    configuration; older USD 5.99 test invoices remain historical evidence only.
    Logo/mascot authorship is owner-attested as of October 19; developer
-   registration remains incomplete, awaiting the owner's personal terms/fee
-   decision. No fee or terms were accepted during read-only inspection.
+   registration is verified in the Store settings. Publisher contact, operator,
+   trader declaration and security details remain separate incomplete/unverified
+   gates. No fee receipt or security completion is inferred.
 3. Configure a production HTTPS origin with debug disabled. Run
    `npm run companion:package`; the ZIP includes only approved runtime files,
    has `manifest.json` at its root, and rejects unsafe client configuration.

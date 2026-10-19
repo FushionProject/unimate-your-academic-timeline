@@ -476,6 +476,55 @@ fs.${operation} = function (file, ...args) {
     assert.match(rejected.stderr, /valid numeric Chrome extension version/);
     assert.deepEqual(fs.readFileSync(zip), originalArchive);
   }
+  for (const changedManifest of [
+    { ...manifest, background: { service_worker: "missing-worker.js" } },
+    {
+      ...manifest,
+      content_scripts: [{ ...manifest.content_scripts[0], js: ["https://remote.invalid/code.js"] }],
+    },
+    {
+      ...manifest,
+      content_scripts: [{ ...manifest.content_scripts[0], css: ["missing-style.css"] }],
+    },
+    { ...manifest, icons: { ...manifest.icons, 128: "assets/missing-icon.png" } },
+    { ...manifest, action: { ...manifest.action, default_icon: "assets/missing-icon.png" } },
+    { ...manifest, action: { ...manifest.action, default_popup: "missing-popup.html" } },
+    { ...manifest, options_page: "missing-options.html" },
+    { ...manifest, options_ui: { page: "missing-options.html" } },
+    { ...manifest, devtools_page: "missing-devtools.html" },
+    { ...manifest, side_panel: { default_path: "missing-panel.html" } },
+    { ...manifest, chrome_url_overrides: { newtab: "missing-newtab.html" } },
+    { ...manifest, sandbox: { pages: ["missing-sandbox.html"] } },
+    {
+      ...manifest,
+      declarative_net_request: {
+        rule_resources: [{ id: "fixture_rules", enabled: true, path: "missing-rules.json" }],
+      },
+    },
+    { ...manifest, background: {} },
+    { ...manifest, content_scripts: [{ ...manifest.content_scripts[0], js: "content.js" }] },
+    {
+      ...manifest,
+      web_accessible_resources: [{ resources: ["README.md"], matches: ["<all_urls>"] }],
+    },
+  ]) {
+    fs.writeFileSync(path.join(extension, "manifest.json"), JSON.stringify(changedManifest));
+    const rejected = spawnSync(process.execPath, [script], { cwd: fixture, encoding: "utf8" });
+    assert.notEqual(rejected.status, 0, "Every manifest resource must exist in the Store ZIP");
+    assert.match(rejected.stderr, /manifest resource/);
+    assert.deepEqual(fs.readFileSync(zip), originalArchive);
+  }
+  fs.writeFileSync(
+    path.join(extension, "manifest.json"),
+    JSON.stringify({ ...manifest, manifest_version: 2 }),
+  );
+  const rejectedManifestVersion = spawnSync(process.execPath, [script], {
+    cwd: fixture,
+    encoding: "utf8",
+  });
+  assert.notEqual(rejectedManifestVersion.status, 0);
+  assert.match(rejectedManifestVersion.stderr, /Manifest V3/);
+  assert.deepEqual(fs.readFileSync(zip), originalArchive);
   fs.writeFileSync(path.join(extension, "manifest.json"), JSON.stringify(manifest));
   const entries = execFileSync("unzip", ["-Z1", zip], { encoding: "utf8" }).trim().split("\n");
   assert.ok(
@@ -639,6 +688,44 @@ fs.${operation} = function (file, ...args) {
       "Rejected source preserves the previous release",
     );
   }
+  // A same-version manifest edit during packaging must not replace the exact
+  // snapshot already validated. Only this synthetic child process is modified.
+  fs.writeFileSync(configFile, generatedConfig);
+  const manifestDriftHook = path.join(fixture, "manifest-drift.cjs");
+  const changedManifest = { ...manifest, background: { service_worker: "missing-worker.js" } };
+  fs.writeFileSync(
+    manifestDriftHook,
+    `const fs = require("node:fs");
+const open = fs.openSync;
+const read = fs.readFileSync;
+let configDescriptor;
+fs.openSync = function (file, ...args) {
+  const descriptor = open(file, ...args);
+  if (String(file).endsWith("/config.local.js")) configDescriptor = descriptor;
+  return descriptor;
+};
+fs.readFileSync = function (file, ...args) {
+  const bytes = read(file, ...args);
+  if (file === configDescriptor) {
+    configDescriptor = undefined;
+    fs.writeFileSync(${JSON.stringify(path.join(extension, "manifest.json"))}, ${JSON.stringify(JSON.stringify(changedManifest))});
+  }
+  return bytes;
+};\n`,
+  );
+  execFileSync(process.execPath, ["--require", manifestDriftHook, script], {
+    cwd: fixture,
+    stdio: "pipe",
+  });
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(path.join(extension, "manifest.json"), "utf8")),
+    changedManifest,
+  );
+  assert.deepEqual(
+    JSON.parse(execFileSync("unzip", ["-p", zip, "manifest.json"], { encoding: "utf8" })),
+    manifest,
+    "Ship the complete validated manifest snapshot, not a later same-version edit",
+  );
 } finally {
   fs.rmSync(fixture, { recursive: true, force: true });
 }

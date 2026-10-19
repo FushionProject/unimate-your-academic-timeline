@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="280" viewBox="0 0 440 280" role="img" aria-labelledby="title desc">
+  <title id="title">UniMate Browser Companion promotional tile</title>
+  <desc id="desc">UniMate's original smiling graduate logo on a warm yellow background, above the UniMate name.</desc>
+  <rect width="440" height="280" fill="#f5c518"/>
+  <circle cx="418" cy="12" r="112" fill="#ffdd56"/>
+  <circle cx="16" cy="276" r="96" fill="#eab811"/>
+  <circle cx="220" cy="107" r="93" fill="#ffdf68"/>
+  <g fill="none" stroke="#997405" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity=".42">
+    <path d="M54 54h32a8 8 0 0 1 8 8v25a8 8 0 0 1-8 8H72L60 105V95h-6a8 8 0 0 1-8-8V62a8 8 0 0 1 8-8Z"/>
+    <path d="M62 69h16M62 79h10"/>
+    <path d="M350 159h30a7 7 0 0 1 7 7v40h-32a8 8 0 0 1-8-8v-32a7 7 0 0 1 7-7ZM347 198a8 8 0 0 1 8-8h32M367 160v17l6-4 6 4v-17"/>
+  </g>
+  <g fill="#fff0ac">
+    <path d="m352 43 3.5 10.5L366 57l-10.5 3.5L352 71l-3.5-10.5L338 57l10.5-3.5Z"/>
+    <path d="m95 161 2.5 7.5L105 171l-7.5 2.5L95 181l-2.5-7.5L85 171l7.5-2.5Z"/>
+    <circle cx="315" cy="122" r="3"/>
+    <circle cx="125" cy="39" r="3"/>
+  </g>
+  <!-- Original owner-created logo is referenced intact, never redrawn. -->
+  <image href="../../public/assets/unimate-logo-head.png" x="114" y="14" width="212" height="197" preserveAspectRatio="xMidYMid meet"/>
+  <text x="220" y="252" text-anchor="middle" fill="#1a1a1a" font-family="Arial, Helvetica, sans-serif" font-size="46" font-weight="700" letter-spacing="-1.7">UniMate</text>
+</svg>

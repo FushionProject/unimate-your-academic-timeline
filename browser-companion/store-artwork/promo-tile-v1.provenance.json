@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "status": "draft_for_owner_review_not_submitted",
+  "createdDate": "2026-10-19",
+  "purpose": "Chrome Web Store small promotional image; not an application screenshot",
+  "dimensions": {
+    "width": 440,
+    "height": 280
+  },
+  "format": "PNG_RGB_no_alpha",
+  "creatorAttestation": "Owner confirmed creating UniMate logo/mascot on 2026-10-19",
+  "source": {
+    "path": "public/assets/unimate-logo-head.png",
+    "sha256": "af5001fed90535450e7cde1e95c65c497186c1d67aee853375a97b82c8615519",
+    "unchanged": true
+  },
+  "layout": {
+    "path": "browser-companion/store-artwork/promo-tile-v1.svg",
+    "sha256": "aed59a6765ed14c54ec929eb6b1a789896776870aa194955d707121c56673b82"
+  },
+  "output": {
+    "path": "browser-companion/store-artwork/promo-tile-v1.png",
+    "sha256": "08c959db7272b47dc3df16ec0bc7e0e36d9a45f315e62f08870bb965d8cda79b"
+  },
+  "renderer": {
+    "name": "sharp",
+    "version": "0.35.5",
+    "font": "Arial"
+  },
+  "newGeneratedIllustration": false,
+  "publicationApproved": false
+}

@@ -7,15 +7,19 @@ the owner confirmed “I created it” for UniMate's logo/mascot. This records t
 owner's authorship attestation, not an independent legal clearance or inferred
 license for unreviewed third-party material.
 
-Read-only inspection on October 19 verified the signed-in account is
-`unimatesupport@gmail.com` at
-<https://chrome.google.com/webstore/devconsole/register>. The Developer Agreement
-registration page showed an unchecked agreement checkbox and a one-time **$5**
-registration fee button: registration is incomplete. The owner must personally
-review those terms and the fee and decide whether to proceed. Sign-in did not
-authorize terms acceptance, payment, upload, submission or publication; none
-was performed. Required security setup and publisher/operator details remain
-unverified. Historical USD 5.99 sandbox invoices and results below
+The later October 19 read-only inspection verified registration at
+<https://chrome.google.com/webstore/devconsole/db3cd9d7-8d64-4e0d-9b8a-8c43117a6baa/settings>.
+Publisher ID `db3cd9d7-8d64-4e0d-9b8a-8c43117a6baa` and the UNIMATE member
+`unimatesupport@gmail.com` (Admin, joined October 19) were shown. Current display
+name is `unimatesupport`; contact email (“Add email required”) and address are
+missing. Trader declaration says “Action required”; a selected but unsaved
+Non-Trader radio option is not a declaration. The Save button was untouched.
+Owner confirmation of personal-versus-business operator details and proposed
+display name `UniMate` is pending. No settings, terms, payment, upload or
+submission action was taken by the agent. This verifies registration, not a
+paid receipt or required security setup. The earlier same-day inspection had
+stopped at the unchecked Developer Agreement and displayed one-time $5 fee;
+that registration status is now superseded. Historical USD 5.99 sandbox invoices and results below
 remain unchanged; they do not verify a new USD 9.99 Checkout. Confirm website,
 server price validation and the selected sandbox Price agree before the next
 price-specific purchase test. No live billing or public release is approved.
@@ -24,6 +28,24 @@ October 19 offline recheck: the synthetic Store package/consent tests passed
 under the established Node 22 runtime with TypeScript stripping enabled. No real
 configuration, provider call, browser-compatibility test, production ZIP or new
 artwork was involved.
+
+Later October 19 preparation: a missing manifest service-worker reference was
+reproduced as a successful ZIP, then fixed. The packager now validates referenced
+resources against its allowlist and archives/verifies the exact validated manifest
+snapshot. Missing worker/content/CSS/icon/popup/options/side-panel/rule resources,
+remote script URLs and same-version manifest drift have synthetic regression
+coverage; previous valid ZIP preservation remains tested. Independent review and
+the full offline suite passed; no real configuration or production ZIP was used.
+
+The new [small promotional tile draft](store-artwork/promo-tile-v1.png) is
+440x280 opaque RGB PNG, with [editable layout](store-artwork/promo-tile-v1.svg)
+and [source/output provenance](store-artwork/promo-tile-v1.provenance.json).
+It reuses `public/assets/unimate-logo-head.png` unchanged; the SVG is code-native
+layout, not a generated replacement logo. Visual inspection and automated format/
+hash checks passed. This brand graphic is not an app screenshot and remains a
+draft for owner review, with no upload or publication approval. Required real-UI
+screenshots remain pending. The image dimensions and separate screenshot scope
+follow [Google's image requirements](https://developer.chrome.com/docs/webstore/images).
 
 October 18 offline recheck: the inspected synthetic Store package/consent test
 passed, including the 13-entry ZIP, root manifest, privacy-link configuration,
@@ -89,7 +111,7 @@ Artifact: `unimate-companion-browser-nxIV6F`. The browser and server exited
 normally. Full offline tests, five runtime repeats, typecheck, lint, secret scan,
 and GitHub's both-build verification passed. At that checkpoint, publisher-dashboard inspection
 reached Google sign-in; the October 19 inspection above supersedes that account
-status but does not complete registration. No terms,
+status and later verified registration. At that earlier checkpoint, no terms,
 fees, account creation, upload, submission or public release was performed.
 
 October 16 Store-readiness recheck: `npm run companion:verify:v2` passed,
@@ -186,10 +208,9 @@ tests passed; these public-release gates remain:
    study request does not establish these behaviors. The October 16 core hosted
    sandbox flow passes, but uses a signed local relay, not a direct production
    webhook. Local renewal/refund/dispute evidence remains separate.
-10. Complete developer registration only after the owner personally reviews and
-    chooses to accept the displayed terms and one-time $5 fee; sign-in alone is
-    not authorization. Verify required security setup for the approved publisher
-    account, `unimatesupport@gmail.com`, and prepare a dedicated,
+10. Registration is verified; complete accurate publisher contact/operator and
+    trader details only with the owner's answers, and verify required security
+    setup for `unimatesupport@gmail.com`. Prepare a dedicated,
     empty, email-confirmed Pro reviewer account and the private test instructions
     below. Reviewers must be able to test the paid features without paying or
     receiving the owner's Vercel/account credentials. No such account or Store
@@ -565,26 +586,26 @@ public legal page.
 
 This is a preparation worksheet, not a submitted listing or authorization to
 register, pay, upload, publish, change DNS, or remove Preview protection.
-October 19 read-only inspection verified sign-in as `unimatesupport@gmail.com`
-but found registration incomplete at the Developer Agreement page. The
-agreement was unchecked and the displayed one-time fee was $5; neither was
-accepted or paid.
+The later October 19 read-only inspection verified registration and Admin
+membership for `unimatesupport@gmail.com` in publisher settings. It did not
+verify a receipt or security completion, and the agent made no settings changes,
+terms acceptance, payment, upload or submission.
 
 Approved October 18: use `unimatesupport@gmail.com` as the publisher account and
 USD 9.99/month as the UniMate Pro launch price. October 19: logo/mascot creation
-is owner-attested and sign-in is verified; registration/security remain open.
+is owner-attested and registration is verified; contact/legal/security remain open.
 No real charge or Store registration payment is authorized.
 
 | Deliverable | Prepared value or next action | Completion gate |
 | --- | --- | --- |
-| Publisher account | Owner-approved `unimatesupport@gmail.com`; sign-in verified October 19. | Registration page shows unchecked agreement and one-time $5 fee. Owner must review and decide personally; no automatic terms/fee acceptance. Security, upload and submission remain separate gates. |
+| Publisher account | `unimatesupport@gmail.com` Admin membership and registration verified October 19; display name currently `unimatesupport`. | Owner must confirm operator details and proposed `UniMate` name; contact, trader declaration and security remain incomplete/unverified. No upload/submission approval. |
 | Listing title, summary, detailed description | Use the draft immediately below; Pro is USD 9.99/month and usage limits apply. | Confirm the submitted wording and release website/server/Stripe price all match the approved price. Historical USD 5.99 test invoices are not proof of the new price. No unlimited-use claim. |
 | Category and language | Education; English. | Confirm those selections in the actual listing form. |
 | Single purpose and permissions | Use the Single purpose section and permission inventory above. | Reconcile against the exact submitted manifest; broad host access is not preapproved. |
 | Remote-code answer | Draft: no remotely executed extension code; AI/API replies are data, not downloaded extension logic. | Reconfirm against the exact release ZIP before certifying the dashboard field. |
 | Homepage, privacy and support links | Proposed `https://askunimate.com/`, `/privacy`, and `/support`. | Not verified public release URLs; approve the policies and verify unauthenticated reachability before entering them. A Vercel-login page is not a public policy. |
-| Contact email | Owner-provided `unimatesupport@gmail.com`. | Verify it in the publisher dashboard and confirm support messages can be received and answered. App confirmation delivery alone does not prove the support workflow. |
-| Images | Existing 128px icon; owner attested to creating the logo/mascot October 19. Prepare one to five 1280x800 screenshots and one 440x280 tile. | Retain authorship attestation with exact release assets, use authorized synthetic coursework, inspect final images; no independent legal clearance is implied. Video and marquee artwork are optional, not launch blockers. |
+| Contact email | Owner-provided `unimatesupport@gmail.com`; dashboard still shows “Add email required.” | Add and verify the contact email with authorization; confirm incoming mail and replies. App confirmation delivery alone does not prove the support workflow. |
+| Images | Existing 128px icon; owner-created logo/mascot attested October 19. A 440x280 tile draft is ready above; one to five 1280x800 real-UI screenshots remain. | Review the tile, retain exact asset provenance, and use authorized synthetic coursework for screenshots. No independent legal clearance is implied. Video and marquee artwork are optional. |
 | Reviewer access | Use the walkthrough below plus a dedicated, empty, email-confirmed Pro account. | Approve an externally reachable review environment, bounded access and support route; no reviewer charge or owner/Vercel credentials. |
 | Distribution | Keep the current local/hosted testing private. | A future Store Private release requires separately approved Google-account testers or group and upload/submission approval. Unlisted is not private. |
 
@@ -596,19 +617,20 @@ Use commitments before certification.
 
 **Decisions to obtain from the owner, in order:**
 
-1. Sign-in is complete for `unimatesupport@gmail.com`; registration is not.
-   Personally review the Developer Agreement and displayed one-time $5 fee,
-   then decide whether to complete registration. No automatic acceptance or
-   payment is authorized. Complete remaining Google identity/security prompts
-   and required 2-Step Verification personally; credentials and recovery codes
-   stay with the owner. The registration email cannot simply be edited later.
+1. Registration and Admin membership are verified for `unimatesupport@gmail.com`.
+   Complete contact email verification and remaining Google identity/security
+   prompts, including required 2-Step Verification, personally; credentials and
+   recovery codes stay with the owner. Security completion has not been verified.
 2. Choose the public publisher name and actual operator (individual or business).
-   Confirm the operator address appropriate for this paid-subscription product.
+   The current display name is `unimatesupport`; permission to change it to
+   `UniMate` and personal-versus-business operator details are awaiting response.
+   Confirm the missing operator address appropriate for this paid-subscription product.
    Google requires every publisher to declare Trader or Non-Trader status; the
    owner must determine this truthfully. Trader legal name, contact address and
    phone are displayed publicly. Enter sensitive verification details directly
    in Google's form, not in this repository or chat. Do not choose Non-Trader
-   merely to avoid disclosure.
+   merely to avoid disclosure. The current “Action required” dialog has an
+   unsaved Non-Trader selection; no selection was saved or certified by the agent.
 3. Logo/mascot authorship confirmation is complete: the owner said “I created
    it” on October 19. Retain that attestation with the release assets; identify
    any additional third-party elements if present and review final Store artwork.
@@ -833,7 +855,8 @@ clearance or rights to any unreviewed third-party elements.
 Git history and successful PNG checks establish which files ship, not licensing
 rights. The owner's statement supplies authorship provenance only; no additional
 rights were inferred or new assets generated in this documentation update. Store
-screenshots/tile are still pending and must use synthetic, authorized coursework.
+screenshots and final tile approval are still pending. The later October 19 tile
+draft is recorded above; real-UI screenshots must use synthetic, authorized coursework.
 
 October 16 repository provenance check: the logo source, packaged mascot, and
 all four icons first appear in commit
@@ -860,10 +883,10 @@ unless the evidence identifies a rights problem.
 - [x] Select the publisher account: `unimatesupport@gmail.com` (October 18).
 - [x] Confirm the intended Pro price: USD 9.99/month (October 18; not a live-billing approval).
 - [x] Record owner-created logo/mascot attestation (October 19; not independent legal clearance).
-- [x] Verify sign-in as `unimatesupport@gmail.com` (October 19; registration still incomplete).
+- [x] Verify registration and Admin membership for `unimatesupport@gmail.com` (October 19; no receipt/security inference).
 - [ ] Approve the publisher/operator identity and the listing's paid-Pro wording.
-- [ ] Verify registration/security for the selected account and approve any
-      required developer terms or displayed registration fee separately.
+- [ ] Complete publisher contact email/address and truthful trader declaration
+      with owner-approved details; verify required account security separately.
 - [ ] Check the published policy against the data map above, including incidental
       sensitive screenshots, optional file pages, account data and saved chats.
 - [ ] Record actual production subprocessors, retention/logging settings and the

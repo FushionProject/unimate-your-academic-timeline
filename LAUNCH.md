@@ -20,15 +20,16 @@ evidence and its separate scopes are below.
 
 Owner decisions/access still needed:
 
-1. **Store sign-in verified; registration incomplete:** the owner approved
-   `unimatesupport@gmail.com` on October 18. Read-only inspection on October 19
-   reached the Developer Agreement registration page signed in as that account,
-   with the agreement checkbox unchecked and a one-time **$5** registration
-   fee button. The owner must personally review the terms and fee and decide
-   whether to complete registration; sign-in is not approval to accept or pay.
-   Complete any remaining identity/security prompts personally and confirm the
-   public publisher/operator identity. No terms, fee, upload or submission action
-   was taken.
+1. **Store registration verified; publisher setup incomplete:** the October 19
+   follow-up reached publisher settings for `unimatesupport@gmail.com`, listed
+   as the UNIMATE Admin member joined October 19. Registration is complete;
+   this does not verify a payment receipt or required security setup. Current
+   display name is `unimatesupport`; contact email and address are missing.
+   Trader declaration says “Action required”; an unsaved Non-Trader selection
+   is not a completed declaration. Await the owner's personal-versus-business
+   operator details and permission to use display name `UniMate`, then complete
+   contact/legal/security details accurately. The agent changed no settings,
+   accepted no terms, made no payment and performed no upload/submission.
 2. **Logo/mascot creator confirmed:** on October 19 the owner answered
    “I created it.” This records the owner's authorship attestation, not an
    independent legal clearance or a license for any unreviewed third-party
@@ -59,6 +60,26 @@ checks; verify direct deployed webhook delivery when a reachable endpoint is
 approved; prepare final Store images/package; verify alerts, release rollback,
 production quotas and the final new-student flow. No further browser-compatibility
 tests are planned, following the owner's instruction.
+
+### October 19 Store preparation follow-up
+
+- Registration is verified in the publisher settings; contact, operator/trader
+  declaration and security details still require the owner. No Store settings
+  were changed, and nothing was uploaded or submitted.
+- Fixed a reproduced packaging defect: a manifest referencing a missing worker
+  previously produced a successful ZIP. Packaging now rejects resources outside
+  the approved package list, including content scripts/styles, icons, popup and
+  options pages, side-panel pages and declarative rules. It archives the exact
+  validated manifest bytes and verifies equality, protecting against same-version
+  edits during packaging. Synthetic regressions preserve the prior valid ZIP.
+- Prepared a [440x280 promotional tile draft](browser-companion/store-artwork/promo-tile-v1.png)
+  with an editable SVG layout and recorded file hashes. The owner's original
+  logo is unchanged. The image is opaque RGB PNG, visually inspected, and not
+  an application screenshot or a submitted/approved listing asset. Final real-UI
+  screenshots remain pending. No new illustration or product theme was generated.
+- Independent package/artwork review, full offline tests, typecheck and the
+  370-file secret scan passed. No new browser-compatibility run, real payment,
+  provider AI call, deployment, production ZIP or public-access change occurred.
 
 Read-only hosting verification at this checkpoint confirmed exact UniMate
 project/team, `READY` isolated Preview source `6a6e39f`, no aliases or Production
@@ -134,9 +155,10 @@ Preview; they were not moved. Normal grace policy, quotas, public signup, AI
 keys, database schema, public domain and Store submission status were not changed.
 At this October 18 checkpoint, Store registration and logo/mascot provenance
 were still awaiting confirmation. The October 19 handoff above supersedes that
-status: authorship is attested, sign-in is verified, and registration remains
-incomplete. Terms acceptance, the displayed $5 fee, upload and submission have
-not been approved or performed.
+status: authorship is attested and the later Store settings inspection verifies
+registration. Contact, legal/operator and security setup remain incomplete or
+unverified. No payment receipt is claimed, and no agent terms acceptance,
+payment, settings change, upload or submission was performed.
 
 ### Previous protected private candidate — October 16
 
