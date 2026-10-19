@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "status": "draft_for_owner_review_not_submitted",
+  "publicationApproved": false,
+  "createdDate": "2026-10-19",
+  "sourceCommit": "b6ddbf0c5950295f354a7501a1c6126b43a2df22",
+  "sourceTreeCleanAtCapture": true,
+  "purpose": "Chrome Web Store screenshots of the actual installed Companion UI with fictional demo content",
+  "capture": {
+    "runner": "scripts/test-companion-browser.mjs",
+    "runnerSha256": "9548cbfaabf28f5a94cd648880daf82b2768a514a68fabbc49fd59d3ab1823f1",
+    "browser": "Chrome/148.0.7778.96",
+    "viewport": { "width": 1280, "height": 800 },
+    "format": "PNG_RGB_no_alpha",
+    "method": "Raw browser screenshots after the installed extension panel transition settled",
+    "postProcessing": "none",
+    "generatedIllustration": false,
+    "profile": "fresh_disposable",
+    "localFixtureOnly": true,
+    "realCredentialsRead": false,
+    "realAiCalls": 0,
+    "realPayments": 0,
+    "simulatedAiReplies": 10,
+    "installedChecksPassed": 30,
+    "providerResponses": "Fixed local HTTP fixtures, not live AI model answers",
+    "content": "Authored fictional biology study guide and synthetic accounts only"
+  },
+  "runtimeSha256": {
+    "manifest.json": "f49e1c515046c9ce7c0ffb96ae9efb82c62625ad1ea2b49b13e613a3b535c4b4",
+    "background.js": "266b74f56ab546632a3cb81deee8d95c8ee0b6a27326b3be57b17df6845854bd",
+    "content.js": "9581e54d54adb0d15d91ca588222d1a22e9bb50eac708c5018f152d8e5dba226",
+    "context-extractor.js": "e6ddaf89b8cb01cdc4550d2c5456fa332bfedcea00f83a44f8e71fa05c143102",
+    "signin.html": "772e63b700b95458d40311cee7fbcdcf032d2b1f98a7b92cc9ad22deab2a429a",
+    "signin.js": "a42aa69125afd0fb853a0d5fde53e5171e16fab90d8840f9ac91afcd121ca440",
+    "signin.css": "75920a1ba13e955201aac19e0734df50746d33463caea9941c4bfcac099b5f31",
+    "assets/mascot.png": "9012e54fb348ae35774434dd0211992853280eeda627cdcd65bfc228d3b10860",
+    "assets/icons/icon16.png": "e67f8d064d94aaecb7cdb2ff3e025ad75e81890d9b5b0d26697c127d8fc939cb",
+    "assets/icons/icon32.png": "f586de8bee927e2935d5097ce1af04a9756af189927d722c24de95482f8f55b3",
+    "assets/icons/icon48.png": "f5b6a9c12dddbcf954686d74be81109dcc6d09cb6e23fd2bd818518906f4ad2c",
+    "assets/icons/icon128.png": "8837c5877fd21fe86bf8f13e83c7f7f0816d73d60c166203a97ef37d764fb47a"
+  },
+  "images": [
+    {
+      "path": "browser-companion/store-artwork/companion-page-sharing-v1.png",
+      "state": "Page-sharing consent before authentication or context sharing",
+      "bytes": 108257,
+      "sha256": "9e470c949a6bd599ffa68831439bdfe7af1054ca9ddb80d60b6d0fb0126eded3"
+    },
+    {
+      "path": "browser-companion/store-artwork/companion-pro-gate-v1.png",
+      "state": "Free account gated from the composer and AI requests",
+      "bytes": 85131,
+      "sha256": "58dc93f10ef09dd9d40c172fb29bfe9c3ee42d80dbe58d70c99f801d36359c03"
+    },
+    {
+      "path": "browser-companion/store-artwork/companion-study-help-v1.png",
+      "state": "Synthetic Pro account displaying the local fixture explanation beside the lesson",
+      "bytes": 96276,
+      "sha256": "0c3980f43c72684627a65aa90a661e83a27776860033012b168ce4eafae78aae"
+    }
+  ],
+  "releaseGate": "Review the images and reconcile the recorded source against the final release before any Store upload. These drafts do not certify current deployed UI, provider answer quality, live billing, or Store approval."
+}

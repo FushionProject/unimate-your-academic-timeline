@@ -26,6 +26,16 @@ is ready for owner review; its editable layout and provenance retain the origina
 logo unchanged. It is not a real-UI screenshot, production package or submitted
 listing. No product theme, hosting, billing or Store settings were changed.
 
+Latest October 19 work: fixed silent failure of an explicit Pro access recheck;
+temporary failures now show retry guidance without clearing drafts or bypassing
+the privacy/Pro gates. Full offline checks and independent review passed. The
+installed Chromium fixture then passed 30 scenarios on clean source `b6ddbf0`,
+producing three raw 1280x800 [Store screenshot drafts](./CHROME_WEB_STORE_READINESS.md)
+with fictional coursework and local simulated replies. Capture hashes and scope
+are recorded; no real AI/payment calls, personal browsing or Store upload occurred.
+Publisher/identity work is deferred at the owner's request until October 20,
+with a one-time 10 AM Central follow-up. No personal details are needed for this work.
+
 Latest private application candidate: `cb8a296` at
 <https://unimate-8kp8pqpcg-resumejuice-s-projects.vercel.app>, with the approved
 $9.99 price, passed offline/GitHub verification and protected HTTP smoke checks.

@@ -49,9 +49,28 @@ and [source/output provenance](store-artwork/promo-tile-v1.provenance.json).
 It reuses `public/assets/unimate-logo-head.png` unchanged; the SVG is code-native
 layout, not a generated replacement logo. Visual inspection and automated format/
 hash checks passed. This brand graphic is not an app screenshot and remains a
-draft for owner review, with no upload or publication approval. Required real-UI
-screenshots remain pending. The image dimensions and separate screenshot scope
+draft for owner review, with no upload or publication approval. Three real-UI
+screenshot drafts are now prepared below. The image dimensions and separate screenshot scope
 follow [Google's image requirements](https://developer.chrome.com/docs/webstore/images).
+
+Latest October 19 capture: the unchanged installed Companion runtime from clean
+commit `b6ddbf0c5950295f354a7501a1c6126b43a2df22` passed all 30 isolated Chromium
+scenarios. The fixture used only authored fictional biology coursework, synthetic
+accounts and 10 fixed local replies; no provider AI, payments, real credentials
+or personal browser profile. The browser was Chrome/148.0.7778.96. The three raw,
+unedited 1280x800 RGB PNGs were visually inspected:
+
+- [Page-sharing consent](store-artwork/companion-page-sharing-v1.png)
+- [Pro unlock gate](store-artwork/companion-pro-gate-v1.png)
+- [Study help beside a lesson](store-artwork/companion-study-help-v1.png)
+
+[Capture provenance](store-artwork/companion-screenshots-v1.provenance.json)
+records exact runtime and image hashes. Automated asset checks preserve those
+captured bytes/dimensions, not a claim that later UI changes are already pictured.
+Review freshness against the final release before any upload. No Store submission,
+public deployment or additional browser-compatibility test occurred. The owner
+deferred publisher/identity setup until October 20; do not request those details
+before then. The one-time follow-up is scheduled for 10 AM America/Chicago.
 
 October 18 offline recheck: the inspected synthetic Store package/consent test
 passed, including the 13-entry ZIP, root manifest, privacy-link configuration,
@@ -611,7 +630,7 @@ No real charge or Store registration payment is authorized.
 | Remote-code answer | Draft: no remotely executed extension code; AI/API replies are data, not downloaded extension logic. | Reconfirm against the exact release ZIP before certifying the dashboard field. |
 | Homepage, privacy and support links | Proposed `https://askunimate.com/`, `/privacy`, and `/support`. | Not verified public release URLs; approve the policies and verify unauthenticated reachability before entering them. A Vercel-login page is not a public policy. |
 | Contact email | Owner-provided `unimatesupport@gmail.com`; dashboard still shows “Add email required.” | Add and verify the contact email with authorization; confirm incoming mail and replies. App confirmation delivery alone does not prove the support workflow. |
-| Images | Existing 128px icon; owner-created logo/mascot attested October 19. A 440x280 tile draft is ready above; one to five 1280x800 real-UI screenshots remain. | Review the tile, retain exact asset provenance, and use authorized synthetic coursework for screenshots. No independent legal clearance is implied. Video and marquee artwork are optional. |
+| Images | Existing 128px icon; owner-created logo/mascot attested October 19. A 440x280 tile and three 1280x800 real-UI screenshot drafts are prepared above. | Owner review and reconciliation against the final release remain. Screenshots use fictional local demo content, not live-provider answers. No independent legal clearance or upload approval is implied. Video and marquee artwork are optional. |
 | Reviewer access | Use the walkthrough below plus a dedicated, empty, email-confirmed Pro account. | Approve an externally reachable review environment, bounded access and support route; no reviewer charge or owner/Vercel credentials. |
 | Distribution | Keep the current local/hosted testing private. | A future Store Private release requires separately approved Google-account testers or group and upload/submission approval. Unlisted is not private. |
 
@@ -862,8 +881,8 @@ clearance or rights to any unreviewed third-party elements.
 Git history and successful PNG checks establish which files ship, not licensing
 rights. The owner's statement supplies authorship provenance only; no additional
 rights were inferred or new assets generated in this documentation update. Store
-screenshots and final tile approval are still pending. The later October 19 tile
-draft is recorded above; real-UI screenshots must use synthetic, authorized coursework.
+image approval is still pending. The later October 19 tile and three raw real-UI
+screenshot drafts are recorded above; screenshots use synthetic, authorized coursework.
 
 October 16 repository provenance check: the logo source, packaged mascot, and
 all four icons first appear in commit

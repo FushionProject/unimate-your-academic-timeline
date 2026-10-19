@@ -73,6 +73,17 @@ tests are planned, following the owner's instruction.
 
 ### October 19 Store preparation follow-up
 
+- Captured three real installed-UI screenshot drafts at 1280x800 from clean
+  source `b6ddbf0c5950295f354a7501a1c6126b43a2df22`: page-sharing consent,
+  Free/Pro access gate and a study explanation. All 30 isolated Chromium
+  scenarios passed, using fictional coursework/accounts and 10 local simulated
+  replies; no real AI, payment, credentials or user browser profiles were used.
+  Raw RGB PNGs were visually inspected and copied unchanged. Exact image/runtime
+  hashes and scope are in
+  `browser-companion/store-artwork/companion-screenshots-v1.provenance.json`.
+  These are draft listing assets, not hosted payment/provider-quality evidence.
+  Owner image review and final release-source reconciliation remain open;
+  nothing was uploaded or submitted, and no other browsers were tested.
 - While owner-information setup is deferred, fixed silent failure of the
   Companion's explicit “I've upgraded · Check access” action. A temporary
   access-check error now stays Pro-gated and shows retry guidance, retaining the
@@ -105,8 +116,9 @@ tests are planned, following the owner's instruction.
 - Prepared a [440x280 promotional tile draft](browser-companion/store-artwork/promo-tile-v1.png)
   with an editable SVG layout and recorded file hashes. The owner's original
   logo is unchanged. The image is opaque RGB PNG, visually inspected, and not
-  an application screenshot or a submitted/approved listing asset. Final real-UI
-  screenshots remain pending. No new illustration or product theme was generated.
+  an application screenshot or a submitted/approved listing asset. Three real-UI
+  screenshot drafts are now recorded above; final review remains pending.
+  No new illustration or product theme was generated.
 - Independent package/artwork review, full offline tests, typecheck and the
   370-file secret scan passed. No new browser-compatibility run, real payment,
   provider AI call, deployment, production ZIP or public-access change occurred.
