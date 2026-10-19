@@ -74,7 +74,7 @@ function harness(kind, initialQuery) {
     CheckCircle2: icon,
     ExternalLink: icon,
     MonitorCheck: icon,
-    PRO_PLAN: { textMonthly: 200, monthlyPrice: "$5.99" },
+    PRO_PLAN: { textMonthly: 200, monthlyPrice: "$9.99" },
     Ask: () => createElement("textarea", { "aria-label": "Allowed chat boundary" }),
   });
   const code = ts.transpileModule(

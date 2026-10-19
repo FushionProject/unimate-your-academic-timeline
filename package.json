@@ -30,6 +30,7 @@
     "preview:billing:recovery:test": "node browser-companion/tests/protected-billing-recovery-policy.test.mjs && node browser-companion/tests/protected-portal-navigation-continuation.test.mjs && node browser-companion/tests/protected-stripe-browser-recovery.test.mjs && node browser-companion/tests/protected-stripe-browser-recovery-card-controls.test.mjs && node browser-companion/tests/protected-stripe-browser-recovery-form.test.mjs && node browser-companion/tests/run-protected-billing-recovery.test.mjs && node browser-companion/tests/inspect-protected-recovery-startup.test.mjs && node browser-companion/tests/stripe-sandbox-clock.test.mjs",
     "preview:billing:test": "node browser-companion/tests/protected-preview-setup.test.mjs && node browser-companion/tests/protected-stripe-preview-relay.test.mjs && node browser-companion/tests/protected-preview-browser.test.mjs && node browser-companion/tests/protected-companion-billing-harness.test.mjs && node browser-companion/tests/run-protected-billing-preview.test.mjs && node browser-companion/tests/protected-billing-run-v2.test.mjs && node browser-companion/tests/protected-stripe-browser-actions.test.mjs && node browser-companion/tests/protected-stripe-browser-payment.test.mjs && node browser-companion/tests/inspect-protected-sandbox-checkout.test.mjs && node browser-companion/tests/continue-protected-sandbox-checkout.test.mjs && node browser-companion/tests/protected-stripe-browser-card.test.mjs && node browser-companion/tests/protected-stripe-browser-cancel.test.mjs && node browser-companion/tests/complete-protected-sandbox-portal.test.mjs",
     "release:readiness": "node scripts/release-readiness.mjs",
+    "pricing:test": "node browser-companion/tests/current-stripe-sandbox-price.test.mjs && node browser-companion/tests/release-readiness.test.mjs",
     "entitlements:test": "node --experimental-strip-types browser-companion/tests/entitlement-policy.test.ts && node browser-companion/tests/entitlement-migration.test.mjs && node browser-companion/tests/entitlement-server-wiring.test.mjs",
     "secret:scan": "node scripts/secret-scan.mjs",
     "companion:test:v2": "node browser-companion/tests/context-pipeline.test.mjs && node browser-companion/tests/background.test.mjs && node browser-companion/tests/grounding.test.mjs",
@@ -39,7 +40,7 @@
     "preview": "wrangler dev --config dist/server/wrangler.json --local",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "npm run companion:verify:v2 && npm run dashboard:test && npm run auth:test && npm run billing:test && npm run hardening:test && npm run capacity:test && npm run resilience:test && npm run operations:test && npm run entitlements:test",
+    "test": "npm run companion:verify:v2 && npm run dashboard:test && npm run auth:test && npm run billing:test && npm run pricing:test && npm run hardening:test && npm run capacity:test && npm run resilience:test && npm run operations:test && npm run entitlements:test",
     "format": "prettier --write ."
   },
   "dependencies": {

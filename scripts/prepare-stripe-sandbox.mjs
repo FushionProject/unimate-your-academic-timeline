@@ -8,6 +8,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
+// Historical $5.99 lifecycle target: preserve this exact identity for existing
+// journals and recovery tools. New $9.99 price verification is separate in
+// verify-current-stripe-sandbox-price.mjs; never relabel these historical runs.
 export const TARGET = Object.freeze({
   account: "acct_1UQHj2IxB8W4eFUh",
   product: "prod_VRA7ssPuHQrbbc",

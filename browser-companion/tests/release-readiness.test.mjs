@@ -100,7 +100,7 @@ for (const values of [
 ])
   assert.equal(check({ ...env, ...values }, "Release entitlement overrides disabled"), false);
 for (const values of [
-  { STRIPE_PRO_MONTHLY_AMOUNT_CENTS: "999" },
+  { STRIPE_PRO_MONTHLY_AMOUNT_CENTS: "599" },
   { STRIPE_PRO_MONTHLY_AMOUNT_CENTS: "0" },
   { STRIPE_PRO_MONTHLY_AMOUNT_CENTS: "NaN" },
   { STRIPE_PRO_CURRENCY: "eur" },
@@ -131,6 +131,19 @@ assert.ok(
   catalog.includes(`monthlyPrice: "$${(RELEASE_PRO_CONTRACT.amountCents / 100).toFixed(2)}"`),
 );
 assert.equal(RELEASE_PRO_CONTRACT.currency, "usd");
+assert.equal(RELEASE_PRO_CONTRACT.amountCents, 999);
+assert.equal(
+  check(
+    { ...env, STRIPE_PRO_MONTHLY_AMOUNT_CENTS: "999", STRIPE_PRO_CURRENCY: "USD" },
+    "Advertised Pro price matches server expectation",
+  ),
+  true,
+);
+const server = await fs.readFile(new URL("../../src/server.ts", import.meta.url), "utf8");
+assert.ok(
+  server.includes(`STRIPE_PRO_MONTHLY_AMOUNT_CENTS || "${RELEASE_PRO_CONTRACT.amountCents}"`),
+);
+assert.ok(server.includes(`expectedAmount !== ${RELEASE_PRO_CONTRACT.amountCents}`));
 
 // CLI formatting and local/process precedence use a generated fixture directory,
 // never the actual workspace .env or private sandbox files.

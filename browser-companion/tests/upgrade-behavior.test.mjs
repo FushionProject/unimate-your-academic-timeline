@@ -137,7 +137,7 @@ function harness(data = { isPro: false, state: "free", canManage: false }, searc
     ExternalLink: icon,
     Loader2: icon,
     Sparkles: icon,
-    PRO_PLAN: { monthlyPrice: "$5.99" },
+    PRO_PLAN: { monthlyPrice: "$9.99" },
     PRO_FEATURES: ["Synthetic plan feature"],
   });
   vm.runInContext(`${compiled}\nglobalThis.Target = Upgrade`, context);

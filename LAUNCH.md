@@ -10,7 +10,7 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - Every completed manual item must include a dated evidence note or link.
 - If a release-blocking check fails, stop promotion and record the response under **Launch incidents**.
 
-## Remaining work and owner handoff — October 16, 2026
+## Remaining work and owner handoff — October 18, 2026
 
 **Still private; not approved for public release or live payments.** Core sandbox
 purchase, cancellation and failed-payment repair now pass, including installed
@@ -20,16 +20,18 @@ evidence and its separate scopes are below.
 
 Owner decisions/access still needed:
 
-1. **Store owner:** choose the long-term Google publisher account (proposed
-   `unimatesupport@gmail.com`), complete any Google identity/2-Step Verification
+1. **Store owner selected:** the owner approved `unimatesupport@gmail.com` on
+   October 18. Complete any Google identity/2-Step Verification
    personally, and confirm the public publisher/operator identity. Any displayed
    registration fee, terms acceptance or submission needs separate approval.
 2. **Artwork rights:** confirm who created the logo/mascot and the permission
    for commercial redistribution. Final Store images remain engineering work
    after that confirmation, not an asset the owner must design.
-3. **Pricing and billing policy:** approve the launch price (currently advertised
-   USD $5.99/month), failed-payment grace policy (normal configuration is still
-   grace-on), and refund/dispute policy. The strict grace-off test was isolated;
+3. **Price approved; billing policy pending:** the owner confirmed **USD
+   $9.99/month** on October 18. The catalog, server expectation and current
+   sandbox Price are being aligned together; historical $5.99 records remain
+   unchanged. Still choose the failed-payment grace policy (normal configuration
+   is still grace-on), and refund/dispute policy. The strict grace-off test was isolated;
    it did not change the normal policy. Review applicable tax registrations
    before enabling tax collection; no live billing is authorized here.
 4. **Support and privacy:** approve the real operator, retention/deletion/provider

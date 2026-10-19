@@ -2724,6 +2724,42 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
     if (!profile) return jsonResponse({ error: "Billing profile is unavailable." }, 503);
     const origin = config.canonicalOrigin;
 
+    // Verify the advertised price before creating a customer or reusing any
+    // existing Checkout Session. Stale deployment settings must fail closed,
+    // not silently charge the historical price behind the current catalog.
+    const expectedAmount = Number(process.env.STRIPE_PRO_MONTHLY_AMOUNT_CENTS || "999");
+    const expectedCurrency = (process.env.STRIPE_PRO_CURRENCY || "usd").toLowerCase();
+    if (expectedAmount !== 999 || expectedCurrency !== "usd") {
+      return jsonResponse({ error: "The Pro plan pricing configuration is unavailable." }, 503);
+    }
+    const priceResponse = await stripeRequest(
+      `/prices/${encodeURIComponent(config.priceId)}`,
+      config,
+    );
+    if (!priceResponse.ok) return jsonResponse({ error: "The Pro plan is unavailable." }, 503);
+    const price = (await priceResponse.json()) as {
+      active?: boolean;
+      type?: string;
+      livemode?: boolean;
+      unit_amount?: number;
+      currency?: string;
+      recurring?: { interval?: string; interval_count?: number };
+    };
+    if (
+      !price.active ||
+      price.type !== "recurring" ||
+      price.livemode !== config.liveMode ||
+      price.unit_amount !== expectedAmount ||
+      price.currency?.toLowerCase() !== expectedCurrency ||
+      price.recurring?.interval !== "month" ||
+      price.recurring.interval_count !== 1
+    ) {
+      return jsonResponse(
+        { error: "The Pro plan is not configured for subscription checkout." },
+        503,
+      );
+    }
+
     const customerId =
       profile.stripe_customer_id || (await createOrBindStripeCustomer(authResult, config));
     if (!customerId) {
@@ -2761,36 +2797,6 @@ async function handleCreateCheckoutSession(request: Request): Promise<Response> 
         ...new Set([...terminalSubscriptionIds, ...checkouts.terminalSubscriptionIds]),
       ].sort();
       terminalSessionIds = checkouts.terminalSessionIds.sort();
-    }
-
-    const priceResponse = await stripeRequest(
-      `/prices/${encodeURIComponent(config.priceId)}`,
-      config,
-    );
-    if (!priceResponse.ok) return jsonResponse({ error: "The Pro plan is unavailable." }, 503);
-    const price = (await priceResponse.json()) as {
-      active?: boolean;
-      type?: string;
-      livemode?: boolean;
-      unit_amount?: number;
-      currency?: string;
-      recurring?: { interval?: string; interval_count?: number };
-    };
-    const expectedAmount = Number(process.env.STRIPE_PRO_MONTHLY_AMOUNT_CENTS || "599");
-    const expectedCurrency = (process.env.STRIPE_PRO_CURRENCY || "usd").toLowerCase();
-    if (
-      !price.active ||
-      price.type !== "recurring" ||
-      price.livemode !== config.liveMode ||
-      price.unit_amount !== expectedAmount ||
-      price.currency?.toLowerCase() !== expectedCurrency ||
-      price.recurring?.interval !== "month" ||
-      price.recurring.interval_count !== 1
-    ) {
-      return jsonResponse(
-        { error: "The Pro plan is not configured for subscription checkout." },
-        503,
-      );
     }
 
     // Only Stripe's terminal attempts advance the generation, never a clock

@@ -23,8 +23,8 @@ function parseEnv(text) {
 }
 
 // Must stay aligned with src/lib/plan-catalog.ts and the server defaults. This
-// is the currently advertised contract, not approval of a future launch price.
-export const RELEASE_PRO_CONTRACT = Object.freeze({ amountCents: 599, currency: "usd" });
+// is the owner-approved monthly price, not approval to enable live billing.
+export const RELEASE_PRO_CONTRACT = Object.freeze({ amountCents: 999, currency: "usd" });
 
 function canonicalReleaseOrigin(value) {
   if (typeof value !== "string" || value !== value.trim()) return false;
@@ -109,9 +109,9 @@ export function buildReleaseReadiness(env = {}) {
   );
   add(
     "Advertised Pro price matches server expectation",
-    Number(env.STRIPE_PRO_MONTHLY_AMOUNT_CENTS || "599") === RELEASE_PRO_CONTRACT.amountCents &&
+    Number(env.STRIPE_PRO_MONTHLY_AMOUNT_CENTS || "999") === RELEASE_PRO_CONTRACT.amountCents &&
       (env.STRIPE_PRO_CURRENCY || "usd").toLowerCase() === RELEASE_PRO_CONTRACT.currency,
-    "Current public catalog is USD $5.99/month. Any price decision must update the catalog, server expectation and verified Stripe Price together.",
+    "Owner-approved catalog is USD $9.99/month. The catalog, server expectation and verified Stripe Price must agree; old $5.99 test evidence does not verify the new price.",
   );
   add(
     "Explicit past-due grace configuration",

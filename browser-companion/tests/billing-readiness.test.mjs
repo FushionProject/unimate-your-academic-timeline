@@ -87,7 +87,7 @@ assert.match(upgrade, /Confirmation is taking longer than expected/);
 assert.match(upgrade, /never\s+receives\s+your card details/);
 assert.doesNotMatch(upgrade, /Payment received/);
 assert.match(billingMigration, /create unique index[\s\S]*stripe_customer_id/);
-assert.match(envExample, /STRIPE_PRO_MONTHLY_AMOUNT_CENTS=599/);
+assert.match(envExample, /STRIPE_PRO_MONTHLY_AMOUNT_CENTS=999/);
 assert.match(envExample, /UNIMATE_CANONICAL_ORIGIN=http:\/\/localhost:8080/);
 
 console.log(

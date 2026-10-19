@@ -186,7 +186,7 @@ function fixture() {
         active: true,
         type: "recurring",
         livemode: false,
-        unit_amount: 599,
+        unit_amount: 999,
         currency: "usd",
         recurring: { interval: "month", interval_count: 1 },
         ...state.price,
@@ -658,6 +658,201 @@ function fixture() {
   assert.equal(await f.access(), 200, "existing trial policy preserved");
 }
 
+// Initial card authentication is a pending payment, not paid access. Exercise
+// actual signed action-required notifications, expanded modern invoice parent
+// IDs, invoice retrieval and the status/Portal paths without a hosted challenge.
+{
+  const f = fixture();
+  const pendingInvoice = invoice("sub_authentication", "open");
+  pendingInvoice.parent.subscription_details.subscription = { id: "sub_authentication" };
+  const sub = subscription("sub_authentication", "incomplete", {
+    latest_invoice: pendingInvoice.id,
+  });
+  f.state.subscriptions = [sub];
+  f.state.invoices.set(pendingInvoice.id, pendingInvoice);
+  const status = async () => {
+    const response = await f.api.handleBillingStatus(f.request("/api/billing-status"));
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+
+  assert.equal((await f.event("customer.subscription.created", sub)).status, 200);
+  for (let delivery = 0; delivery < 2; delivery++) {
+    assert.equal((await f.event("invoice.payment_action_required", pendingInvoice)).status, 200);
+    assert.equal(await f.access(), 403, "an unfinished initial challenge never grants Pro");
+  }
+  const pending = await status();
+  assert.equal(pending.state, "incomplete");
+  assert.equal(pending.isPro, false);
+  assert.equal(pending.canManage, true, "pending payment still exposes billing recovery");
+  const checkout = await f.api.handleCreateCheckoutSession(
+    f.request("/api/create-checkout-session", "POST"),
+  );
+  assert.equal(checkout.status, 200);
+  assert.deepEqual(await checkout.json(), {
+    alreadySubscribed: true,
+    url: "https://billing.stripe.com/synthetic",
+  });
+  assert.equal(f.state.sessions.size, 0, "the pending challenge cannot create a second purchase");
+  assert.equal(
+    (await f.api.handleCreatePortalSession(f.request("/api/create-portal-session", "POST"))).status,
+    200,
+  );
+
+  // A payment notification must not override an authoritative subscription
+  // that is still incomplete. The following subscription event completes it.
+  const staleChallenge = structuredClone(pendingInvoice);
+  pendingInvoice.status = "paid";
+  assert.equal((await f.event("invoice.paid", pendingInvoice)).status, 200);
+  assert.equal(await f.access(), 403);
+  sub.status = "active";
+  assert.equal((await f.event("customer.subscription.updated", sub)).status, 200);
+  assert.equal(await f.access(), 200, "paid invoice and active subscription unlock together");
+  assert.equal((await status()).state, "active");
+  assert.ok(
+    f.state.calls.some((call) => call.url.pathname === `/v1/invoices/${pendingInvoice.id}`),
+    "an unexpanded invoice reference is resolved before granting access",
+  );
+  assert.equal((await f.event("invoice.payment_action_required", staleChallenge)).status, 200);
+  assert.equal(await f.access(), 200, "a delayed challenge notification cannot undo recovery");
+
+  sub.status = "canceled";
+  assert.equal((await f.event("customer.subscription.deleted", sub)).status, 200);
+  assert.equal(await f.access(), 403);
+  assert.equal((await f.event("invoice.paid", pendingInvoice)).status, 200);
+  assert.equal(await f.access(), 403, "a late paid invoice cannot revive canceled access");
+}
+
+// Abandoned authentication expires without grace, even when an earlier paid
+// subscription exists. A delayed success notification is only a reconciliation
+// signal; neither its type nor its paid snapshot is sufficient for fulfillment.
+{
+  const f = fixture();
+  const previous = subscription("sub_previous", "canceled");
+  const sub = subscription("sub_auth_expired", "incomplete", {
+    latest_invoice: invoice("sub_auth_expired", "open"),
+  });
+  f.state.subscriptions = [previous, sub];
+  f.state.paidInvoices.set(previous.id, [invoice(previous.id)]);
+  assert.equal((await f.event("invoice.payment_action_required", sub.latest_invoice)).status, 200);
+  assert.equal(await f.access(), 403, "paid history is scoped to the current subscription");
+  sub.status = "incomplete_expired";
+  sub.latest_invoice.status = "void";
+  assert.equal((await f.event("customer.subscription.updated", sub)).status, 200);
+  const lateCheckout = {
+    mode: "subscription",
+    subscription: { id: sub.id },
+    customer: { id: customerId },
+    client_reference_id: userId,
+    payment_status: "paid",
+  };
+  assert.equal(
+    (await f.event("checkout.session.async_payment_succeeded", lateCheckout)).status,
+    200,
+  );
+  assert.equal(await f.access(), 403, "expired pending authentication stays locked");
+  assert.equal((await f.event("invoice.paid", invoice(sub.id))).status, 200);
+  assert.equal(await f.access(), 403);
+}
+
+// Delayed Checkout success can arrive before invoice settlement is readable.
+// Repeated status checks keep the Companion locked until a fresh authoritative
+// invoice shows paid; this tests handlers only, not a real delayed payment rail.
+{
+  const f = fixture();
+  const sub = subscription("sub_delayed", "active", { latest_invoice: "in_delayed" });
+  const settling = { ...invoice(sub.id, "open"), id: "in_delayed" };
+  f.state.subscriptions = [sub];
+  f.state.invoices.set(settling.id, settling);
+  const checkout = {
+    mode: "subscription",
+    subscription: sub.id,
+    client_reference_id: userId,
+    customer: customerId,
+    payment_status: "paid",
+  };
+  assert.equal((await f.event("checkout.session.async_payment_succeeded", checkout)).status, 200);
+  assert.equal(await f.access(), 403, "event payment_status alone is not paid invoice evidence");
+  let response = await f.api.handleBillingStatus(f.request("/api/billing-status"));
+  assert.equal(response.status, 200);
+  const pending = await response.json();
+  assert.equal(pending.state, "incomplete");
+  assert.equal(pending.isPro, false);
+  assert.equal(pending.canManage, true);
+  const priorWrites = f.state.writes.length;
+  f.state.failure = (url) => url.pathname === `/v1/invoices/${settling.id}`;
+  assert.ok((await f.event("checkout.session.async_payment_succeeded", checkout)).status >= 500);
+  assert.equal(f.state.writes.length, priorWrites, "invoice outage leaves a retryable event");
+  assert.equal(await f.access(), 403);
+  f.state.failure = null;
+  settling.status = "paid";
+  assert.equal((await f.event("invoice.paid", settling)).status, 200);
+  assert.equal(await f.access(), 200);
+  // Even an old failure reconciles the now-settled state, not its event label.
+  assert.equal((await f.event("checkout.session.async_payment_failed", checkout)).status, 200);
+  assert.equal(await f.access(), 200);
+  sub.status = "unpaid";
+  assert.equal((await f.event("customer.subscription.updated", sub)).status, 200);
+  assert.equal(await f.access(), 403, "terminal unpaid overrides historical paid invoices");
+  assert.equal((await f.event("checkout.session.async_payment_succeeded", checkout)).status, 200);
+  assert.equal(await f.access(), 403);
+}
+
+// Dedicated paused/resumed events must work without relying on an accompanying
+// subscription.updated delivery. This is subscription status pausing, not
+// Stripe's distinct pause_collection setting, which does not change status.
+{
+  const f = fixture();
+  const sub = subscription("sub_pause_resume");
+  f.state.subscriptions = [sub];
+  assert.equal((await f.event("invoice.paid", invoice(sub.id))).status, 200);
+  assert.equal(await f.access(), 200);
+  const activeSnapshot = structuredClone(sub);
+  sub.status = "paused";
+  const pausedSnapshot = structuredClone(sub);
+  assert.equal((await f.event("customer.subscription.paused", sub)).status, 200);
+  assert.equal(await f.access(), 403);
+  let response = await f.api.handleBillingStatus(f.request("/api/billing-status"));
+  assert.equal(response.status, 200);
+  const paused = await response.json();
+  assert.equal(paused.state, "paused");
+  assert.equal(paused.isPro, false);
+  assert.equal(paused.canManage, true);
+  assert.equal((await f.event("customer.subscription.resumed", activeSnapshot)).status, 200);
+  assert.equal(await f.access(), 403, "a stale resume event cannot bypass current paused state");
+  sub.status = "active";
+  assert.equal((await f.event("customer.subscription.resumed", sub)).status, 200);
+  assert.equal(await f.access(), 200);
+  assert.equal((await f.event("customer.subscription.paused", pausedSnapshot)).status, 200);
+  assert.equal(await f.access(), 200, "a delayed pause event cannot undo the current paid resume");
+  sub.status = "unpaid";
+  assert.equal((await f.event("customer.subscription.updated", sub)).status, 200);
+  response = await f.api.handleBillingStatus(f.request("/api/billing-status"));
+  assert.equal(response.status, 200);
+  const unpaid = await response.json();
+  assert.equal(unpaid.state, "unpaid");
+  assert.equal(unpaid.isPro, false);
+  assert.equal(unpaid.canManage, true);
+  assert.equal(await f.access(), 403);
+}
+
+// A newer invoice parent shape is authoritative. An unrelated invoice with a
+// legacy-looking subscription field must not synchronize any customer access.
+{
+  const f = fixture();
+  f.state.subscriptions = [subscription()];
+  for (const parent of [
+    { type: "quote_details", quote_details: {} },
+    { type: "subscription_details", subscription_details: { subscription: {} } },
+    { type: "subscription_details" },
+  ]) {
+    const unrelated = { ...invoice("sub_current"), subscription: "sub_current", parent };
+    assert.equal((await f.event("invoice.payment_action_required", unrelated)).status, 200);
+    assert.equal(f.state.writes.length, 0);
+    assert.equal(f.state.calls.length, 0, "unrelated invoice references cause no provider lookup");
+  }
+}
+
 // Full lists, not the first page, decide entitlement. Broken or bounded-out
 // pagination returns a retryable server failure without changing access.
 {
@@ -928,6 +1123,9 @@ function fixture() {
 // A monthly label is not enough: month x3 is quarterly, not the advertised
 // monthly plan. Missing/incorrect mode must not silently coerce into test mode.
 for (const price of [
+  { unit_amount: 599 },
+  { unit_amount: 1000 },
+  { currency: "eur" },
   { recurring: { interval: "month", interval_count: 3 } },
   { recurring: { interval: "month" } },
   { recurring: { interval: "month", interval_count: "1" } },
@@ -942,6 +1140,79 @@ for (const price of [
     503,
   );
   assert.equal(f.state.sessions.size, 0, "invalid monthly price never creates payable checkout");
+}
+
+// A price migration must not relabel historical $5.99 sessions or let stale
+// deployment env override the current $9.99 customer-facing contract.
+for (const config of [
+  { STRIPE_PRO_MONTHLY_AMOUNT_CENTS: "599" },
+  { STRIPE_PRO_MONTHLY_AMOUNT_CENTS: "1000" },
+  { STRIPE_PRO_MONTHLY_AMOUNT_CENTS: "NaN" },
+  { STRIPE_PRO_CURRENCY: "eur" },
+]) {
+  const f = fixture();
+  Object.assign(f.env, config);
+  f.state.exposeSession = true;
+  const response = await f.api.handleCreateCheckoutSession(
+    f.request("/api/create-checkout-session", "POST"),
+  );
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).url, undefined);
+  assert.equal(
+    f.state.calls.filter((call) => call.url.origin === "https://api.stripe.com").length,
+    0,
+  );
+  assert.equal(f.state.writes.length, 0);
+}
+for (const existingCustomer of [false, true]) {
+  const f = fixture();
+  f.state.price = { unit_amount: 599 };
+  f.state.exposeSession = true;
+  if (!existingCustomer) f.state.profile.stripe_customer_id = null;
+  const response = await f.api.handleCreateCheckoutSession(
+    f.request("/api/create-checkout-session", "POST"),
+  );
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).url, undefined);
+  assert.equal(f.state.customerCreates.size, 0, "price checked before customer creation");
+  assert.equal(f.state.writes.length, 0);
+  assert.equal(
+    f.state.calls.filter((call) => call.url.pathname === "/v1/checkout/sessions").length,
+    0,
+    "historical amount cannot return an already-open checkout",
+  );
+}
+{
+  const f = fixture();
+  f.env.STRIPE_PRO_MONTHLY_AMOUNT_CENTS = "599";
+  f.state.profile.is_pro = true;
+  f.state.subscriptions = [subscription()];
+  assert.equal(
+    (await f.api.handleCreateCheckoutSession(f.request("/api/create-checkout-session", "POST")))
+      .status,
+    503,
+  );
+  const portal = await f.api.handleCreatePortalSession(
+    f.request("/api/create-portal-session", "POST"),
+  );
+  assert.equal(portal.status, 200, "stale new-purchase pricing does not block billing management");
+  assert.equal((await portal.json()).url, "https://billing.stripe.com/synthetic");
+  const status = await f.api.handleBillingStatus(f.request("/api/billing-status"));
+  assert.equal(status.status, 200);
+  assert.equal((await status.json()).isPro, true);
+  assert.equal(await f.access(), 200, "a pricing mismatch does not revoke an existing entitlement");
+}
+{
+  const f = fixture();
+  f.env.STRIPE_PRO_MONTHLY_AMOUNT_CENTS = "999";
+  f.env.STRIPE_PRO_CURRENCY = "USD";
+  assert.equal(
+    (await f.api.handleCreateCheckoutSession(f.request("/api/create-checkout-session", "POST")))
+      .status,
+    200,
+    "the explicit owner-approved amount remains payable in the synthetic fixture",
+  );
+  assert.equal(f.state.sessions.size, 1);
 }
 
 // A successful customer creation followed by a database outage must recover
@@ -1154,5 +1425,5 @@ for (const statusFirst of [false, true]) {
 }
 
 console.log(
-  "PASS actual signed billing lifecycle: payment, cancellation, replacement, replay, pagination, ownership, failures, and stable Checkout retries",
+  "PASS actual signed billing lifecycle: payment/authentication/delayed settlement, pause/resume, cancellation, replacement, replay, pagination, ownership, failures, and stable Checkout retries (offline)",
 );

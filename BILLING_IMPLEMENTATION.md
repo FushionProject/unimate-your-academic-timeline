@@ -37,13 +37,15 @@ STRIPE_PRICE_ID=price_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_LIVE_MODE_ENABLED=false
 STRIPE_PAST_DUE_GRACE_ENABLED=true
-STRIPE_PRO_MONTHLY_AMOUNT_CENTS=599
+STRIPE_PRO_MONTHLY_AMOUNT_CENTS=999
 STRIPE_PRO_CURRENCY=usd
 UNIMATE_CANONICAL_ORIGIN=http://localhost:8080
 SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
-The configured Price must be active, recurring monthly, USD, exactly $5.99, and in the same Stripe mode as the secret key. Redirects use the configured canonical origin instead of an untrusted request host. A live secret is rejected unless `STRIPE_LIVE_MODE_ENABLED=true` is explicitly set.
+The owner confirmed USD $9.99/month on October 18, 2026. The configured Price must be active, recurring monthly, USD, exactly $9.99, and in the same Stripe mode as the secret key. The expected amount/currency must also agree with the advertised contract. Validation runs before customer creation or existing Checkout reuse; stale $5.99 settings fail closed for new purchases without disabling direct billing management. Redirects use the configured canonical origin instead of an untrusted request host. A live secret is rejected unless `STRIPE_LIVE_MODE_ENABLED=true` is explicitly set; that remains unauthorized.
+
+New sandbox Price: `price_1US7nEIxB8W4eFUhI9C4RuJa`. The older $5.99 Price and its hard-bound operator tools/journals remain historical; do not relabel or reuse those proofs as $9.99 purchases. The current-price verifier performs only read-only configuration checks. Price changes are not a migration strategy for existing paid subscriptions: entitlement matching is exact-Price scoped and requires a separate migration design before changing prices for active customers.
 
 Configure the Stripe customer portal in test mode and register `/api/stripe-webhook` for:
 

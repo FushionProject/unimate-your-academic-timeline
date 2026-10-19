@@ -1,10 +1,10 @@
 import { AI_ENTITLEMENTS } from "./ai-entitlements";
 
-// This is the existing monthly checkout contract. Change it only alongside
+// This is the owner-approved monthly checkout contract. Change it only alongside
 // the configured Stripe price and the server's expected amount.
 export const PRO_PLAN = Object.freeze({
   name: "UniMate Pro",
-  monthlyPrice: "$5.99",
+  monthlyPrice: "$9.99",
   textMonthly: AI_ENTITLEMENTS.pro.textMonthly,
   syllabusMonthly: AI_ENTITLEMENTS.pro.syllabusMonthly,
   screenshotMonthly: AI_ENTITLEMENTS.pro.screenshotMonthly,

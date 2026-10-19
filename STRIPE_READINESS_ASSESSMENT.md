@@ -1,14 +1,16 @@
 # Stripe and Entitlement Readiness Assessment
 
-## Current assessment — October 16, 2026
+## Current assessment — October 18, 2026
 
 **Keep public launch and live billing disabled. Core sandbox billing and
 Companion lifecycle behavior are now proven; the August implementation gaps
 below are historical, not a description of the current code.**
 
 Evidence is recorded in [Stripe sandbox manual tests](./STRIPE_SANDBOX_MANUAL_TESTS.md).
-No provider actions, private journals, credentials or deployment settings were
-changed during this offline assessment.
+October 16's assessment was offline. The October 18 owner-approved pricing
+follow-up creates/verifies a new $9.99 sandbox Price without paying an invoice,
+changing subscriptions or rewriting historical journals. See LAUNCH.md for the
+separate deployment verification and current evidence scope.
 
 ### Proven engineering work
 
@@ -54,10 +56,11 @@ changed during this offline assessment.
 
 ### Owner decisions, not missing implementation
 
-- **Launch price:** the current public catalog, server defaults and verified
-  test Price are **USD $5.99/month**. A different price or higher-tier plan needs
-  an explicit product decision, corresponding quotas/unit economics, and
-  coordinated catalog/server/Stripe changes. No price was changed here.
+- **Launch price approved October 18:** **USD $9.99/month**, with coordinated
+  catalog/server/preflight and new sandbox Price
+  `price_1US7nEIxB8W4eFUhI9C4RuJa`. Historical $5.99 lifecycle evidence stays
+  scoped to the old Price; it does not prove a new $9.99 payment. No live plan,
+  usage-limit increase, higher-tier product or subscription migration is approved.
 - **Failed-payment grace:** normal configuration remains grace-on; the isolated
   test deployment used grace-off. Choose the customer-facing launch policy
   explicitly. Tests of both behaviors are not approval to change the normal

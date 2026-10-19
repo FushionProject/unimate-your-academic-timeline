@@ -1,5 +1,14 @@
 # UniMate Browser Companion
 
+Store owner update — October 18, 2026: the approved publisher account is
+`unimatesupport@gmail.com`, and the intended UniMate Pro launch price is
+USD 9.99/month. Developer registration/security, logo rights, legal disclosures,
+reviewer access, any registration fee and submission approval remain separate
+gates. Historical USD 5.99 sandbox evidence is preserved, not reclassified as
+USD 9.99 purchase proof. The synthetic Store package/consent test passed again
+without a browser, provider call or production ZIP; see
+[Store readiness](./CHROME_WEB_STORE_READINESS.md) for the exact handoff.
+
 Implementation notes updated October 16, 2026, including post-`ffbae91` checks.
 The current protected Preview runs application commit `561ecc2` at
 `https://unimate-rvrhmln07-resumejuice-s-projects.vercel.app/`. Protected smoke
@@ -476,7 +485,10 @@ write the database, or prove current hosted billing behavior.
    The core protected-hosted sandbox purchase/cancellation path now passes;
    production billing and the remaining lifecycle matrix are still separate.
 2. Confirm the canonical domain, published privacy/terms/support pages, monitored
-   support mailbox, asset rights, and publisher-account/listing details.
+   support mailbox, asset rights, and registration/security/listing details for
+   the approved publisher account, `unimatesupport@gmail.com`. Verify release
+   pricing matches the approved USD 9.99/month across the listing, app and billing
+   configuration; older USD 5.99 test invoices remain historical evidence only.
 3. Configure a production HTTPS origin with debug disabled. Run
    `npm run companion:package`; the ZIP includes only approved runtime files,
    has `manifest.json` at its root, and rejects unsafe client configuration.

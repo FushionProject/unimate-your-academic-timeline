@@ -380,9 +380,16 @@ Before sending authenticated lifecycle-helper requests, independently verify tha
 
 ## Test setup
 
+**October 18 price change:** new runs must use the approved $9.99 Price
+`price_1US7nEIxB8W4eFUhI9C4RuJa`. Historical $5.99 scripts, private journals
+and evidence above remain deliberately bound to their original Price. Do not
+overwrite those files or run an old supervisor against the new configuration.
+The separate `verify-current-stripe-sandbox-price.mjs` helper checks only the new
+Price/account read-only; it does not run or certify any purchase/lifecycle test.
+
 1. Use a dedicated Supabase test user and a Stripe test-mode recurring Price.
-2. Configure server-only test values: `STRIPE_SECRET_KEY=sk_test_...` (or a least-privilege `rk_test_...` key), `STRIPE_PRICE_ID=price_...`, `STRIPE_WEBHOOK_SECRET=whsec_...`, `STRIPE_LIVE_MODE_ENABLED=false`, `STRIPE_PRO_MONTHLY_AMOUNT_CENTS=599`, `STRIPE_PRO_CURRENCY=usd`, `UNIMATE_CANONICAL_ORIGIN=http://localhost:8080`, and `SUPABASE_SERVICE_ROLE_KEY=...`.
-3. Use the controlled supervisor above instead of a raw listener command or copying a webhook secret. The current Stripe CLI requires an explicit `--events`, `--all-snapshot`, or `--all-thin` selection when forwarding; the supervisor supplies the scoped handled-event list.
+2. Configure server-only test values: `STRIPE_SECRET_KEY=sk_test_...` (or a least-privilege `rk_test_...` key), `STRIPE_PRICE_ID=price_...`, `STRIPE_WEBHOOK_SECRET=whsec_...`, `STRIPE_LIVE_MODE_ENABLED=false`, `STRIPE_PRO_MONTHLY_AMOUNT_CENTS=999`, `STRIPE_PRO_CURRENCY=usd`, `UNIMATE_CANONICAL_ORIGIN=http://localhost:8080`, and `SUPABASE_SERVICE_ROLE_KEY=...`.
+3. A new $9.99 lifecycle run needs separately reviewed, exact-Price-bound orchestration and fresh evidence. Keep the historical controlled supervisors unchanged. Do not use a raw listener command or copy a webhook secret; forwarding must use an explicit scoped event list and preserve private evidence.
 4. Keep browser Network responses, the supervisor's sanitized event/delivery summaries, Stripe test-event log, and the synthetic user's `profiles.is_pro` and `profiles.stripe_customer_id` values available for inspection. Never paste credentials into tickets or logs; raw child diagnostics are intentionally withheld.
 5. Run `npm run billing:test` before and after the manual sequence.
 
@@ -393,7 +400,7 @@ Before sending authenticated lifecycle-helper requests, independently verify tha
 3. Complete Checkout using Stripe's successful test card `4242 4242 4242 4242`, any future expiration, any CVC, and a valid postal code.
 4. Return to `/upgrade` and allow status reconciliation to finish.
 
-Expected: the server rejects any Price that is not active, monthly, USD, exactly $5.99, and test-mode. One test customer and one subscription exist; the page reports active Pro; `profiles.is_pro` is true; `stripe_customer_id` matches that customer; no card data reaches UniMate.
+Expected for new runs: the server rejects any Price that is not active, monthly, USD, exactly $9.99, and test-mode. One test customer and one subscription exist; the page reports active Pro; `profiles.is_pro` is true; `stripe_customer_id` matches that customer; no card data reaches UniMate.
 
 Inspect failures in: browser Network responses for `/api/create-checkout-session` and `/api/billing-status`, local server output, Stripe test Checkout/subscription/event logs, webhook delivery details, and the test profile.
 

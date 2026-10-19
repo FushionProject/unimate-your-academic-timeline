@@ -1,7 +1,26 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-Readiness updated: October 16, 2026, after protected sandbox recovery cleanup on
-`codex/unimate-premium-revival`. The previously verified private study Preview runs
+Readiness updated: October 18, 2026. The owner approved
+`unimatesupport@gmail.com` as the long-term Chrome Web Store publisher account
+and confirmed the intended UniMate Pro price is **USD 9.99/month**. This records
+the account choice and launch price, not verified developer registration,
+2-Step Verification, acceptance of terms, fee approval, or authorization to
+upload/submit/publish. Historical USD 5.99 sandbox invoices and results below
+remain unchanged; they do not verify a new USD 9.99 Checkout. Confirm website,
+server price validation and the selected sandbox Price agree before the next
+price-specific purchase test. No live billing or public release is approved.
+
+October 18 offline recheck: the inspected synthetic Store package/consent test
+passed, including the 13-entry ZIP, root manifest, privacy-link configuration,
+unsafe configuration/file rejection, and preservation of prior valid files.
+Only generated fixture configuration was used; no private local configuration,
+browser profile, provider or Store dashboard was accessed. The test copied the
+existing tracked icons/mascot into its disposable fixture, but no production
+ZIP or new Store artwork was created.
+The prior pause on further browser-compatibility testing remains in force.
+
+Historical October 16 protected sandbox recovery cleanup on
+`codex/unimate-premium-revival`: the previously verified private study Preview runs
 application commit `561ecc2`; a separate isolated grace-off billing Preview runs
 `6a6e39f`. Purchase → same-panel Pro unlock → immediate cancellation/revocation
 passed on `561ecc2`. Real failed-renewal → Portal repair → cancellation passed
@@ -141,7 +160,8 @@ tests passed; these public-release gates remain:
    study request does not establish these behaviors. The October 16 core hosted
    sandbox flow passes, but uses a signed local relay, not a direct production
    webhook. Local renewal/refund/dispute evidence remains separate.
-10. Confirm the publisher's Chrome Web Store account and prepare a dedicated,
+10. Verify developer registration and required security setup for the approved
+    publisher account, `unimatesupport@gmail.com`, and prepare a dedicated,
     empty, email-confirmed Pro reviewer account and the private test instructions
     below. Reviewers must be able to test the paid features without paying or
     receiving the owner's Vercel/account credentials. No such account or Store
@@ -170,7 +190,7 @@ tests passed; these public-release gates remain:
   `READY`, Preview (`target:null`), without aliases, persistent bypasses or
   Production variables; live Stripe mode and custom-domain auto-assignment
   stayed off. Full details: `../STRIPE_SANDBOX_MANUAL_TESTS.md`.
-- **Current protected Preview — October 16:**
+- **Previously verified private study/email Preview — October 16:**
   `https://unimate-rvrhmln07-resumejuice-s-projects.vercel.app/`, deployment
   `dpl_8vko5jDM9b6LonH8bSdtJjqJQ2Mq`, source `561ecc2`, `READY`, Preview,
   no aliases. Actual upload matched the reviewed 139-file allowlist. Anonymous
@@ -513,16 +533,22 @@ public legal page.
 
 ## Store listing draft
 
-### Submission handoff — owner decisions still pending
+### Submission handoff — approved choices and remaining gates
 
 This is a preparation worksheet, not a submitted listing or authorization to
 register, pay, upload, publish, change DNS, or remove Preview protection. Current
 publisher-account state must be checked in the owner's dashboard; reaching a
 Google sign-in page did not establish registration or ownership.
 
+Approved October 18: use `unimatesupport@gmail.com` as the publisher account and
+USD 9.99/month as the UniMate Pro launch price. Account selection is complete;
+registration/security verification and launch-price implementation verification
+are separate gates. No real charge or Store registration payment is authorized.
+
 | Deliverable | Prepared value or next action | Completion gate |
 | --- | --- | --- |
-| Listing title, summary, detailed description | Use the draft immediately below; keep the paid-Pro requirement visible. | Owner approves the exact name and subscription wording. No fixed price or unlimited-use claim is invented. |
+| Publisher account | Owner-approved `unimatesupport@gmail.com`. | Verify registration and security requirements in this account; stop before accepting terms, paying a fee, uploading or submitting without separate approval. |
+| Listing title, summary, detailed description | Use the draft immediately below; Pro is USD 9.99/month and usage limits apply. | Confirm the submitted wording and release website/server/Stripe price all match the approved price. Historical USD 5.99 test invoices are not proof of the new price. No unlimited-use claim. |
 | Category and language | Education; English. | Confirm those selections in the actual listing form. |
 | Single purpose and permissions | Use the Single purpose section and permission inventory above. | Reconcile against the exact submitted manifest; broad host access is not preapproved. |
 | Remote-code answer | Draft: no remotely executed extension code; AI/API replies are data, not downloaded extension logic. | Reconfirm against the exact release ZIP before certifying the dashboard field. |
@@ -540,11 +566,15 @@ Use commitments before certification.
 
 **Decisions to obtain from the owner, in order:**
 
-1. Choose the long-term Google publisher account and confirm any existing
-   registration. Google documents a one-time registration fee; if payment is
-   required, stop for the displayed amount and explicit approval. Its registration
-   email cannot simply be edited later. Enable the required 2-Step Verification
-   on that account; credentials and recovery codes stay with the owner.
+1. Sign in to the Chrome Web Store developer dashboard with the approved
+   `unimatesupport@gmail.com` account and confirm any existing registration.
+   Complete Google identity/security prompts and enable required 2-Step
+   Verification personally; credentials and recovery codes stay with the owner.
+   Stop before accepting developer terms or paying a fee. Google documents a
+   one-time registration fee; if payment is required, stop for the displayed
+   amount and explicit approval. Its registration
+   email cannot simply be edited later. The email choice itself does not prove
+   this account is registered or authorize registration terms/payment.
 2. Choose the public publisher name and actual operator (individual or business).
    Confirm the operator address appropriate for this paid-subscription product.
    Google requires every publisher to declare Trader or Non-Trader status; the
@@ -601,9 +631,9 @@ Key features:
 - Sign in with your existing UniMate account; no separate extension account.
 - Capture only after you press Send—never continuous screen recording.
 
-An active paid UniMate Pro subscription is required; usage limits apply. Billing
-is managed on the UniMate website. AI answers can be wrong: check important
-details and follow your institution's academic-integrity rules. This is not an
+An active paid UniMate Pro subscription is required (USD 9.99/month); usage limits
+apply. Billing is managed on the UniMate website. AI answers can be wrong: check
+important details and follow your institution's academic-integrity rules. This is not an
 LMS integration and does not complete or submit coursework on your behalf.
 
 Chrome restricts extensions on
@@ -794,7 +824,11 @@ unless the evidence identifies a rights problem.
 
 ### Owner privacy sign-off before upload
 
+- [x] Select the publisher account: `unimatesupport@gmail.com` (October 18).
+- [x] Confirm the intended Pro price: USD 9.99/month (October 18; not a live-billing approval).
 - [ ] Approve the publisher/operator identity and the listing's paid-Pro wording.
+- [ ] Verify registration/security for the selected account and approve any
+      required developer terms or displayed registration fee separately.
 - [ ] Check the published policy against the data map above, including incidental
       sensitive screenshots, optional file pages, account data and saved chats.
 - [ ] Record actual production subprocessors, retention/logging settings and the

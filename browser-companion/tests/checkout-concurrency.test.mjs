@@ -71,7 +71,7 @@ function fixture() {
         active: true,
         type: "recurring",
         livemode: false,
-        unit_amount: 599,
+        unit_amount: 999,
         currency: "usd",
         recurring: { interval: "month", interval_count: 1 },
       });

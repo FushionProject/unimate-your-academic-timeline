@@ -62,11 +62,11 @@ Search runs only for an explicit browse/source request or a clearly time-sensiti
 
 The request ledger contains metadata only. It stores no student content. Establish a scheduled, reviewed retention job before launch (recommended: delete ledger rows older than 90 days while retaining aggregate daily/monthly rows according to the privacy policy). No retention automation is deployed by this branch.
 
-## Pricing decision — proposal, not live billing
+## Pricing decision — approved October 18, 2026; not live billing
 
-The repository currently validates a $5.99 USD monthly Stripe price. The UI now uses a shared catalog matching that amount; changing the catalog alone must not change checkout. Update the Stripe Price, server expected amount, and catalog together only after an approved price decision.
+The owner confirmed **$9.99 USD/month** as the Pro launch price. The shared UI catalog, server expectation, preflight and new sandbox Price are aligned to 999 cents; historical $5.99 invoices/test journals are preserved, not repriced. Live payments remain off. Existing usage limits and paid-only Companion access are unchanged.
 
-Suggested test: Pro at **$12.99/month**, with **$9.99/month as a clearly defined founder offer**. Consider a **$24.99 Max** only after evidence of demand from heavy users and measured cost distribution; do not sell an unimplemented tier or unlimited usage. Free should demonstrate the planner first. A small lifetime Ask sample is a possible later conversion experiment, not enabled in this branch. Browser Companion remains paid-only.
+Earlier $12.99 Pro/founder-offer and $24.99 Max ideas were proposals, not approved plans. There is no Max tier or unlimited usage promise. Revisit tiers only after evidence of demand and measured cost distribution. Free demonstrates the planner first. A small lifetime Ask sample remains a possible later conversion experiment, not enabled in this branch. Browser Companion remains paid-only.
 
 Illustrative unit economics, not a margin forecast: GPT-5.4 mini is listed at $0.75 per million input tokens and $4.50 per million output tokens ([official model pricing](https://developers.openai.com/api/docs/models/gpt-5.4-mini), checked October 12, 2026). At 3,000 input + 600 output tokens, one text answer costs about $0.00495; 200 answers cost $0.99, and 750 cost $3.71. That excludes screenshots, web search, syllabus extraction, payment fees, storage/hosting, support, tax, refunds, and acquisition. Long conversations or source-heavy answers cost more. Request-count caps and estimated token accounting are not a hard dollar ceiling: use provider project budgets/alerts and observe actual usage before promising sustainable margins.
 
