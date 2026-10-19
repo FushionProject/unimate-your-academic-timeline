@@ -12,9 +12,12 @@ This is the single operating checklist for UniMate's public launch. A box is che
 
 ## Remaining work and owner handoff — October 19, 2026
 
-**Still private; not approved for public release or live payments.** Core sandbox
-purchase, cancellation and failed-payment repair now pass, including installed
-Companion unlock/revocation. Do not repeat the completed payment journals or
+**Still private; not approved for public release or live payments.** Historical
+$5.99 sandbox purchase, cancellation and failed-payment repair passed, including
+installed Companion unlock/revocation. The current **$9.99 standard-card purchase
+→ Companion unlock → exact cancellation → revocation also passed** on October 19.
+Successful 3DS authentication remains a separate open check, not a condition on
+that completed basic result. Do not repeat completed payment journals or
 interpret old unchecked production boxes as missing implementation. Detailed
 evidence and its separate scopes are below.
 
@@ -88,14 +91,14 @@ tests are planned, following the owner's instruction.
   vulnerabilities) passed. These changes are source/test fixes, not new hosted
   payment or installed-browser evidence; the private deployed source remains
   the separate `cb8a296` checkpoint below.
-- Remaining billing-test preparation was audited without provider access:
+- Earlier billing-test preparation was audited without provider access:
   historical paid helpers are intentionally pinned to $5.99 and terminal
-  journals, while the current $9.99 helper verifies only an unpaid quote.
-  A fresh 3DS purchase/unlock/cancellation run needs a separately journaled,
-  exact-current-price harness and read-only sandbox/fixture/access preflight.
+  journals; at that point the $9.99 helper covered only an unpaid quote.
+  The separately journaled current-price standard lifecycle has since passed;
+  its scope and the separate failed-authentication evidence are recorded below.
   Do not repoint old runners or replay completed journals. Delayed methods must
   be confirmed eligible before testing; no method, grace or tax settings were
-  changed. This audit does not claim current remote access or new payment proof.
+  changed by that audit, which did not claim remote access or new payment proof.
 - Captured three real installed-UI screenshot drafts at 1280x800 from clean
   source `b6ddbf0c5950295f354a7501a1c6126b43a2df22`: page-sharing consent,
   Free/Pro access gate and a study explanation. All 30 isolated Chromium
@@ -157,6 +160,56 @@ unguarded `vercel curl` here: use the existing origin-scoped short-lived OIDC
 transport and verify protection before/after. No token was printed or committed.
 The previous pushed checkpoint `beebaaa` passed all
 [GitHub checks](https://github.com/FushionProject/unimate-your-academic-timeline/actions/runs/38990695725).
+
+### Current $9.99 standard purchase and Companion lifecycle — passed October 19
+
+The protected `cb8a296` Preview below completed a fresh, separately journaled
+standard-card test after the earlier unpaid authentication attempt was safely
+retired. That old Checkout was expired once with no payment retry; all prior
+journals and payment-claim hashes were preserved.
+
+The new Checkout paid exactly USD 999 cents using the published test card ending
+`4242`. Genuine `invoice.paid` delivery returned HTTP 200 through the signed
+local relay to the hosted handler. Persisted access and the **same new open
+Companion panel/session** moved **Free 80 → Pro 83 → Free 84**. Cancellation
+targeted only that new subscription, once, with no proration or final invoice;
+the matching deletion event returned HTTP 200. The Pro composer and final
+inactive-access gate with its draft-preservation message were visually inspected.
+
+Final verification: all eight synthetic subscriptions canceled, zero open
+Checkouts, prior evidence unchanged, and zero AI requests/captures/extractions.
+The owned runner exited 0. The immutable journal is
+`current-billing-999-standard-v1.jsonl`; installed source and exact event evidence
+are recorded in [the billing test record](./STRIPE_SANDBOX_MANUAL_TESTS.md).
+This proves the basic current-price lifecycle, **not** successful 3DS, delayed
+payment, Portal cancellation UI, or direct public-webhook delivery. Cancellation
+used the exact sandbox API; webhook delivery used the signed local relay. Public
+signup, Store publication and live billing remain closed.
+
+### Current $9.99 authentication-required attempt — retired October 19
+
+On the protected `cb8a296` Preview below, one exact $9.99 test Checkout was
+created. The first runner stopped during response/verification after creation;
+canonical readback confirmed it was unpaid, with seven historical canceled
+subscriptions and the synthetic account still Free at revision 80. Its journal
+was preserved. A separate continuation selected Card only and stopped before
+card entry/payment when Stripe's hidden Link checkbox needed its visible label.
+
+A second bounded continuation reused **that same Checkout** and opened a fresh
+Free Companion panel; earlier panels are not claimed as continuous. With Link
+explicitly off, the published authentication-required card ending `3220` was
+filled and **one PAY was submitted**. The USD 999-cent test PaymentIntent first
+required authentication. Stripe's simulated authentication expired during
+preparation; **no CHALLENGE/completion action was sent**. Before retirement,
+canonical state was `requires_payment_method`, amount received zero, no next
+action, and `payment_intent_authentication_failure`. The account stayed Free 80,
+all seven historical subscriptions remained canceled, and no new subscription
+existed. The runner stopped cleanly without a payment retry. That exact unpaid
+Checkout was subsequently expired once before the fresh standard run above.
+This attempt proves no premature unlock, **not** successful 3DS authentication;
+positive 3DS coverage remains open. See [the scoped billing record](./STRIPE_SANDBOX_MANUAL_TESTS.md).
+All earlier journals and historical $5.99 evidence remain intact; no live charge
+or public launch is authorized.
 
 ### Latest protected private candidate and approved price — October 18
 
@@ -371,6 +424,7 @@ was not modified. Full details and remaining hosted/browser gaps are recorded in
 - [ ] Freeze and record the exact new release commit and rollback point
 - [x] Protected Preview purchase unlocks the same open Companion panel/session (reverified October 16)
 - [x] Protected Preview period-end cancellation revokes the same open Companion panel/session (reverified October 16)
+- [x] Current $9.99 standard purchase unlocks and exact immediate cancellation revokes the same new open Companion panel/session (October 19; sandbox API cancellation, signed relay)
 - [x] Verify protected study Preview `561ecc2`'s live Companion study flow end to end (October 16; not a rerun on latest `1767708`)
 - [ ] Complete the remaining real Stripe sandbox lifecycle matrix
 - [x] Verify custom SMTP delivery and private-preview recovery-link landing (October 16)

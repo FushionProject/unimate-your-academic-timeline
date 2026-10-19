@@ -2,6 +2,84 @@
 
 Status: **test mode only**. Do not use live keys, enable `STRIPE_LIVE_MODE_ENABLED`, or make live charges while following this checklist.
 
+## Current $9.99 standard purchase → Companion → cancellation — passed October 19, 2026
+
+**Basic current-price lifecycle passed; no live charges.** This used the protected
+`cb8a296362a743f58e6eb31511bdab2eb122ae15` Preview recorded below, the marked
+synthetic account, and the published standard test card ending `4242`.
+
+- **Separate attempt:** the failed-authentication Checkout below was expired
+  once under a validated retirement receipt, with all source journals and
+  payment-claim hashes preserved. No old payment or authentication action was
+  retried. A new Checkout and fresh Free Companion session were used; no panel
+  continuity is claimed with any earlier runner.
+- **Paid purchase and unlock:** Checkout
+  `cs_test_a1VAPEROCuVLiKowtNJk1c1Ikf9Kf1reenqNLWs1kgloGRPgelyjvSeEec`
+  paid exactly USD 999 cents. Canonical invoice `in_1USAcNIxB8W4eFUheV99xcwp`
+  was paid; genuine `invoice.paid` event `evt_1USAcQIxB8W4eFUhcOnT5Nms`
+  returned HTTP 200 through the signed local relay to the protected hosted
+  handler. Persisted access and the same open Companion panel/session moved
+  Free revision 80 → Pro revision 83; the enabled composer was visually inspected.
+- **Exact cancellation and revocation:** only new subscription
+  `sub_1USAcPIxB8W4eFUhonSK1J0Q` was canceled, once, through the sandbox API,
+  with no proration or final invoice. Matching `customer.subscription.deleted`
+  event `evt_1USAdMIxB8W4eFUhAsBTpu5F` returned HTTP 200. Persisted Free revision
+  84 and the inactive-access gate were verified in that same open panel/session;
+  its draft-preservation message and revoked state were visually inspected.
+- **Final state and scope:** all eight synthetic subscriptions canceled, zero
+  open Checkouts, prior evidence unchanged, and zero AI requests/captures/page
+  extractions. `sameOpenPanelTransition:true` and `sessionReused:true` apply only
+  to this new run's Free 80 → Pro 83 → Free 84 sequence. The runner exited 0.
+  Installed source stayed
+  `e104ba1a4846ac838d3908afecc0f65489807a9eddeb77bf3e803f302d4857a3`.
+
+The private immutable journal is `current-billing-999-standard-v1.jsonl`; final
+proof SHA-256 is `8b7050e9a42b416ffffe52fbc7d534efb46e9229449277fcdfc9d99d6f538287`.
+Full offline tests, typecheck and the 384-file secret scan passed; lint reported
+zero errors/eight existing warnings. This is signed-relay hosted-handler proof,
+**not** direct public-webhook delivery or Portal cancellation UI. Successful 3DS
+and delayed-payment coverage remain separate open checks. Nothing here opens
+public signup, submits the Store listing, or authorizes live billing.
+
+## Current $9.99 authentication-required attempt — retired October 19, 2026
+
+**Test authentication failed; no early unlock. Successful 3DS remains unverified.**
+This uses the protected Preview and current Price recorded in the October 18
+section below, a marked synthetic account, and no live charges.
+
+- The original current-price run created one exact USD 999-cent Checkout, then
+  stopped during response/verification after creation. Canonical readback
+  showed that session unpaid, all seven historical subscriptions canceled,
+  no new subscription/payment, and the profile Free at revision 80. The original
+  `current-billing-999-v1.jsonl` remains immutable; creation was not repeated.
+- Continuation v1 reused the same Checkout, selected Card, then stopped before
+  filling or paying because Link's checkbox was hidden. Its four-phase journal
+  is preserved; it contains no card-fill or payment attempt.
+- Continuation v2 again reused the exact Checkout with a **new** Free Companion
+  session. Its installed source hash is
+  `e104ba1a4846ac838d3908afecc0f65489807a9eddeb77bf3e803f302d4857a3`.
+  Earlier browser panels are not part of this session's continuity. The corrected
+  associated-label action turned Link off, the published 3DS-required test card
+  ending `3220` was filled, and one PAY was submitted, without a payment retry.
+- Canonical PaymentIntent readback initially showed test mode, USD 999 cents,
+  card ending `3220`, and `requires_action`. Stripe's test 3DS2 page displayed
+  Complete, but **no CHALLENGE/completion action was sent**. Simulated
+  authentication expired during preparation. Before retirement, canonical state was
+  `requires_payment_method`, `amount_received:0`, `next_action:null`, with
+  `last_payment_error.code:payment_intent_authentication_failure`.
+- At that stop, account state remained Free revision 80, seven historical canceled
+  subscriptions, no new subscription, and one open Checkout. The runner stopped
+  cleanly; no payment retry occurred. All original/continuation journals remain
+  immutable. This verifies no premature access during pending/failed
+  authentication, not successful payment or a positive Companion lifecycle.
+
+The exact unpaid Checkout was later expired once under
+`current-billing-999-retirement-v1.jsonl`, with zero open Checkouts, unchanged
+Free 80 and preserved source/claim hashes verified before the separate standard
+run above. Positive authentication-required coverage remains open; do not replay
+this stopped payment attempt. Historical $5.99 results remain intact. This
+negative authentication check is not positive 3DS or live-billing proof.
+
 ## Approved $9.99 hosted unpaid quote — October 18, 2026
 
 **Quote and exact unpaid expiry passed; no payment submitted.** On the protected
