@@ -1,10 +1,15 @@
 # UniMate Browser Companion
 
-Store owner update — October 18, 2026: the approved publisher account is
-`unimatesupport@gmail.com`, and the intended UniMate Pro launch price is
-USD 9.99/month. Developer registration/security, logo rights, legal disclosures,
-reviewer access, any registration fee and submission approval remain separate
-gates. Historical USD 5.99 sandbox evidence is preserved, not reclassified as
+Store owner update — October 19, 2026: the publisher account and launch price
+approved October 18 remain `unimatesupport@gmail.com` and USD 9.99/month. The
+owner confirmed “I created it” for the UniMate logo/mascot; this is an authorship
+attestation, not independent legal clearance. Read-only Store inspection
+verified that account is signed in but remains on the Developer Agreement
+registration page, with the agreement unchecked and a one-time $5 fee button.
+The owner must personally review the terms/fee and decide whether to register;
+no acceptance, payment, upload or submission is authorized by sign-in.
+Registration/security, legal disclosures, reviewer access and submission
+approval remain separate gates. Historical USD 5.99 sandbox evidence is preserved, not reclassified as
 USD 9.99 purchase proof. The synthetic Store package/consent test passed again
 without a browser, provider call or production ZIP; see
 [Store readiness](./CHROME_WEB_STORE_READINESS.md) for the exact handoff.
@@ -493,10 +498,13 @@ write the database, or prove current hosted billing behavior.
    The core protected-hosted sandbox purchase/cancellation path now passes;
    production billing and the remaining lifecycle matrix are still separate.
 2. Confirm the canonical domain, published privacy/terms/support pages, monitored
-   support mailbox, asset rights, and registration/security/listing details for
+   support mailbox, exact release-asset provenance, and registration/security/listing details for
    the approved publisher account, `unimatesupport@gmail.com`. Verify release
    pricing matches the approved USD 9.99/month across the listing, app and billing
    configuration; older USD 5.99 test invoices remain historical evidence only.
+   Logo/mascot authorship is owner-attested as of October 19; developer
+   registration remains incomplete, awaiting the owner's personal terms/fee
+   decision. No fee or terms were accepted during read-only inspection.
 3. Configure a production HTTPS origin with debug disabled. Run
    `npm run companion:package`; the ZIP includes only approved runtime files,
    has `manifest.json` at its root, and rejects unsafe client configuration.

@@ -10,7 +10,7 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - Every completed manual item must include a dated evidence note or link.
 - If a release-blocking check fails, stop promotion and record the response under **Launch incidents**.
 
-## Remaining work and owner handoff — October 18, 2026
+## Remaining work and owner handoff — October 19, 2026
 
 **Still private; not approved for public release or live payments.** Core sandbox
 purchase, cancellation and failed-payment repair now pass, including installed
@@ -20,13 +20,20 @@ evidence and its separate scopes are below.
 
 Owner decisions/access still needed:
 
-1. **Store owner selected:** the owner approved `unimatesupport@gmail.com` on
-   October 18. Complete any Google identity/2-Step Verification
-   personally, and confirm the public publisher/operator identity. Any displayed
-   registration fee, terms acceptance or submission needs separate approval.
-2. **Artwork rights:** confirm who created the logo/mascot and the permission
-   for commercial redistribution. Final Store images remain engineering work
-   after that confirmation, not an asset the owner must design.
+1. **Store sign-in verified; registration incomplete:** the owner approved
+   `unimatesupport@gmail.com` on October 18. Read-only inspection on October 19
+   reached the Developer Agreement registration page signed in as that account,
+   with the agreement checkbox unchecked and a one-time **$5** registration
+   fee button. The owner must personally review the terms and fee and decide
+   whether to complete registration; sign-in is not approval to accept or pay.
+   Complete any remaining identity/security prompts personally and confirm the
+   public publisher/operator identity. No terms, fee, upload or submission action
+   was taken.
+2. **Logo/mascot creator confirmed:** on October 19 the owner answered
+   “I created it.” This records the owner's authorship attestation, not an
+   independent legal clearance or a license for any unreviewed third-party
+   material. Final Store images remain engineering work, not an asset the owner
+   must design; retain this provenance with the exact release assets.
 3. **Price approved; billing policy pending:** the owner confirmed **USD
    $9.99/month** on October 18. The catalog, server expectation and current
    sandbox Price are aligned together; historical $5.99 records remain
@@ -125,8 +132,11 @@ Preview: <https://unimate-8kp8pqpcg-resumejuice-s-projects.vercel.app>
 Email callbacks remain on the previously approved `unimate-rvrhmln07` study
 Preview; they were not moved. Normal grace policy, quotas, public signup, AI
 keys, database schema, public domain and Store submission status were not changed.
-The Store owner is now approved, not yet verified as a registered publisher.
-Final artwork still awaits the owner's logo/mascot rights confirmation.
+At this October 18 checkpoint, Store registration and logo/mascot provenance
+were still awaiting confirmation. The October 19 handoff above supersedes that
+status: authorship is attested, sign-in is verified, and registration remains
+incomplete. Terms acceptance, the displayed $5 fee, upload and submission have
+not been approved or performed.
 
 ### Previous protected private candidate — October 16
 

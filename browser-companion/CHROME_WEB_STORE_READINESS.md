@@ -1,14 +1,29 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-Readiness updated: October 18, 2026. The owner approved
+Readiness updated: October 19, 2026. On October 18 the owner approved
 `unimatesupport@gmail.com` as the long-term Chrome Web Store publisher account
-and confirmed the intended UniMate Pro price is **USD 9.99/month**. This records
-the account choice and launch price, not verified developer registration,
-2-Step Verification, acceptance of terms, fee approval, or authorization to
-upload/submit/publish. Historical USD 5.99 sandbox invoices and results below
+and confirmed the intended UniMate Pro price is **USD 9.99/month**. On October 19
+the owner confirmed “I created it” for UniMate's logo/mascot. This records the
+owner's authorship attestation, not an independent legal clearance or inferred
+license for unreviewed third-party material.
+
+Read-only inspection on October 19 verified the signed-in account is
+`unimatesupport@gmail.com` at
+<https://chrome.google.com/webstore/devconsole/register>. The Developer Agreement
+registration page showed an unchecked agreement checkbox and a one-time **$5**
+registration fee button: registration is incomplete. The owner must personally
+review those terms and the fee and decide whether to proceed. Sign-in did not
+authorize terms acceptance, payment, upload, submission or publication; none
+was performed. Required security setup and publisher/operator details remain
+unverified. Historical USD 5.99 sandbox invoices and results below
 remain unchanged; they do not verify a new USD 9.99 Checkout. Confirm website,
 server price validation and the selected sandbox Price agree before the next
 price-specific purchase test. No live billing or public release is approved.
+
+October 19 offline recheck: the synthetic Store package/consent tests passed
+under the established Node 22 runtime with TypeScript stripping enabled. No real
+configuration, provider call, browser-compatibility test, production ZIP or new
+artwork was involved.
 
 October 18 offline recheck: the inspected synthetic Store package/consent test
 passed, including the 13-entry ZIP, root manifest, privacy-link configuration,
@@ -72,8 +87,9 @@ grants/AI during the outages, and recovered access/history refresh were verified
 This does not claim resubmission of that question or a new hosted-provider run.
 Artifact: `unimate-companion-browser-nxIV6F`. The browser and server exited
 normally. Full offline tests, five runtime repeats, typecheck, lint, secret scan,
-and GitHub's both-build verification passed. Publisher-dashboard inspection
-reached Google sign-in, so publisher registration remains unverified. No terms,
+and GitHub's both-build verification passed. At that checkpoint, publisher-dashboard inspection
+reached Google sign-in; the October 19 inspection above supersedes that account
+status but does not complete registration. No terms,
 fees, account creation, upload, submission or public release was performed.
 
 October 16 Store-readiness recheck: `npm run companion:verify:v2` passed,
@@ -153,8 +169,9 @@ tests passed; these public-release gates remain:
    `/companion-setup` flow already checks Pro access and displays the installation
    action only for an active Pro account and a syntactically valid Store detail
    URL. URL validation does not verify that a listing is published.
-6. Confirm ownership and release rights for `assets/mascot.png` and the logo used
-   for extension icons. Keep written provenance with the release record.
+6. Retain the October 19 owner-created logo/mascot attestation with the exact
+   `assets/mascot.png` and logo-derived icon release record. Do not infer rights
+   for any additional third-party material; review the final artwork separately.
 7. Complete a manual installed-extension test against production auth, Pro
    entitlement, HTTPS backend, restricted pages, account sign-out, and spoken
    screen-reader behavior. Automated accessibility-tree checks do not replace it.
@@ -169,8 +186,10 @@ tests passed; these public-release gates remain:
    study request does not establish these behaviors. The October 16 core hosted
    sandbox flow passes, but uses a signed local relay, not a direct production
    webhook. Local renewal/refund/dispute evidence remains separate.
-10. Verify developer registration and required security setup for the approved
-    publisher account, `unimatesupport@gmail.com`, and prepare a dedicated,
+10. Complete developer registration only after the owner personally reviews and
+    chooses to accept the displayed terms and one-time $5 fee; sign-in alone is
+    not authorization. Verify required security setup for the approved publisher
+    account, `unimatesupport@gmail.com`, and prepare a dedicated,
     empty, email-confirmed Pro reviewer account and the private test instructions
     below. Reviewers must be able to test the paid features without paying or
     receiving the owner's Vercel/account credentials. No such account or Store
@@ -545,25 +564,27 @@ public legal page.
 ### Submission handoff — approved choices and remaining gates
 
 This is a preparation worksheet, not a submitted listing or authorization to
-register, pay, upload, publish, change DNS, or remove Preview protection. Current
-publisher-account state must be checked in the owner's dashboard; reaching a
-Google sign-in page did not establish registration or ownership.
+register, pay, upload, publish, change DNS, or remove Preview protection.
+October 19 read-only inspection verified sign-in as `unimatesupport@gmail.com`
+but found registration incomplete at the Developer Agreement page. The
+agreement was unchecked and the displayed one-time fee was $5; neither was
+accepted or paid.
 
 Approved October 18: use `unimatesupport@gmail.com` as the publisher account and
-USD 9.99/month as the UniMate Pro launch price. Account selection is complete;
-registration/security verification and launch-price implementation verification
-are separate gates. No real charge or Store registration payment is authorized.
+USD 9.99/month as the UniMate Pro launch price. October 19: logo/mascot creation
+is owner-attested and sign-in is verified; registration/security remain open.
+No real charge or Store registration payment is authorized.
 
 | Deliverable | Prepared value or next action | Completion gate |
 | --- | --- | --- |
-| Publisher account | Owner-approved `unimatesupport@gmail.com`. | Verify registration and security requirements in this account; stop before accepting terms, paying a fee, uploading or submitting without separate approval. |
+| Publisher account | Owner-approved `unimatesupport@gmail.com`; sign-in verified October 19. | Registration page shows unchecked agreement and one-time $5 fee. Owner must review and decide personally; no automatic terms/fee acceptance. Security, upload and submission remain separate gates. |
 | Listing title, summary, detailed description | Use the draft immediately below; Pro is USD 9.99/month and usage limits apply. | Confirm the submitted wording and release website/server/Stripe price all match the approved price. Historical USD 5.99 test invoices are not proof of the new price. No unlimited-use claim. |
 | Category and language | Education; English. | Confirm those selections in the actual listing form. |
 | Single purpose and permissions | Use the Single purpose section and permission inventory above. | Reconcile against the exact submitted manifest; broad host access is not preapproved. |
 | Remote-code answer | Draft: no remotely executed extension code; AI/API replies are data, not downloaded extension logic. | Reconfirm against the exact release ZIP before certifying the dashboard field. |
 | Homepage, privacy and support links | Proposed `https://askunimate.com/`, `/privacy`, and `/support`. | Not verified public release URLs; approve the policies and verify unauthenticated reachability before entering them. A Vercel-login page is not a public policy. |
 | Contact email | Owner-provided `unimatesupport@gmail.com`. | Verify it in the publisher dashboard and confirm support messages can be received and answered. App confirmation delivery alone does not prove the support workflow. |
-| Images | Existing 128px icon; prepare one to five 1280x800 screenshots and one 440x280 tile. | Confirm logo rights, use the release UI with authorized synthetic coursework, inspect final images. Video and marquee artwork are optional, not launch blockers. |
+| Images | Existing 128px icon; owner attested to creating the logo/mascot October 19. Prepare one to five 1280x800 screenshots and one 440x280 tile. | Retain authorship attestation with exact release assets, use authorized synthetic coursework, inspect final images; no independent legal clearance is implied. Video and marquee artwork are optional, not launch blockers. |
 | Reviewer access | Use the walkthrough below plus a dedicated, empty, email-confirmed Pro account. | Approve an externally reachable review environment, bounded access and support route; no reviewer charge or owner/Vercel credentials. |
 | Distribution | Keep the current local/hosted testing private. | A future Store Private release requires separately approved Google-account testers or group and upload/submission approval. Unlisted is not private. |
 
@@ -575,15 +596,12 @@ Use commitments before certification.
 
 **Decisions to obtain from the owner, in order:**
 
-1. Sign in to the Chrome Web Store developer dashboard with the approved
-   `unimatesupport@gmail.com` account and confirm any existing registration.
-   Complete Google identity/security prompts and enable required 2-Step
-   Verification personally; credentials and recovery codes stay with the owner.
-   Stop before accepting developer terms or paying a fee. Google documents a
-   one-time registration fee; if payment is required, stop for the displayed
-   amount and explicit approval. Its registration
-   email cannot simply be edited later. The email choice itself does not prove
-   this account is registered or authorize registration terms/payment.
+1. Sign-in is complete for `unimatesupport@gmail.com`; registration is not.
+   Personally review the Developer Agreement and displayed one-time $5 fee,
+   then decide whether to complete registration. No automatic acceptance or
+   payment is authorized. Complete remaining Google identity/security prompts
+   and required 2-Step Verification personally; credentials and recovery codes
+   stay with the owner. The registration email cannot simply be edited later.
 2. Choose the public publisher name and actual operator (individual or business).
    Confirm the operator address appropriate for this paid-subscription product.
    Google requires every publisher to declare Trader or Non-Trader status; the
@@ -591,9 +609,10 @@ Use commitments before certification.
    phone are displayed publicly. Enter sensitive verification details directly
    in Google's form, not in this repository or chat. Do not choose Non-Trader
    merely to avoid disclosure.
-3. Supply the logo/mascot creator and license or ownership evidence described
-   below. Approve commercial redistribution and any attribution before creating
-   Store artwork from those assets.
+3. Logo/mascot authorship confirmation is complete: the owner said “I created
+   it” on October 19. Retain that attestation with the release assets; identify
+   any additional third-party elements if present and review final Store artwork.
+   This does not certify legal clearance or replace review of new material.
 4. Approve real operator/provider/retention/deletion practices and the legal
    effective date, then approve the corresponding public policy. This worksheet
    does not make those business commitments on the owner's behalf.
@@ -801,16 +820,19 @@ release and verify that every attribution and source URL matches the exact binar
 shipped.
 
 The extension icon files are documented as derived from UniMate's current logo
-and are declared at 16, 32, 48, and 128 pixels. Confirm brand ownership before
-store submission; a derivation claim is not an ownership record.
+and are declared at 16, 32, 48, and 128 pixels. On October 19, in response to the
+logo/mascot creator question, the owner stated “I created it.” This is the
+recorded authorship attestation; it does not independently establish legal
+clearance or rights to any unreviewed third-party elements.
 
-| Packaged asset | Repository evidence | Owner approval still required |
+| Packaged asset | Repository evidence | Provenance and remaining release review |
 | --- | --- | --- |
-| `assets/mascot.png` | Tracked with the Companion; the other mascot variants are excluded from the ZIP. | Original creator/source, license or ownership, and permission to redistribute commercially. |
-| `assets/icons/icon16.png`, `icon32.png`, `icon48.png`, `icon128.png` | PNG dimensions are checked; the current logo source is `public/assets/unimate-logo-head.png`. | Rights to the source logo and derived icons; record any required attribution. |
+| `assets/mascot.png` | Tracked with the Companion; the other mascot variants are excluded from the ZIP. | Owner-created attestation recorded October 19; retain it with the exact shipped asset. Review any additional third-party material separately. |
+| `assets/icons/icon16.png`, `icon32.png`, `icon48.png`, `icon128.png` | PNG dimensions are checked; the current logo source is `public/assets/unimate-logo-head.png`. | Source logo is covered by the owner's October 19 creation attestation; keep the derived-icon provenance and exact release files together. No additional license or attribution terms were inferred. |
 
 Git history and successful PNG checks establish which files ship, not licensing
-rights. No rights were inferred or new assets generated in this audit. Store
+rights. The owner's statement supplies authorship provenance only; no additional
+rights were inferred or new assets generated in this documentation update. Store
 screenshots/tile are still pending and must use synthetic, authorized coursework.
 
 October 16 repository provenance check: the logo source, packaged mascot, and
@@ -821,7 +843,9 @@ Markdown/license records and inspected asset histories did not provide a
 visual-asset creator, source license, commission/assignment, or commercial
 redistribution grant. The tracked
 `public/audio/ATTRIBUTION.md` covers audio only, not these images. This is a gap
-in repository evidence, not a conclusion that the owner lacks rights.
+in repository evidence at that historical checkpoint, not a conclusion that the
+owner lacks rights. The October 19 owner-created attestation above now records
+authorship without inventing a license, assignment, or other legal evidence.
 
 For each source image, retain a private record of the creator/source, creation or
 purchase date, license/assignment or applicable generation terms, commercial-use
@@ -835,6 +859,8 @@ unless the evidence identifies a rights problem.
 
 - [x] Select the publisher account: `unimatesupport@gmail.com` (October 18).
 - [x] Confirm the intended Pro price: USD 9.99/month (October 18; not a live-billing approval).
+- [x] Record owner-created logo/mascot attestation (October 19; not independent legal clearance).
+- [x] Verify sign-in as `unimatesupport@gmail.com` (October 19; registration still incomplete).
 - [ ] Approve the publisher/operator identity and the listing's paid-Pro wording.
 - [ ] Verify registration/security for the selected account and approve any
       required developer terms or displayed registration fee separately.
