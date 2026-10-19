@@ -14,8 +14,14 @@ Publisher ID `db3cd9d7-8d64-4e0d-9b8a-8c43117a6baa` and the UNIMATE member
 name is `unimatesupport`; contact email (“Add email required”) and address are
 missing. Trader declaration says “Action required”; a selected but unsaved
 Non-Trader radio option is not a declaration. The Save button was untouched.
-Owner confirmation of personal-versus-business operator details and proposed
-display name `UniMate` is pending. No settings, terms, payment, upload or
+The owner confirmed personal operation and explicitly approved public display
+name `UniMate`; these choices are recorded but applying the name is blocked by
+the persistent trader-declaration dialog. Escape did not dismiss it and no
+dismiss control was available; no name edit or Save was attempted. The owner
+must complete the truthful declaration before the approved name can be applied.
+Personal operation does not establish Trader/Non-Trader classification;
+identity/contact details and the owner's declaration remain pending.
+No settings, terms, payment, upload or
 submission action was taken by the agent. This verifies registration, not a
 paid receipt or required security setup. The earlier same-day inspection had
 stopped at the unchecked Developer Agreement and displayed one-time $5 fee;
@@ -598,7 +604,7 @@ No real charge or Store registration payment is authorized.
 
 | Deliverable | Prepared value or next action | Completion gate |
 | --- | --- | --- |
-| Publisher account | `unimatesupport@gmail.com` Admin membership and registration verified October 19; display name currently `unimatesupport`. | Owner must confirm operator details and proposed `UniMate` name; contact, trader declaration and security remain incomplete/unverified. No upload/submission approval. |
+| Publisher account | `unimatesupport@gmail.com` Admin membership and registration verified October 19; personally operated and `UniMate` display name owner-approved. Current saved name remains `unimatesupport`. | Name application is blocked by the trader-declaration dialog; owner must complete a truthful declaration. Identity/contact and security remain incomplete/unverified. Personal operation is not a trader classification. No upload/submission approval. |
 | Listing title, summary, detailed description | Use the draft immediately below; Pro is USD 9.99/month and usage limits apply. | Confirm the submitted wording and release website/server/Stripe price all match the approved price. Historical USD 5.99 test invoices are not proof of the new price. No unlimited-use claim. |
 | Category and language | Education; English. | Confirm those selections in the actual listing form. |
 | Single purpose and permissions | Use the Single purpose section and permission inventory above. | Reconcile against the exact submitted manifest; broad host access is not preapproved. |
@@ -621,9 +627,10 @@ Use commitments before certification.
    Complete contact email verification and remaining Google identity/security
    prompts, including required 2-Step Verification, personally; credentials and
    recovery codes stay with the owner. Security completion has not been verified.
-2. Choose the public publisher name and actual operator (individual or business).
-   The current display name is `unimatesupport`; permission to change it to
-   `UniMate` and personal-versus-business operator details are awaiting response.
+2. Personal operation and public display name `UniMate` are owner-approved;
+   the current saved name is still `unimatesupport`. Applying the approved name
+   is blocked by the persistent trader-declaration dialog and remains separate
+   from identity/contact verification. No name edit or Save was attempted.
    Confirm the missing operator address appropriate for this paid-subscription product.
    Google requires every publisher to declare Trader or Non-Trader status; the
    owner must determine this truthfully. Trader legal name, contact address and
@@ -884,7 +891,8 @@ unless the evidence identifies a rights problem.
 - [x] Confirm the intended Pro price: USD 9.99/month (October 18; not a live-billing approval).
 - [x] Record owner-created logo/mascot attestation (October 19; not independent legal clearance).
 - [x] Verify registration and Admin membership for `unimatesupport@gmail.com` (October 19; no receipt/security inference).
-- [ ] Approve the publisher/operator identity and the listing's paid-Pro wording.
+- [x] Record personal operation and approval of public display name `UniMate` (October 19; name not yet applied, no trader classification inferred).
+- [ ] Verify publisher/operator identity details and approve the listing's paid-Pro wording.
 - [ ] Complete publisher contact email/address and truthful trader declaration
       with owner-approved details; verify required account security separately.
 - [ ] Check the published policy against the data map above, including incidental

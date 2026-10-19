@@ -26,9 +26,12 @@ Owner decisions/access still needed:
    this does not verify a payment receipt or required security setup. Current
    display name is `unimatesupport`; contact email and address are missing.
    Trader declaration says “Action required”; an unsaved Non-Trader selection
-   is not a completed declaration. Await the owner's personal-versus-business
-   operator details and permission to use display name `UniMate`, then complete
-   contact/legal/security details accurately. The agent changed no settings,
+   is not a completed declaration. The owner confirmed personal operation and
+   approved the public display name `UniMate`; those choices are recorded, but
+   applying the name is blocked by the persistent trader-declaration dialog.
+   No name edit or Save was attempted. Personal operation does not determine
+   Trader/Non-Trader status. Identity/contact details, the owner's truthful
+   declaration and security verification remain pending. The agent changed no settings,
    accepted no terms, made no payment and performed no upload/submission.
 2. **Logo/mascot creator confirmed:** on October 19 the owner answered
    “I created it.” This records the owner's authorship attestation, not an
