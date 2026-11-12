@@ -10,7 +10,7 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - Every completed manual item must include a dated evidence note or link.
 - If a release-blocking check fails, stop promotion and record the response under **Launch incidents**.
 
-## November 12 connected workspace — source implementation, private rollout pending
+## November 12 connected workspace — private Preview ready, hosted persistence pending
 
 The owner subsequently authorized a fresh backup, this migration, and an updated
 private Preview/installed Companion with cross-app persistence checks. Initial
@@ -34,12 +34,30 @@ diagnostics, and hashes are retained privately and excluded from Git/uploads.
 The saved Vercel CLI login still accesses the exact UniMate project/team.
 Authentication protection, zero persistent bypasses, no Production environment
 variables, and disabled custom-domain auto-assignment were verified. The
-source-only upload dry run matches 145 reviewed files (9,188,345 bytes), with
-private files excluded. A dedicated hosted workspace harness is prepared for
-the marked sandbox user: real website/Companion saves and reloads with synthetic
-coursework, no AI or payment requests. Its offline transport-policy checks are
-not hosted persistence proof. The new private deployment and hosted cross-app
-checks are the next gate; no updated Preview has yet been declared verified.
+source-only upload audit matches 145 reviewed files (9,188,410 bytes), with
+private files excluded. Application source
+`d5f1751f1076b195ec8ecb0e088621d613e71083` is now deployed at
+<https://unimate-r11nbzj7i-resumejuice-s-projects.vercel.app>, deployment
+`dpl_GbGLtrh6Ejv8Jjg37XYoAzWoB3gw`: `READY`, Preview (`target: null`), and no
+aliases. GitHub CI run `43308680054` passed. An anonymous Preview request returned
+302; protected health returned 200; unauthenticated workspace and billing APIs
+returned 401. The homepage visibly loaded. Readback confirmed signup disabled,
+live Stripe disabled, and the monthly price set to 999 cents (USD 9.99).
+
+The ignored `browser-companion/config.local.js` was atomically updated to this
+exact Preview with debug disabled, after backing up its previous contents in
+the ignored private area. No `.env` file, ZIP, Store setting, or authentication
+token was changed. This prepares local configuration; the installed Companion
+has not been run against this deployment, and Vercel authentication is still
+required. Email callback settings were not moved.
+
+A dedicated hosted workspace harness is prepared for the marked sandbox user:
+real website/Companion saves and reloads with synthetic coursework, no AI or
+payment requests. Its offline transport-policy checks are not hosted persistence
+proof. Automatic approval review rejected implied authorization for temporarily
+granting that account Pro; explicit owner approval remains pending. No entitlement
+or test data was changed, and the hosted cross-app test has not run. This rollout
+does not establish new billing, purchase, or installed-Companion evidence.
 
 The owner requested an optional whole-school workspace or standalone Pro
 Companion: understand an assignment, get started, optionally attach a class,
@@ -85,13 +103,16 @@ Artifact: `unimate-companion-browser-mQyiXH` (assignment screenshots 12–15).
 This is local synthetic evidence, not a hosted persistence or real-model quality
 evaluation; historical Store screenshots remain drafts.
 
-**Private rollout dependency:** the verified backup and application of
+**Remaining private rollout check:** the verified backup and application of
 `supabase/migrations/20261112201345_study_workspace.sql` are complete, as recorded
-above. Deploy this source privately and update the installed Companion, then
-verify cross-app persistence. If the schema is unavailable, saved-work operations fail explicitly
-without reporting success or overwriting browser-local data. Existing general
-chat stays available; an explicitly selected unavailable source blocks tutoring
-until the student retries or chooses to continue without that source.
+above. The matching protected Preview is ready and local Companion configuration
+is prepared. After explicit approval of the temporary marked-account Pro access,
+run the installed cross-app persistence check and restore the account's prior
+entitlement afterward. If the schema is unavailable, saved-work operations
+fail explicitly without reporting success or overwriting browser-local data.
+Existing general chat stays available; an explicitly selected unavailable source
+blocks tutoring until the student retries or chooses to continue without that
+source.
 
 Full syllabus/lecture indexing, automatic LMS synchronization, adaptive calendar
 rescheduling, and autonomous note/link actions are not part of this change.

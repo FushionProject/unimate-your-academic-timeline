@@ -1,6 +1,6 @@
 # UniMate Browser Companion
 
-## Connected assignment flow (private rollout pending)
+## Connected assignment flow (private Preview ready; hosted persistence pending)
 
 Students can use the Pro Companion on its own or with the UniMate workspace;
 creating classes and uploading a syllabus are optional. The assignment flow is
@@ -15,10 +15,26 @@ Conflicting changes keep the student's draft for review. Saving does not invoke
 AI or submit coursework; the tutor cannot silently change saved work. Account
 switches and Pro access checks still apply.
 
-This source requires `supabase/migrations/20261112201345_study_workspace.sql`
-and a matching private website deployment before updating the installed
-Companion. Neither hosted change has been made by this implementation pass.
-See [LAUNCH.md](../LAUNCH.md) for verification and rollout dependencies.
+November 12 status: the backup/restore check and migration
+`supabase/migrations/20261112201345_study_workspace.sql` are complete. Matching
+application source `d5f1751f1076b195ec8ecb0e088621d613e71083` is `READY` at the
+protected Preview <https://unimate-r11nbzj7i-resumejuice-s-projects.vercel.app>
+(`dpl_GbGLtrh6Ejv8Jjg37XYoAzWoB3gw`, Preview target, no aliases). GitHub CI run
+`43308680054` and protected HTTP smoke checks passed; the homepage visibly loaded.
+Signup and live Stripe remain disabled; the monthly price is USD 9.99.
+
+Local ignored Companion configuration now targets that exact Preview with debug
+disabled, with its previous contents backed up privately. No `.env` file, ZIP,
+Store setting, authentication token, or email callback was changed. Configuration
+is prepared, but no installed Companion run against this Preview has occurred;
+Vercel authentication is still required.
+
+Hosted save/resume testing awaits explicit owner approval for temporary Pro access
+on the marked test account after automatic approval review rejected implied
+authorization. No entitlement or test data changed. The hosted cross-app check
+has not run, and this is not new billing or purchase proof. See
+[LAUNCH.md](../LAUNCH.md) for the exact verification scope and unchanged public
+release gates.
 
 ## Earlier launch evidence
 
@@ -58,7 +74,7 @@ are recorded; no real AI/payment calls, personal browsing or Store upload occurr
 Publisher/identity work is deferred at the owner's request until October 20,
 with a one-time 10 AM Central follow-up. No personal details are needed for this work.
 
-Latest private application candidate: `cb8a296` at
+Historical October 18 private application candidate: `cb8a296` at
 <https://unimate-8kp8pqpcg-resumejuice-s-projects.vercel.app>, with the approved
 $9.99 price, passed offline/GitHub verification and protected HTTP smoke checks.
 One hosted unpaid Checkout quoted exactly $9.99 and was expired with no payment
@@ -511,7 +527,7 @@ listening with a screen reader.
   requires explicit owner approval, a configured provider budget, and
   `UNIMATE_LIVE_AI_EVAL=approved`. Never run it automatically in CI.
 
-For the current protected website, the owner-preview runner additionally needs
+Historical October 15 protected-preview example: the owner-preview runner needed
 `UNIMATE_COMPANION_PREVIEW_ORIGIN=https://unimate-2qsdme7qj-resumejuice-s-projects.vercel.app`
 and a fresh, project-scoped development OIDC token supplied only to its process.
 Use the existing authenticated Vercel environment runner from a fresh empty
@@ -520,6 +536,9 @@ old local env file cannot override that token. Keep the token out of commands,
 logs, saved configuration, and Git. The runner verifies the exact READY Preview
 and closes if its worker changes or its short-lived access expires; do not
 disable protection or generate a persistent bypass to continue a failed test.
+For the new connected-workspace check, use the separately scoped
+[hosted workspace harness](../scripts/HOSTED_WORKSPACE_TEST.md) after its approval
+gate; this older owner-preview runner does not allow the saved-work API.
 
 The prior hosted billing runner is intentionally **one-shot**, not a repeatable
 purchase button. `scripts/run-protected-billing-preview.mjs` requires exactly

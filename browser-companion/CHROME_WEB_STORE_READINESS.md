@@ -1,5 +1,20 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
+November 12 private rollout addendum: the backup/restore and workspace migration
+`20261112201345` are complete. Application source
+`d5f1751f1076b195ec8ecb0e088621d613e71083` is `READY` at protected Preview
+<https://unimate-r11nbzj7i-resumejuice-s-projects.vercel.app>, deployment
+`dpl_GbGLtrh6Ejv8Jjg37XYoAzWoB3gw` (Preview target, no aliases). CI run
+`43308680054` and protected HTTP smoke checks passed; signup and live Stripe
+remain disabled and the price remains USD 9.99/month. Local ignored Companion
+configuration is prepared for this Preview, but no installed run or hosted
+cross-app persistence test has occurred. Temporary Pro access for the marked
+test account awaits explicit owner approval after automatic approval review
+rejected implied authorization; no entitlement or test data changed. Vercel
+authentication remains required. No Store ZIP, publisher setting, submission,
+email callback, or public access changed. Historical billing/email evidence below
+retains its original deployment scope; see [LAUNCH.md](../LAUNCH.md).
+
 Readiness updated: October 19, 2026. On October 18 the owner approved
 `unimatesupport@gmail.com` as the long-term Chrome Web Store publisher account
 and confirmed the intended UniMate Pro price is **USD 9.99/month**. On October 19
@@ -95,7 +110,7 @@ and [Stripe sandbox manual tests](../STRIPE_SANDBOX_MANUAL_TESTS.md).
 No custom domain was assigned and nothing was submitted to or published in the
 Chrome Web Store.
 
-The newest private application candidate is `cb8a296` at
+The historical October 18 private application candidate is `cb8a296` at
 <https://unimate-8kp8pqpcg-resumejuice-s-projects.vercel.app>. Website price and
 Preview billing configuration now match the approved $9.99 sandbox Price.
 Full offline/GitHub verification and protected HTTP smoke checks passed; no live

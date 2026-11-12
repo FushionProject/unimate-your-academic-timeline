@@ -26,4 +26,17 @@ Only explicit reviewed UI saves are used for writes. No AI request, screen captu
 
 Artifacts are private and ignored beneath `.stripe-sandbox.local/workspace-<run UUID>/`. `result.json` is emitted only after all assertions pass. Screenshots contain fictional coursework after sign-in; credentials and OIDC are never logged, screenshot, or written to source. Temporary Chromium authentication remains in this private isolated profile until separately removed.
 
-Offline guards are covered by `npm run workspace:test`. A passing offline policy check is **not** evidence that hosted save/resume passed. As of preparation, the hosted check awaits the database migration and new private Preview.
+Offline guards are covered by `npm run workspace:test`. A passing offline policy check is **not** evidence that hosted save/resume passed.
+
+November 12 status: the verified backup/restore and migration `20261112201345`
+are complete. The protected Preview
+<https://unimate-r11nbzj7i-resumejuice-s-projects.vercel.app> is `READY` at application
+source `d5f1751f1076b195ec8ecb0e088621d613e71083`, deployment
+`dpl_GbGLtrh6Ejv8Jjg37XYoAzWoB3gw` (Preview target, no aliases). CI run
+`43308680054` and protected HTTP smoke checks passed. The installed cross-app
+test has **not run**: explicit owner approval for temporary Pro access on the
+marked account is pending after automatic approval review rejected implied
+authorization. No entitlement or test data was changed. The local Companion
+configuration is prepared, but Vercel authentication is still required. Public
+signup, live Stripe, Store publication, and email callback settings are unchanged;
+this status is not hosted persistence or billing/purchase evidence.
