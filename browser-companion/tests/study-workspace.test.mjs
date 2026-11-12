@@ -309,11 +309,13 @@ const assignmentContext = await server.readStudyWorkspaceContext(
 );
 assert.equal(requests.length, beforeContextRead + 1, "Evidence and its badge share one owned read");
 assert.equal(assignmentContext.evidence, evidence);
+assert.equal(assignmentContext.kind, "assignment");
 assert.equal(assignmentContext.grounding.label, "Your saved assignment");
 assert.match(assignmentContext.grounding.detail, /instructions, progress, and next step/);
 assert.match(assignmentContext.grounding.detail, /Linked pages have not been fetched/);
 assert.doesNotMatch(assignmentContext.grounding.detail, /0 open assignments/);
 const noteContext = await server.readStudyWorkspaceContext(request(), owner, standalone);
+assert.equal(noteContext.kind, "note");
 assert.equal(noteContext.grounding.label, "Your saved note");
 assert.match(noteContext.grounding.detail, /selected saved note/);
 const savedLinkId = crypto.randomUUID();
@@ -324,6 +326,7 @@ records.set(savedLinkId, {
   source_url: "https://example.edu/reading",
 });
 const linkContext = await server.readStudyWorkspaceContext(request(), owner, savedLinkId);
+assert.equal(linkContext.kind, "link");
 assert.equal(linkContext.grounding.label, "Your saved link");
 assert.match(linkContext.grounding.detail, /link and annotation/);
 assert.match(linkContext.grounding.detail, /linked page has not been fetched/);

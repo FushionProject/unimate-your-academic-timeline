@@ -24,7 +24,6 @@ import type { CourseFact, AssignmentFact } from "./lib/coursework-grounding";
 import {
   studyWorkspaceResponse,
   readStudyWorkspaceContext,
-  readStudyWorkspaceEvidence,
   workspaceErrorResponse,
 } from "./lib/study-workspace-server";
 
@@ -34,6 +33,7 @@ import { buildOperationalReadiness, readinessKeyMatches } from "./lib/operationa
 import { selectPreferredSubscription, stripeStateEntitled } from "./lib/billing-policy";
 import {
   ASSIGNMENT_COACHING_GUIDANCE,
+  SAVED_ASSIGNMENT_TASK_DIRECTIVE,
   COMPANION_GROUNDING_SYSTEM_PROMPT,
   COMPANION_PROMPT_TEMPLATE_ID,
   buildProvenanceBlock,
@@ -1049,9 +1049,9 @@ async function studyContextOrResponse(
   userId: string,
   workspaceId: unknown,
   conversationId?: unknown,
-): Promise<string | Response> {
+): Promise<Awaited<ReturnType<typeof readStudyWorkspaceContext>> | Response> {
   try {
-    return await readStudyWorkspaceEvidence(request, userId, workspaceId, conversationId);
+    return await readStudyWorkspaceContext(request, userId, workspaceId, conversationId);
   } catch (error) {
     return workspaceErrorResponse(error);
   }
@@ -1439,7 +1439,7 @@ async function handleDashboardAI(request: Request): Promise<Response> {
       if (entitlement instanceof Response) return entitlement;
       const rateLimited = enforceUserRateLimit(entitlement.user.id, "companion-text", 20);
       if (rateLimited) return rateLimited;
-      const workspaceEvidence =
+      const workspaceContext =
         body.workspaceId !== undefined
           ? await studyContextOrResponse(
               request,
@@ -1447,8 +1447,9 @@ async function handleDashboardAI(request: Request): Promise<Response> {
               body.workspaceId,
               body.conversationId,
             )
-          : "";
-      if (workspaceEvidence instanceof Response) return workspaceEvidence;
+          : undefined;
+      if (workspaceContext instanceof Response) return workspaceContext;
+      const workspaceEvidence = workspaceContext?.evidence || "";
       const reservation = await reserveProductEntitlementOrResponse({
         request,
         userId: entitlement.user.id,
@@ -1483,9 +1484,11 @@ async function handleDashboardAI(request: Request): Promise<Response> {
       const referenceInstruction = currentTask.resolution
         ? `\nCURRENT REFERENCE: ${currentTask.resolution.reference}; semantic type: ${currentTask.resolution.semanticType}. Use the matched block, not a task type inferred from earlier chat.`
         : "";
+      const assignmentInstruction =
+        workspaceContext?.kind === "assignment" ? `\n\n${SAVED_ASSIGNMENT_TASK_DIRECTIVE}` : "";
       const userContent = `${buildProvenanceBlock(provenance)}\n\nTUTOR TASK: ${buildTutorTaskInstruction(
         intent,
-      )}${referenceInstruction}\n\nCURRENT STUDENT REQUEST: ${studentMessage}`;
+      )}${referenceInstruction}\n\nCURRENT STUDENT REQUEST: ${studentMessage}${assignmentInstruction}`;
 
       try {
         const result = await generateGroundedCompanionAnswer({
@@ -2063,7 +2066,7 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
       return jsonResponse({ error: "Question is too large" }, 413);
     }
 
-    const workspaceEvidence =
+    const workspaceContext =
       body.workspaceId !== undefined
         ? await studyContextOrResponse(
             request,
@@ -2071,8 +2074,9 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
             body.workspaceId,
             body.conversationId,
           )
-        : "";
-    if (workspaceEvidence instanceof Response) return workspaceEvidence;
+        : undefined;
+    if (workspaceContext instanceof Response) return workspaceContext;
+    const workspaceEvidence = workspaceContext?.evidence || "";
     const reservation = await reserveProductEntitlementOrResponse({
       request,
       userId: entitlement.user.id,
@@ -2112,9 +2116,11 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
     const referenceInstruction = currentTask.resolution
       ? `\nCURRENT REFERENCE: ${currentTask.resolution.reference}; semantic type: ${currentTask.resolution.semanticType}. Locate this target in the screenshot too, and use its visible heading to choose the action. Do not assume it is a question.`
       : "";
+    const assignmentInstruction =
+      workspaceContext?.kind === "assignment" ? `\n\n${SAVED_ASSIGNMENT_TASK_DIRECTIVE}` : "";
     const userContent = `${buildProvenanceBlock(provenance)}\n\nTUTOR TASK: ${buildTutorTaskInstruction(
       intent,
-    )}${referenceInstruction}\n\nCURRENT STUDENT REQUEST: ${userPrompt}`;
+    )}${referenceInstruction}\n\nCURRENT STUDENT REQUEST: ${userPrompt}${assignmentInstruction}`;
     const history = normalizeCompanionHistory(chatHistory);
 
     // Only caller-supplied image data is accepted; no remote URL fetches.

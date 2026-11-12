@@ -24,6 +24,7 @@ import {
 } from "./hosted-workspace-test-policy.mjs";
 import {
   TUTORING_CASES,
+  tutoringPlan,
   createHostedTutoringPolicy,
   installHostedTutoringWorker,
 } from "./hosted-assignment-tutoring-policy.mjs";
@@ -132,6 +133,10 @@ export async function runHostedAssignmentTutoring({ approved = false, origin } =
     process.argv.length > 2
   )
     fail("EXPLICIT_HOSTED_TUTORING_APPROVAL_REQUIRED");
+  const plan = tutoringPlan(process.env.UNIMATE_TUTORING_RECHECK);
+  const focused = plan.name === "clarify-stuck";
+  const savedProgress = "I have finished my outline and chosen two examples.";
+  const savedNextStep = "Draft the opening paragraph using my outline.";
   assertIgnored(ROOT);
   const record = JSON.parse(await readPrivate(path.join(ROOT, ARTIFACT)));
   validateRecord(record);
@@ -253,7 +258,8 @@ export async function runHostedAssignmentTutoring({ approved = false, origin } =
       prefix,
       fixtureOrigin,
       lane: "website",
-      cases: TUTORING_CASES,
+      cases: plan.cases,
+      plan: plan.name,
     });
     const saved = [];
     let selectedBrowserChat = null;
@@ -331,12 +337,16 @@ export async function runHostedAssignmentTutoring({ approved = false, origin } =
         "Write a 500-word reflection comparing spaced practice and cramming. Include exactly two examples and finish with your own study plan. No deadline or grading rubric has been supplied. This is fictional coursework.",
       );
     await page.getByText("Remember my progress", { exact: true }).click();
-    await workspaceTextbox(page, "What I’ve done").fill("");
-    await workspaceTextbox(page, "My next step").fill("");
+    await workspaceTextbox(page, "What I’ve done").fill(focused ? savedProgress : "");
+    await workspaceTextbox(page, "My next step").fill(focused ? savedNextStep : "");
     await page.getByRole("button", { name: "Save assignment", exact: true }).click();
     await until(() => saved.some((i) => i.kind === "assignment"), "WEBSITE_ASSIGNMENT_SAVE");
     const assignment = saved.find((i) => i.kind === "assignment");
     assert.equal(assignment.courseId, null);
+    if (focused) {
+      assert.equal(assignment.progress, savedProgress);
+      assert.equal(assignment.nextStep, savedNextStep);
+    }
     const handoff = page.getByRole("button", {
       name: `Select ${websiteTitle} for Browser Companion`,
       exact: true,
@@ -411,7 +421,8 @@ export async function runHostedAssignmentTutoring({ approved = false, origin } =
       prefix,
       supabase: TARGET.supabase,
       fixtureOrigin,
-      cases: TUTORING_CASES,
+      cases: plan.cases,
+      plan: plan.name,
     });
     const signin = await extension.newPage();
     await signin.goto(new URL("signin.html", worker.url()).href);
@@ -444,6 +455,7 @@ export async function runHostedAssignmentTutoring({ approved = false, origin } =
         version: 1,
         runId,
         origin,
+        plan: plan.name,
         attempts,
         companion,
         website: policy.snapshot(),
@@ -461,7 +473,12 @@ export async function runHostedAssignmentTutoring({ approved = false, origin } =
       return evidence;
     };
     const journal = async (id) => {
-      if (attempts.length >= 6 || attempts.includes(id)) fail("TUTORING_NO_RETRY");
+      if (
+        attempts.length >= plan.cases.length ||
+        attempts.includes(id) ||
+        plan.cases[attempts.length]?.id !== id
+      )
+        fail("TUTORING_NO_RETRY");
       attempts.push(id);
       await fs.writeFile(
         path.join(artifactDir, "request-plan.json"),
@@ -469,9 +486,10 @@ export async function runHostedAssignmentTutoring({ approved = false, origin } =
           {
             runId,
             origin,
-            maxHttpRequests: 6,
+            plan: plan.name,
+            maxHttpRequests: plan.cases.length,
             attempts,
-            plannedCases: TUTORING_CASES.map(({ id, lane }) => ({ id, lane })),
+            plannedCases: plan.cases.map(({ id, lane }) => ({ id, lane })),
             noAutomaticRetry: true,
           },
           null,
@@ -500,7 +518,8 @@ export async function runHostedAssignmentTutoring({ approved = false, origin } =
     const turn = async (id, starter) => {
       stage = `companion-${id}`;
       report({ stage });
-      const test = TUTORING_CASES.find((item) => item.id === id);
+      const test = plan.cases.find((item) => item.id === id);
+      if (!test || test.lane !== "companion") fail("TUTORING_FIXED_PLAN_REQUIRED");
       await reopen(id);
       const before = await readChat();
       assert.equal(before.conversationId, currentItem.conversationId);
@@ -547,23 +566,21 @@ export async function runHostedAssignmentTutoring({ approved = false, origin } =
       );
       return result;
     };
-    await turn("understand", ".um-understand");
-    await turn("start", ".um-get-started");
-    await shadow(".um-save-menu summary", "click");
-    await shadow(".um-save-progress", "click");
-    await until(() => shadow("#um-work-progress", "visible"), "LIVE_PROGRESS_EDITOR");
-    await shadow(
-      "#um-work-progress",
-      "fill",
-      "I have finished my outline and chosen two examples.",
-    );
-    await shadow("#um-work-next", "fill", "Draft the opening paragraph using my outline.");
-    await shadow(".um-study-form .um-primary", "click");
-    await until(
-      async () => (await shadow(".um-resume"))?.includes("Draft the opening paragraph"),
-      "LIVE_PROGRESS_SAVED",
-    );
-    await turn("resume", ".um-continue-work");
+    if (!focused) {
+      await turn("understand", ".um-understand");
+      await turn("start", ".um-get-started");
+      await shadow(".um-save-menu summary", "click");
+      await shadow(".um-save-progress", "click");
+      await until(() => shadow("#um-work-progress", "visible"), "LIVE_PROGRESS_EDITOR");
+      await shadow("#um-work-progress", "fill", savedProgress);
+      await shadow("#um-work-next", "fill", savedNextStep);
+      await shadow(".um-study-form .um-primary", "click");
+      await until(
+        async () => (await shadow(".um-resume"))?.includes("Draft the opening paragraph"),
+        "LIVE_PROGRESS_SAVED",
+      );
+      await turn("resume", ".um-continue-work");
+    }
     await shadow(".um-saved-work", "click");
     await until(() => shadow(".um-new-assignment", "visible"), "LIVE_NEW_ASSIGNMENT");
     await shadow(".um-new-assignment", "click");
@@ -594,48 +611,57 @@ export async function runHostedAssignmentTutoring({ approved = false, origin } =
     );
     currentItem = primary;
     await turn("injection");
-    stage = "website-handoff";
-    report({ stage });
-    await page.goto(`${origin}/ask?conversation=${primary.conversationId}&workspace=${primary.id}`);
-    await revealAssignment(page);
-    const draft = "Unsent fictional draft: I want to compare my two examples later.";
-    await page.getByRole("textbox", { name: "Ask UniMate a question", exact: true }).fill(draft);
-    policy.arm({
-      id: "website-handoff",
-      workspaceId: primary.id,
-      conversationId: primary.conversationId,
-    });
-    await journal("website-handoff");
-    await page.getByRole("button", { name: "Pick up where I left off", exact: true }).click();
-    await until(
-      () => {
-        const state = policy.snapshot();
-        if (state.failed) fail(state.failed);
-        return state.completed.length === 1;
-      },
-      "LIVE_WEBSITE_HANDOFF",
-      120000,
-    );
-    assert.equal(
-      await page.getByRole("textbox", { name: "Ask UniMate a question", exact: true }).inputValue(),
-      draft,
-    );
-    const websiteReply = policy.snapshot().completed[0];
-    const roundtrip = await readChat();
-    assert.ok(
-      roundtrip.messages.some(
-        (item) => item.role === "assistant" && item.message === websiteReply.answer,
-      ),
-    );
-    assert.equal(roundtrip.workspaceItem.id, primary.id);
-    await snapshot(page, "live-website-handoff");
-    pass(
-      "Website assignment shortcut continued shared chat and retained the unsent composer draft",
-    );
+    if (!focused) {
+      stage = "website-handoff";
+      report({ stage });
+      await page.goto(
+        `${origin}/ask?conversation=${primary.conversationId}&workspace=${primary.id}`,
+      );
+      await revealAssignment(page);
+      const draft = "Unsent fictional draft: I want to compare my two examples later.";
+      await page.getByRole("textbox", { name: "Ask UniMate a question", exact: true }).fill(draft);
+      policy.arm({
+        id: "website-handoff",
+        workspaceId: primary.id,
+        conversationId: primary.conversationId,
+      });
+      await journal("website-handoff");
+      await page.getByRole("button", { name: "Pick up where I left off", exact: true }).click();
+      await until(
+        () => {
+          const state = policy.snapshot();
+          if (state.failed) fail(state.failed);
+          return state.completed.length === 1;
+        },
+        "LIVE_WEBSITE_HANDOFF",
+        120000,
+      );
+      assert.equal(
+        await page
+          .getByRole("textbox", { name: "Ask UniMate a question", exact: true })
+          .inputValue(),
+        draft,
+      );
+      const websiteReply = policy.snapshot().completed[0];
+      const roundtrip = await readChat();
+      assert.ok(
+        roundtrip.messages.some(
+          (item) => item.role === "assistant" && item.message === websiteReply.answer,
+        ),
+      );
+      assert.equal(roundtrip.workspaceItem.id, primary.id);
+      await snapshot(page, "live-website-handoff");
+      pass(
+        "Website assignment shortcut continued shared chat and retained the unsent composer draft",
+      );
+    }
     const evidence = await privateEvidence();
-    assert.equal(evidence.companion.stats.requests, 5);
-    assert.equal(evidence.website.stats.requests, 1);
-    assert.equal(evidence.companion.stats.persisted + evidence.website.stats.persisted, 6);
+    assert.equal(evidence.companion.stats.requests, focused ? 2 : 5);
+    assert.equal(evidence.website.stats.requests, focused ? 0 : 1);
+    assert.equal(
+      evidence.companion.stats.persisted + evidence.website.stats.persisted,
+      plan.cases.length,
+    );
     assert.equal(evidence.companion.baseStats.stripe + evidence.website.baseStats.stripe, 0);
     assert.equal(policyFailure, false);
     evidence.completed = true;
@@ -648,7 +674,8 @@ export async function runHostedAssignmentTutoring({ approved = false, origin } =
     report({
       completed: true,
       checks: checks.length,
-      aiHttpRequests: 6,
+      plan: plan.name,
+      aiHttpRequests: plan.cases.length,
       artifactDir,
       qualityReviewPending: true,
     });

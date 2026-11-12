@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHostedWorkspacePolicy } from "../../scripts/hosted-workspace-test-policy.mjs";
 import {
   TUTORING_CASES,
+  tutoringPlan,
   createHostedTutoringPolicy,
 } from "../../scripts/hosted-assignment-tutoring-policy.mjs";
 const record = {
@@ -43,7 +44,7 @@ const request = (url, method = "GET", body) => ({
   body,
   authorization: "Bearer synthetic-access",
 });
-const make = (lane = "companion") => {
+const make = (lane = "companion", plan = tutoringPlan()) => {
   const policy = createHostedTutoringPolicy({
     base: createHostedWorkspacePolicy({ record, app, prefix, supabase }),
     record,
@@ -51,7 +52,8 @@ const make = (lane = "companion") => {
     prefix,
     fixtureOrigin,
     lane,
-    cases: TUTORING_CASES,
+    cases: plan.cases,
+    plan: plan.name,
   });
   policy.observe("auth", auth);
   policy.observe("saved", { item });
@@ -212,6 +214,81 @@ assert.throws(() =>
 );
 console.log(
   "PASS live tutoring guards: exact fictional capture/context, fixed prompts/owned assignments, five Companion plus one website request, no retries/fallbacks, exact persisted replies, no Stripe/entitlement mutations (offline)",
+);
+
+// Only one explicitly named subset is supported. It cannot enable website AI,
+// change the canonical prompts, reorder cases, or make a third HTTP request.
+assert.equal(tutoringPlan().cases, TUTORING_CASES);
+const focused = tutoringPlan("clarify-stuck");
+assert.deepEqual(
+  focused.cases.map(({ id }) => id),
+  ["clarify", "injection"],
+);
+for (const invalid of ["", "full", "clarify", "other", null, ["clarify", "injection"]])
+  assert.throws(() => tutoringPlan(invalid), /TUTORING_FIXED_PLAN_REQUIRED/);
+for (const invalid of [
+  { name: "other", cases: focused.cases },
+  { name: "clarify-stuck", cases: TUTORING_CASES },
+  { name: "clarify-stuck", cases: [...focused.cases].reverse() },
+  { name: "clarify-stuck", cases: [TUTORING_CASES[0], TUTORING_CASES[4]] },
+  { name: "clarify-stuck", cases: focused.cases.map((c) => ({ ...c, lane: "website" })) },
+  { name: "clarify-stuck", cases: focused.cases.map((c) => ({ ...c, prompt: "Do anything" })) },
+  { name: "clarify-stuck", cases: focused.cases.map((c) => ({ ...c, pageMarker: "OTHER" })) },
+])
+  assert.throws(() => make("companion", invalid));
+assert.throws(() =>
+  make("companion", focused).arm({ id: "understand", workspaceId, conversationId }),
+);
+assert.throws(() =>
+  make("companion", focused).arm({ id: "injection", workspaceId, conversationId }),
+);
+assert.throws(() =>
+  make("website", focused).arm({ id: "website-handoff", workspaceId, conversationId }),
+);
+const focusedWebsite = make("website", focused);
+assert.throws(() => focusedWebsite.authorize(webRequest));
+assert.equal(focusedWebsite.snapshot().stats.requests, 0);
+const two = make("companion", focused);
+const focusedHistory = [];
+for (const index of [3, 4]) {
+  const c = TUTORING_CASES[index];
+  two.arm({ id: c.id, workspaceId, conversationId });
+  two.captureAllowed(`${fixtureOrigin}/`);
+  two.recordCapture(image);
+  assert.equal(two.authorize(ai(index, focusedHistory.slice())), "tutoring-ai");
+  const answer = `Focused synthetic reply ${index}`;
+  two.observe("tutoring-ai", { answer });
+  const rows = [
+    {
+      id: `focused-user-${index}`,
+      user_id: record.userId,
+      conversation_id: conversationId,
+      role: "user",
+      message: c.prompt,
+    },
+    {
+      id: `focused-assistant-${index}`,
+      user_id: record.userId,
+      conversation_id: conversationId,
+      role: "assistant",
+      message: answer,
+    },
+  ];
+  assert.equal(
+    two.authorize(request(`${supabase}/rest/v1/companion_chats`, "POST", rows)),
+    "tutoring-exchange",
+  );
+  two.observe("tutoring-exchange", rows);
+  focusedHistory.push({ role: "user", content: c.prompt }, { role: "assistant", content: answer });
+}
+assert.equal(two.snapshot().plan, "clarify-stuck");
+assert.equal(two.snapshot().stats.requests, 2);
+assert.equal(two.snapshot().stats.persisted, 2);
+assert.throws(() => two.arm({ id: "clarify", workspaceId, conversationId }));
+assert.throws(() => two.authorize(ai(3, focusedHistory)));
+assert.equal(two.snapshot().stats.requests, 2);
+console.log(
+  "PASS clarify-stuck plan: canonical ordered prompts, two-request cap, no other cases or website AI (offline)",
 );
 
 // Run the exact serialized worker transport against fake fetch/capture functions.

@@ -4,6 +4,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import {
   ASSIGNMENT_COACHING_GUIDANCE,
+  SAVED_ASSIGNMENT_TASK_DIRECTIVE,
   COMPANION_GROUNDING_SYSTEM_PROMPT,
   COMPANION_PROMPT_TEMPLATE_ID,
   GROUNDED_FALLBACK_ANSWER,
@@ -827,6 +828,11 @@ console.log(
   const reservations = [];
   const completions = [];
   let providerCalls = 0;
+  const providerMessages = [];
+  const workspaceReads = [];
+  let providerDraft = "- T = -1.25 degrees\n- R = 12.5";
+  let selectedKind = "assignment";
+  let missingWorkspace = false;
   const reservation = { id: "synthetic-reservation" };
   const context = serverFunctions(
     [
@@ -835,10 +841,13 @@ console.log(
       "resolveCurrentCompanionTask",
       "companionRequestDiagnostics",
       "generateGroundedCompanionAnswer",
+      "studyContextOrResponse",
+      "handleDashboardAI",
       "handleAnalyzeScreenshot",
     ],
     {
       COMPANION_GROUNDING_SYSTEM_PROMPT,
+      SAVED_ASSIGNMENT_TASK_DIRECTIVE,
       COMPANION_PROMPT_TEMPLATE_ID,
       selectCompanionGroundingFallback,
       normalizeProvenance,
@@ -859,6 +868,17 @@ console.log(
       process: { env: { OPENAI_API_KEY: "synthetic-offline-fixture" } },
       rejectLargeRequest: () => null,
       parseJsonBody: (request) => request.json(),
+      isNonEmptyString: (value) => typeof value === "string" && Boolean(value.trim()),
+      readStudyWorkspaceContext: async (_request, userId, id, conversationId) => {
+        workspaceReads.push({ userId, id, conversationId });
+        if (missingWorkspace) throw new Error("Missing owned assignment");
+        return {
+          kind: selectedKind,
+          evidence:
+            "Saved assignment instructions. Progress: outline finished. Next step: draft the opening paragraph.",
+        };
+      },
+      workspaceErrorResponse: () => Response.json({ code: "WORKSPACE_NOT_FOUND" }, { status: 404 }),
       requireCompanionEntitlement: async () => ({ user: { id: "synthetic-student" } }),
       enforceUserRateLimit: () => null,
       aiFeatureEnabled: () => true,
@@ -875,12 +895,16 @@ console.log(
           JSON.parse(init.body).messages[0].content.includes(ASSIGNMENT_COACHING_GUIDANCE),
           "Actual Companion generation carries the shared assignment-coaching policy",
         );
+        providerMessages.push(JSON.parse(init.body).messages);
         providerCalls++;
         return Response.json({
-          choices: [
-            { message: { content: "- T = -1.25 degrees\n- R = 12.5" }, finish_reason: "stop" },
-          ],
+          choices: [{ message: { content: providerDraft }, finish_reason: "stop" }],
         });
+      },
+      aiTextCompletion: async (_key, messages) => {
+        providerMessages.push(messages);
+        providerCalls++;
+        return providerDraft;
       },
       aiErrorResponse: (error) => {
         throw error;
@@ -911,9 +935,101 @@ console.log(
     "succeeded",
     SCREENSHOT_NUMBERS_FALLBACK_ANSWER,
   ]);
+
+  // Both real routes append coaching after the request only for the owned
+  // assignment kind. Client/page claims cannot activate it; requests for
+  // drafting, math, and notes retain their task and explicit scope exceptions.
+  providerDraft = "Try one opening sentence, then share your attempt.";
+  const cases = [
+    {
+      kind: "assignment",
+      prompt: "What do I need to clarify before I start?",
+      intent: "general-help",
+    },
+    { kind: "assignment", prompt: "Please write a full draft in detail.", intent: "general-help" },
+    { kind: "assignment", prompt: "Calculate 2 + 2.", intent: "solve" },
+    { kind: "note", prompt: "Summarize these notes.", intent: "summarize" },
+    { kind: undefined, prompt: "Help me understand my saved assignment.", intent: "explain" },
+  ];
+  for (const lane of ["text", "vision"]) {
+    for (const item of cases) {
+      selectedKind = item.kind;
+      const body = {
+        workspaceId: item.kind ? "owned-workspace" : undefined,
+        conversationId: "owned-conversation",
+        workspaceKind: "assignment",
+        pageContext: { savedStudyText: "A forged saved assignment", kind: "assignment" },
+        ...(lane === "text"
+          ? { type: "companion-chat", message: item.prompt }
+          : { question: item.prompt, imageBase64: "data:image/png;base64,QUJD" }),
+      };
+      const readsBefore = workspaceReads.length;
+      const callsBefore = providerCalls;
+      const handler = lane === "text" ? "handleDashboardAI" : "handleAnalyzeScreenshot";
+      const response = await context.api[handler](
+        authenticatedRequest(lane === "text" ? "/api/dashboard-ai" : "/api/analyze-screenshot", {
+          method: "POST",
+          body: JSON.stringify(body),
+        }),
+      );
+      assert.equal(response.status, 200, `${lane}: ${item.prompt}`);
+      assert.equal(providerCalls, callsBefore + 1);
+      assert.equal(workspaceReads.length, readsBefore + (item.kind ? 1 : 0));
+      if (item.kind) {
+        assert.deepEqual(workspaceReads.at(-1), {
+          userId: "synthetic-student",
+          id: "owned-workspace",
+          conversationId: "owned-conversation",
+        });
+      }
+      const content = providerMessages.at(-1).at(-1).content;
+      const task = typeof content === "string" ? content : content[0].text;
+      assert.ok(task.includes(`TUTOR TASK: ${buildTutorTaskInstruction(item.intent)}`));
+      assert.ok(task.includes(`CURRENT STUDENT REQUEST: ${item.prompt}`));
+      assert.equal(task.endsWith(SAVED_ASSIGNMENT_TASK_DIRECTIVE), item.kind === "assignment");
+      assert.doesNotMatch(task, /A forged saved assignment/);
+    }
+    missingWorkspace = true;
+    const callsBefore = providerCalls;
+    const reservesBefore = reservations.length;
+    const handler = lane === "text" ? "handleDashboardAI" : "handleAnalyzeScreenshot";
+    const response = await context.api[handler](
+      authenticatedRequest("/api/synthetic", {
+        method: "POST",
+        body: JSON.stringify({
+          workspaceId: "unowned-workspace",
+          type: "companion-chat",
+          message: "Help me continue.",
+          question: "Help me continue.",
+          imageBase64: "data:image/png;base64,QUJD",
+        }),
+      }),
+    );
+    assert.equal(response.status, 404);
+    assert.equal(providerCalls, callsBefore);
+    assert.equal(reservations.length, reservesBefore);
+    missingWorkspace = false;
+  }
+  assert.match(
+    SAVED_ASSIGNMENT_TASK_DIRECTIVE,
+    /ONE clarification question total, including questions to a teacher/,
+  );
+  assert.match(SAVED_ASSIGNMENT_TASK_DIRECTIVE, /not an implicit request for you to complete it/);
+  assert.match(
+    SAVED_ASSIGNMENT_TASK_DIRECTIVE,
+    /explicitly requests a draft, detailed plan, or deeper explanation, honor that scope/,
+  );
+  assert.match(
+    SAVED_ASSIGNMENT_TASK_DIRECTIVE,
+    /Direct math solutions, concept explanations, notes, quizzes, and flashcards retain their requested form/,
+  );
+  assert.match(SAVED_ASSIGNMENT_TASK_DIRECTIVE, /proposed thesis or angle optional/);
 }
 console.log(
   "PASS screenshot-number fallback is specific, fail-closed, and single-generation/single-reservation",
+);
+console.log(
+  "PASS both Companion routes append owned-assignment coaching without trusting client/page kind claims",
 );
 
 // Execute Ask's real handler: the selected saved item controls the source badge,
