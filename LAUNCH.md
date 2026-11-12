@@ -12,11 +12,41 @@ This is the single operating checklist for UniMate's public launch. A box is che
 
 ## November 12 connected workspace — source implementation, private rollout pending
 
+The owner subsequently authorized a fresh backup, this migration, and an updated
+private Preview/installed Companion with cross-app persistence checks. Initial
+database authentication/connection failures cleared after the owner signed in
+to the dashboard; the displayed session-pooler address matched the saved target.
+No password or network setting changed. A fresh TLS-verified logical backup at
+`2026-11-12T21-12-53-459Z-Dov2eW` passed an isolated local application/auth restore:
+24 accounts/profiles, 15 courses, 47 assignments, 22 chat messages, 14 conversations,
+9 preferences, and zero Storage objects. The earlier failed attempt remains
+marked `INCOMPLETE` and is not a recovery point.
+
+Migration `20261112201345` was applied with its exact history record in one
+transaction after that restore check. Whole-row digests of all existing accounts,
+profiles, coursework, and chats were unchanged. Readback confirms the empty
+workspace table, four owner policies, authenticated CRUD, no anonymous SELECT,
+both owner foreign keys, and an invoker trigger. Supabase's advisor found no new
+workspace warning; prior signup-trigger execution and password-protection warnings
+remain separate release-hardening items. The backup, restore report, migration
+diagnostics, and hashes are retained privately and excluded from Git/uploads.
+
+The saved Vercel CLI login still accesses the exact UniMate project/team.
+Authentication protection, zero persistent bypasses, no Production environment
+variables, and disabled custom-domain auto-assignment were verified. The
+source-only upload dry run matches 145 reviewed files (9,188,345 bytes), with
+private files excluded. A dedicated hosted workspace harness is prepared for
+the marked sandbox user: real website/Companion saves and reloads with synthetic
+coursework, no AI or payment requests. Its offline transport-policy checks are
+not hosted persistence proof. The new private deployment and hosted cross-app
+checks are the next gate; no updated Preview has yet been declared verified.
+
 The owner requested an optional whole-school workspace or standalone Pro
 Companion: understand an assignment, get started, optionally attach a class,
 save progress, and return later. The warm visual theme and existing AI/Pro
-entitlements are preserved. This pass does not deploy or change hosted data,
-public signup, Store publication, or Stripe mode.
+entitlements are preserved. The source implementation was verified before the
+separately authorized hosted rollout above. Public signup, Store publication,
+and Stripe mode remain unchanged.
 
 - Home and the empty Today screen offer both entry paths. Manual Free class
   setup remains available. No class or syllabus is required for Companion.
@@ -55,10 +85,10 @@ Artifact: `unimate-companion-browser-mQyiXH` (assignment screenshots 12–15).
 This is local synthetic evidence, not a hosted persistence or real-model quality
 evaluation; historical Store screenshots remain drafts.
 
-**Private rollout dependency:** back up and review the private database, then
-apply `supabase/migrations/20261112201345_study_workspace.sql` before deploying
-this source and updating the installed Companion. This migration has not been
-applied to hosted Supabase. If absent, saved-work operations fail explicitly
+**Private rollout dependency:** the verified backup and application of
+`supabase/migrations/20261112201345_study_workspace.sql` are complete, as recorded
+above. Deploy this source privately and update the installed Companion, then
+verify cross-app persistence. If the schema is unavailable, saved-work operations fail explicitly
 without reporting success or overwriting browser-local data. Existing general
 chat stays available; an explicitly selected unavailable source blocks tutoring
 until the student retries or chooses to continue without that source.
