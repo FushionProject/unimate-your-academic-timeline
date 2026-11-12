@@ -301,7 +301,12 @@ assert.match(evidence, /500 words/);
 assert.match(evidence, /Outlined the experiment/);
 assert.match(evidence, /URL has not been fetched/);
 const beforeContextRead = requests.length;
-const assignmentContext = await server.readStudyWorkspaceContext(request(), owner, id, conversation);
+const assignmentContext = await server.readStudyWorkspaceContext(
+  request(),
+  owner,
+  id,
+  conversation,
+);
 assert.equal(requests.length, beforeContextRead + 1, "Evidence and its badge share one owned read");
 assert.equal(assignmentContext.evidence, evidence);
 assert.equal(assignmentContext.grounding.label, "Your saved assignment");

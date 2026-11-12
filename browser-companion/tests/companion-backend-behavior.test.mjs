@@ -937,7 +937,10 @@ console.log(
     isNonEmptyString: (value) => typeof value === "string" && Boolean(value.trim()),
     needsWebSearch: () => false,
     planForAiRequest: async () => "pro",
-    readStudentCoursework: async () => ({ evidence: "Saved planner fixture", grounding: plannerGrounding }),
+    readStudentCoursework: async () => ({
+      evidence: "Saved planner fixture",
+      grounding: plannerGrounding,
+    }),
     readStudyWorkspaceContext: async (_request, userId, id) => {
       assert.equal(userId, "synthetic-student");
       assert.equal(id, "40000000-0000-4000-8000-000000000001");
@@ -945,7 +948,10 @@ console.log(
       if (unavailable) throw new Error("Missing saved item");
       return {
         evidence: `Owned saved ${selectedKind} fixture`,
-        grounding: { label: `Your saved ${selectedKind}`, detail: "Selected saved material; linked page not fetched." },
+        grounding: {
+          label: `Your saved ${selectedKind}`,
+          detail: "Selected saved material; linked page not fetched.",
+        },
       };
     },
     workspaceErrorResponse: () => Response.json({ code: "WORKSPACE_NOT_FOUND" }, { status: 404 }),
@@ -959,14 +965,17 @@ console.log(
       calls.push({ type: "model", messages, options });
       return "Write one opening sentence using the outline you already finished.";
     },
-    aiErrorResponse: (error) => { throw error; },
+    aiErrorResponse: (error) => {
+      throw error;
+    },
   });
-  const ask = (workspaceId) => context.api.handleAskUniMate(
-    authenticatedRequest("/api/ask-unimate", {
-      method: "POST",
-      body: JSON.stringify({ question: "Help me continue.", workspaceId }),
-    }),
-  );
+  const ask = (workspaceId) =>
+    context.api.handleAskUniMate(
+      authenticatedRequest("/api/ask-unimate", {
+        method: "POST",
+        body: JSON.stringify({ question: "Help me continue.", workspaceId }),
+      }),
+    );
   for (selectedKind of ["assignment", "note", "link"]) {
     const response = await ask("40000000-0000-4000-8000-000000000001");
     assert.equal(response.status, 200);
@@ -990,4 +999,6 @@ console.log(
   assert.equal(calls.filter((call) => call.type === "model").length, providersBefore);
   assert.equal(calls.filter((call) => call.type === "reserve").length, reservationsBefore);
 }
-console.log("PASS Ask selected-work source badge, shared coaching, planner fallback and fail-closed evidence");
+console.log(
+  "PASS Ask selected-work source badge, shared coaching, planner fallback and fail-closed evidence",
+);
