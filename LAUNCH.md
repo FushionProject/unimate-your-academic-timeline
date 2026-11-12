@@ -51,7 +51,10 @@ remains historical; this repair pass uses offline fixtures and local builds.
   when its upstream range includes a patched release. Actual API-client schema
   contracts are tested under Zod 4. The existing bundled-lock regression caught
   npm 11 pruning two unchanged optional WASI bundle records; those exact records
-  were preserved for clean Linux installs.
+  were preserved for clean Linux installs. GitHub's first clean install also
+  caught the pruned optional Sharp WASM runtime record. Restoring that record
+  passes isolated npm 10.9.2 clean-install validation with scripts disabled;
+  the repaired candidate must complete the full GitHub workflow below.
 
 Verification: the full offline suite, targeted behavioral regressions, TypeScript, lint (zero errors;
 eight existing Fast Refresh warnings), secret scan, and both Cloudflare/Vercel
