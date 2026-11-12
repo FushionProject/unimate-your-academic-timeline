@@ -56,7 +56,8 @@ assert.match(content, /document\.addEventListener\("unimate-browser-chat-changed
 assert.match(askRoute, /New chat created and selected/);
 assert.match(authContext, /unimate-auth-signed-out/);
 assert.match(authContext, /document\.dispatchEvent/);
-assert.match(authContext, /dataset\.unimateAuthState = session \? "signed-in" : "signed-out"/);
+assert.match(authContext, /dataset\.unimateAuthState = nextUserId/);
+assert.match(authContext, /"anonymous"/);
 assert.match(content, /handleWebsiteSignOut/);
 assert.match(content, /document\.addEventListener\("unimate-auth-signed-out"/);
 assert.match(content, /function syncWebsiteAuthState/);

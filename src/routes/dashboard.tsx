@@ -143,6 +143,8 @@ function Dashboard() {
     [courseFilter, pressureItems, typeFilter],
   );
   const weeks = useMemo(() => buildSemesterWeeks(filteredItems), [filteredItems]);
+  const outsideMapCount =
+    filteredItems.length - weeks.reduce((count, week) => count + week.items.length, 0);
   const dailyBrief = useMemo(() => buildDailyBrief(pressureItems), [pressureItems]);
   const busiestWeek = useMemo(
     () =>
@@ -197,6 +199,7 @@ function Dashboard() {
   };
 
   const handleRemoveAssignment = (item: PressureItem) => {
+    if (!window.confirm(`Delete “${item.name}”? This cannot be undone.`)) return;
     setCompletionMessage("");
     removeAssignment.mutate(item.id, {
       onError: () => {
@@ -206,6 +209,15 @@ function Dashboard() {
   };
 
   const handleRemoveCourse = (courseId: string, courseName: string) => {
+    const deadlineCount = assignments.filter(
+      (assignment) => assignment.course_id === courseId,
+    ).length;
+    if (
+      !window.confirm(
+        `Delete “${courseName}” and its ${deadlineCount} saved deadline${deadlineCount === 1 ? "" : "s"}? This cannot be undone.`,
+      )
+    )
+      return;
     setFormMessage("");
     removeCourse.mutate(courseId, {
       onError: () => {
@@ -580,7 +592,8 @@ function Dashboard() {
                     <h2 className="text-lg font-semibold text-foreground">Semester pressure</h2>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Darker weeks have more unfinished deadlines close together.
+                    Recent and upcoming weeks. Darker weeks have more unfinished deadlines close
+                    together.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -638,6 +651,12 @@ function Dashboard() {
                   ))}
                 </div>
               </div>
+              {outsideMapCount > 0 && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {outsideMapCount} saved {outsideMapCount === 1 ? "date is" : "dates are"} outside
+                  this window. Every saved date remains in the timeline below.
+                </p>
+              )}
               <div className="mt-4 flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
                 {(Object.keys(pressureLabels) as PressureLevel[]).map((level) => (
                   <span key={level} className="inline-flex items-center gap-1.5">

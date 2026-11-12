@@ -91,12 +91,88 @@ function harness({ pro = true, consent = true, fail = false, authFail = false, o
     source.indexOf("  if (initialRuntime) {"),
   );
   vm.runInContext(
-    `${functionSource("submitChat", "initialize")}\n${functionSource("refreshMessagesOnOpen", "handleBrowserChatChanged")}\n${functionSource("initialize", "mountListeners")}\n${functionSource("applyAuthState", "handleSignOut")}\n${functionSource("handleSignOut", "handleWebsiteSignOut")}\n${functionSource("handleWebsiteSignOut", "syncWebsiteAuthState")}\n${functionSource("handleOpenSignIn", "applyAuthState")}\n${runtimeListener}\nglobalThis.testApi = { submitChat, refreshMessagesOnOpen, initialize, handleSignOut, handleWebsiteSignOut, handleOpenSignIn, runtimeMessageListener };`,
+    `${functionSource("submitChat", "initialize")}\n${functionSource("refreshMessagesOnOpen", "handleBrowserChatChanged")}\n${functionSource("initialize", "mountListeners")}\n${functionSource("applyAuthState", "handleSignOut")}\n${functionSource("handleSignOut", "handleWebsiteSignOut")}\n${functionSource("handleWebsiteSignOut", "syncWebsiteAuthState")}\n${functionSource("syncWebsiteAuthState", "handleChat")}\n${functionSource("handleOpenSignIn", "applyAuthState")}\n${runtimeListener}\nglobalThis.testApi = { submitChat, refreshMessagesOnOpen, initialize, handleSignOut, handleWebsiteSignOut, syncWebsiteAuthState, handleOpenSignIn, runtimeMessageListener };`,
     context,
   );
   vm.runInContext(functionSource("rememberReadingPosition", "announce"), context);
   vm.runInContext(functionSource("retainFailedQuestion", "submitChat"), context);
   return { state, events, context, api: context.testApi };
+}
+
+{
+  const { state, events, context, api } = harness();
+  context.document = { documentElement: { dataset: { unimateAuthState: "anonymous" } } };
+  state.messages = [{ role: "assistant", message: "Keep my unsaved answer" }];
+  state.pendingSave = "keep-save";
+  api.syncWebsiteAuthState();
+  await Promise.resolve();
+  assert.equal(
+    events.some(([name]) => name === "WEBSITE_SIGN_OUT"),
+    false,
+  );
+  assert.equal(state.auth.userId, "student");
+  assert.equal(state.messages.length, 1);
+  assert.equal(state.draft, "Explain this");
+  assert.equal(state.pendingSave, "keep-save");
+  context.document.documentElement.dataset.unimateAuthState = "signed-out";
+  api.syncWebsiteAuthState();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(events.filter(([name]) => name === "WEBSITE_SIGN_OUT").length, 1);
+  assert.equal(state.messages.length, 0);
+  assert.equal(state.draft, "");
+  assert.equal(state.pendingSave, null);
+}
+
+// Loaded dialogue remains conversational context across reload and handoff.
+// It never becomes a field in the fresh page-source packet.
+for (const load of ["initialize", "refreshMessagesOnOpen"]) {
+  const saved = [
+    { role: "user", message: "Quiz me about photosynthesis" },
+    { role: "assistant", message: "Which pigment absorbs light?" },
+  ];
+  const { state, events, api } = harness({
+    onSend: (request) =>
+      request.type === "LOAD_CHAT_STATE"
+        ? { conversationId: "saved-quiz", conversationTitle: "Saved quiz", messages: saved.slice() }
+        : undefined,
+  });
+  await api[load]();
+  assert.equal(state.pageHistory.length, 0);
+  await api.submitChat("Chlorophyll. Was that correct?");
+  const payload = events.find(([name]) => name === "SEND_CHAT")[1];
+  assert.equal(payload.conversationId, "saved-quiz");
+  assert.deepEqual(JSON.parse(JSON.stringify(payload.history)), saved);
+  assert.equal(payload.context.visiblePageText, "Course material");
+  assert.equal(JSON.stringify(payload.context).includes("Which pigment"), false);
+}
+
+{
+  const { state, events, api } = harness();
+  state.messages = Array.from({ length: 24 }, (_, index) => ({
+    role: index % 2 ? "assistant" : "user",
+    message: `${index}:` + "x".repeat(5000),
+  }));
+  await api.submitChat("Continue");
+  const payload = events.find(([name]) => name === "SEND_CHAT")[1];
+  assert.equal(payload.history.length, 10);
+  assert.ok(payload.history.every((message) => message.message.length === 4000));
+  assert.ok(payload.history[0].message.startsWith("14:"));
+}
+
+{
+  const context = vm.createContext({});
+  vm.runInContext(functionSource("escapeHtml", "studentFacingError"), context);
+  for (const value of ["Save $20 from a $100 price.", "It costs $4.50.", "The range is $5–$10."]) {
+    assert.equal(context.formatAssistantMessage(value), value);
+  }
+  assert.equal(
+    context.formatAssistantMessage("**Answer:** 2 \\times 3 = 6"),
+    "<strong>Answer:</strong> 2 × 3 = 6",
+  );
+  assert.equal(
+    context.formatAssistantMessage('<img src=x onerror="bad">'),
+    "&lt;img src=x onerror=&quot;bad&quot;&gt;",
+  );
 }
 
 // A definitive revocation is not a transient history/network failure. Keep the
@@ -839,12 +915,18 @@ for (const stage of ["AUTH_STATE", "SEND_CHAT"]) {
 {
   const { state, context, events, api } = harness();
   state.pageHistory = [{ role: "assistant", message: "Answer about the previous page" }];
+  state.messages = state.pageHistory.slice();
   context.location.href = "https://course.test/next-lesson";
   await api.submitChat("Explain this");
   assert.equal(
     events.find(([name]) => name === "SEND_CHAT")[1].history.length,
-    0,
-    "Sending immediately after SPA navigation must not include the previous page’s history",
+    1,
+    "SPA navigation preserves dialogue, separately from current-page evidence",
+  );
+  assert.equal(state.pageHistory[0].message, "Explain this");
+  assert.equal(
+    events.find(([name]) => name === "SEND_CHAT")[1].context.visiblePageText,
+    "Course material",
   );
 }
 

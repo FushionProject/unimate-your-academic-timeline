@@ -88,13 +88,22 @@ export function buildPressureItems(assignments: Assignment[], courses: Course[])
 }
 
 export function buildSemesterWeeks(items: PressureItem[], today = new Date()): PressureWeek[] {
-  const validDates = items.map((item) => new Date(item.due_at));
-  const earliest = validDates[0];
-  const latest = validDates[validDates.length - 1];
+  const openDates = items
+    .filter((item) => !item.completed)
+    .map((item) => new Date(item.due_at))
+    .sort((left, right) => left.getTime() - right.getTime());
+  const earliest = openDates[0];
+  const latest = openDates[openDates.length - 1];
   const currentWeek = startOfWeek(today, { weekStartsOn: 1 });
-  const firstWeek = earliest
-    ? startOfWeek(earliest < currentWeek ? earliest : currentWeek, { weekStartsOn: 1 })
-    : currentWeek;
+  // Retained work from an earlier term must not push this term off the map.
+  // Keep a little recent catch-up context; older dates remain in the timeline.
+  const earliestVisibleWeek = addWeeks(currentWeek, -4);
+  const firstWeek =
+    earliest && earliest < currentWeek
+      ? startOfWeek(earliest < earliestVisibleWeek ? earliestVisibleWeek : earliest, {
+          weekStartsOn: 1,
+        })
+      : currentWeek;
   const minimumEnd = addWeeks(firstWeek, 15);
   const desiredEnd = latest && latest > minimumEnd ? latest : minimumEnd;
   const weekCount = Math.min(

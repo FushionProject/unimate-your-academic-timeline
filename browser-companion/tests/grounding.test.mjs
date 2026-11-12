@@ -44,6 +44,12 @@ check(
   /screenshot is your primary view/i.test(COMPANION_GROUNDING_SYSTEM_PROMPT),
 );
 check(
+  "saved dialogue is not current-page evidence",
+  /History may include saved dialogue[\s\S]*never as evidence for facts about the current page/.test(
+    COMPANION_GROUNDING_SYSTEM_PROMPT,
+  ),
+);
+check(
   "answers precede explanation",
   /Solve or answer first[\s\S]*Explain briefly next[\s\S]*Summarize only/i.test(
     COMPANION_GROUNDING_SYSTEM_PROMPT,

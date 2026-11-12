@@ -242,6 +242,18 @@ async function parseResponse(response, phase = "network") {
   }
   if (!response.ok) {
     if (
+      phase === "screenshot-analysis" &&
+      response.status === 503 &&
+      body?.code === "SCREENSHOT_UNAVAILABLE"
+    ) {
+      // This exact backend contract rejects before quota reservation or model
+      // generation. Other backend failures must never trigger a second AI call.
+      throw new CompanionError("Screen analysis is temporarily unavailable.", {
+        code: "SCREENSHOT_UNAVAILABLE",
+        phase,
+      });
+    }
+    if (
       ["AI_BILLING_UNAVAILABLE", "AI_CONFIGURATION_ERROR", "AI_NOT_CONFIGURED"].includes(body?.code)
     ) {
       throw new CompanionError(
@@ -1250,6 +1262,7 @@ async function executeChat(payload, sender, session, requestId, requestKey, epoc
   let answer;
   let pipelineDiagnostics = null;
   let contextMode = "screenshot";
+  let screenshotFallbackStatus = "captured";
   try {
     try {
       const image = await captureActiveTab(sender);
@@ -1271,16 +1284,21 @@ async function executeChat(payload, sender, session, requestId, requestKey, epoc
             : "text+screenshot"
           : "screenshot";
     } catch (error) {
-      // Screenshot capture itself can be prohibited on browser-owned pages.
-      // Preserve a useful text-only fallback when supplemental text exists;
-      // backend/AI failures remain visible and are never disguised as capture
-      // problems or multiplied with a second model call.
+      // Capture rejection and the backend's explicit pre-generation screenshot
+      // shutdown can use text. Never retry uncertain/provider failures through
+      // another model route, which could duplicate paid work.
+      const screenshotDisabled =
+        error?.code === "SCREENSHOT_UNAVAILABLE" && error?.phase === "screenshot-analysis";
+      const captureFallback =
+        error?.phase === "capture" &&
+        ![
+          "CAPTURE_UI_HIDE_FAILED",
+          "CAPTURE_TAB_CHANGED",
+          "CAPTURE_DOCUMENT_UNAVAILABLE",
+          "CAPTURE_TIMEOUT",
+        ].includes(error?.code);
       if (
-        error?.phase !== "capture" ||
-        error?.code === "CAPTURE_UI_HIDE_FAILED" ||
-        error?.code === "CAPTURE_TAB_CHANGED" ||
-        error?.code === "CAPTURE_DOCUMENT_UNAVAILABLE" ||
-        error?.code === "CAPTURE_TIMEOUT" ||
+        !(screenshotDisabled || captureFallback) ||
         !(pageContext.visiblePageText || pageContext.highlightedText)
       ) {
         throw error;
@@ -1290,6 +1308,9 @@ async function executeChat(payload, sender, session, requestId, requestKey, epoc
       answer = result.answer;
       pipelineDiagnostics = result.pipelineDiagnostics;
       contextMode = "text-fallback";
+      screenshotFallbackStatus = screenshotDisabled
+        ? "screen analysis unavailable; used text"
+        : "capture unavailable; used text";
     }
   } catch (error) {
     // Persistence begins only after accepted AI work completes, so capture or
@@ -1361,8 +1382,7 @@ async function executeChat(payload, sender, session, requestId, requestKey, epoc
     matchedItem:
       pageContext.relevance?.matchedQuestionNumber || pageContext.relevance?.bestBlockId || null,
     contextCharacterCount: String(pageContext.visiblePageText || "").length,
-    screenshotFallbackStatus:
-      contextMode === "text-fallback" ? "capture unavailable; used text" : "captured",
+    screenshotFallbackStatus,
     confidenceScore: Number(payload.contextConfidence ?? 1),
     ...(pipelineDiagnostics || {}),
   };

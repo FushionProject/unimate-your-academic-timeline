@@ -8,6 +8,8 @@ import {
   pressureLevel,
 } from "../../src/lib/semester-pressure.ts";
 import type { Assignment, Course } from "../../src/lib/courses.ts";
+import { syllabusDateToIso } from "../../src/lib/syllabus-review.ts";
+import { courseworkEvidence } from "../../src/lib/coursework-grounding.ts";
 
 const courses = [
   {
@@ -75,6 +77,37 @@ assert.ok(crowdedWeek, "the three clustered deadlines should share a week");
 assert.equal(crowdedWeek.level, "moderate");
 assert.match(describePressureWeek(crowdedWeek), /3 deadlines across 2 courses/);
 assert.equal(weeks.length, 16, "a semester map should show at least sixteen weeks");
+
+for (const completed of [true, false]) {
+  const retainedItems = buildPressureItems(
+    [
+      { ...assignments[0], id: "old", due_at: "2026-01-15T12:00:00Z", completed },
+      { ...assignments[1], id: "current", due_at: "2026-11-12T12:00:00Z" },
+      { ...assignments[2], id: "far-future", due_at: "2028-01-15T12:00:00Z" },
+    ],
+    courses,
+  );
+  const currentWeeks = buildSemesterWeeks(retainedItems, new Date("2026-11-11T12:00:00Z"));
+  assert.ok(
+    currentWeeks.some((week) => week.items.some((item) => item.id === "current")),
+    "Retained deadlines from old terms must not hide current deadlines",
+  );
+  assert.ok(currentWeeks.length <= 26, "A distant date must not create an unbounded map");
+  assert.equal(retainedItems.length, 3, "Outside-window items stay available in the timeline");
+}
+
+// Noon is only the storage convention for a calendar date, never a known due time.
+const dateOnlyEvidence = JSON.parse(
+  courseworkEvidence(
+    courses,
+    [{ ...assignments[0], due_at: syllabusDateToIso("2026-11-12")! }],
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    new Date("2026-11-11T12:00:00Z"),
+  ).evidence,
+);
+assert.equal(dateOnlyEvidence.openAssignments[0].due, "Thursday, November 12, 2026");
+assert.match(dateOnlyEvidence.deadlinePrecision, /times are not recorded/);
+assert.doesNotMatch(dateOnlyEvidence.openAssignments[0].due, /12:00|AM|PM/);
 
 const dailyItems = buildPressureItems(
   [

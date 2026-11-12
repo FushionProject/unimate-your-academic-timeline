@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useBlocker } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import {
   Plus,
@@ -118,6 +118,7 @@ function Notes() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [loadedNotesKey, setLoadedNotesKey] = useState<string | null>(null);
+  const [persistedNotesJson, setPersistedNotesJson] = useState<string | null>(null);
   const [storageError, setStorageError] = useState("");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -153,6 +154,20 @@ function Notes() {
     !hasUnsavedChanges ||
     window.confirm("This note has unsaved changes. Discard them and continue?");
 
+  // Saving updates React state before storage is attempted. Keep protecting that
+  // state until storage confirms it, including when the browser is out of space.
+  const hasUnstoredChanges =
+    hasLoadedNotes && (hasUnsavedChanges || JSON.stringify(notes) !== persistedNotesJson);
+  useBlocker({
+    disabled: !hasUnstoredChanges,
+    enableBeforeUnload: hasUnstoredChanges,
+    shouldBlockFn: () =>
+      hasUnstoredChanges &&
+      !window.confirm(
+        "Your note changes have not been saved in this browser. Leave and discard them?",
+      ),
+  });
+
   const tagColors = [
     "#FEF3C7",
     "#DBEAFE",
@@ -186,6 +201,7 @@ function Notes() {
   useEffect(() => {
     if (!notesStorageKey) return;
     setLoadedNotesKey(null);
+    setPersistedNotesJson(null);
     setStorageError("");
     try {
       const saved = localStorage.getItem(notesStorageKey);
@@ -200,6 +216,7 @@ function Notes() {
       setFormatting(first?.formatting ?? { ...DEFAULT_FORMATTING });
       setTags(first?.tags ?? []);
       setSelectedCourse(first?.course ?? "");
+      setPersistedNotesJson(JSON.stringify(parsedNotes));
       setLoadedNotesKey(notesStorageKey);
     } catch {
       setNotes([]);
@@ -218,7 +235,9 @@ function Notes() {
   useEffect(() => {
     if (!notesStorageKey || !hasLoadedNotes) return;
     try {
-      localStorage.setItem(notesStorageKey, JSON.stringify(notes));
+      const serialized = JSON.stringify(notes);
+      localStorage.setItem(notesStorageKey, serialized);
+      setPersistedNotesJson(serialized);
       setStorageError("");
     } catch {
       setSaveStatus("");
@@ -551,7 +570,7 @@ function Notes() {
                   role="status"
                   aria-live="polite"
                 >
-                  {saveStatus}
+                  {hasUnsavedChanges ? "Unsaved changes" : saveStatus}
                 </span>
               </div>
 

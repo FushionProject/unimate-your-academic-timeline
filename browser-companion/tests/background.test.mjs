@@ -11,6 +11,8 @@ let lastVisionBody = null;
 let lastDashboardBody = null;
 let dashboardCalls = 0;
 let visionFailure = null;
+let onVisionFailure = null;
+let visionCalls = 0;
 let failAssistantPersistence = false;
 let profileIsPro = true;
 let privacyConsentAccepted = true;
@@ -65,9 +67,11 @@ const context = vm.createContext({
       return json(rows.map((row) => ({ id: crypto.randomUUID(), ...row })));
     }
     if (href.endsWith("/api/analyze-screenshot")) {
+      visionCalls += 1;
       if (visionFailure) {
         const response = visionFailure;
         visionFailure = null;
+        onVisionFailure?.();
         return response;
       }
       lastVisionBody = JSON.parse(options.body);
@@ -312,6 +316,53 @@ assert.equal(
   persistedBeforeAiFailure,
   "failed AI work must not leave an orphaned user message",
 );
+assert.equal(dashboardCalls, 1, "ordinary backend failures never start a second AI route");
+
+const visionBeforeShutdown = visionCalls;
+visionFailure = json({ code: "SCREENSHOT_UNAVAILABLE", error: "Screen analysis disabled" }, 503);
+const shutdownFallback = await sendChat(
+  { requestId: "screenshot-disabled", message: "Explain this", context: pageContext, history: [] },
+  sender,
+);
+assert.equal(visionCalls, visionBeforeShutdown + 1);
+assert.equal(dashboardCalls, 2, "a known pre-generation rejection can use available text once");
+assert.equal(shutdownFallback.contextMode, "text-fallback");
+assert.equal(shutdownFallback.assistant.message, "Text answer");
+assert.equal(
+  shutdownFallback.diagnostics.screenshotFallbackStatus,
+  "screen analysis unavailable; used text",
+);
+assert.equal(lastDashboardBody.type, "companion-chat");
+assert.equal("imageBase64" in lastDashboardBody, false);
+
+for (const failure of [
+  json({ code: "SCREENSHOT_UNAVAILABLE", error: "Unexpected response status" }, 500),
+  json({ code: "AI_TIMEOUT", error: "Uncertain provider work" }, 503),
+  json({ code: "AI_RESPONSE_TRUNCATED", error: "Model work already ran" }, 502),
+]) {
+  visionFailure = failure;
+  await assert.rejects(
+    sendChat({ message: "Explain this", context: pageContext, history: [] }, sender),
+  );
+  assert.equal(dashboardCalls, 2, "only the exact pre-generation contract may fall back");
+}
+visionFailure = json({ code: "SCREENSHOT_UNAVAILABLE" }, 503);
+await assert.rejects(
+  sendChat({ message: "Explain this", context: {}, history: [] }, sender),
+  (error) => error.code === "SCREENSHOT_UNAVAILABLE",
+);
+assert.equal(dashboardCalls, 2, "text fallback requires actual selected or visible text");
+visionFailure = json({ code: "SCREENSHOT_UNAVAILABLE" }, 503);
+onVisionFailure = () => {
+  privacyConsentAccepted = false;
+};
+await assert.rejects(
+  sendChat({ message: "Explain this", context: pageContext, history: [] }, sender),
+  (error) => error.code === "PRIVACY_CONSENT_REQUIRED",
+);
+assert.equal(dashboardCalls, 2, "consent is rechecked before recovery transmits page text");
+onVisionFailure = null;
+privacyConsentAccepted = true;
 
 failAssistantPersistence = true;
 const answerDespitePersistenceFailure = await sendChat(

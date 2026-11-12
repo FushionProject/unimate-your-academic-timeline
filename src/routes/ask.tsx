@@ -951,6 +951,10 @@ function Ask({
                       : "Add courses in your dashboard for more personal help."}
             </span>
           </div>
+          <p className="border-b border-border/60 px-4 py-2 text-xs leading-5 text-muted-foreground sm:px-6">
+            UniMate uses your saved courses and deadline dates. Uploaded syllabus text and Notes
+            aren’t included automatically. Paste the text or instructions you want help with.
+          </p>
           {/* Conversation Area */}
           <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
             {selectedConversationId && (

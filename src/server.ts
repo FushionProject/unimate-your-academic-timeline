@@ -154,7 +154,10 @@ function configuredAiConcurrency(): number {
   return Number.isInteger(value) && value > 0 && value <= 100 ? value : DEFAULT_MAX_AI_CONCURRENCY;
 }
 
-async function withAiProviderCapacity<T>(operation: () => Promise<T>): Promise<T> {
+async function withAiProviderCapacity<T>(
+  operation: () => Promise<T>,
+  clientSignal?: AbortSignal,
+): Promise<T> {
   if (activeAiProviderRequests >= configuredAiConcurrency()) {
     throw new CompanionUpstreamError(
       "AI_BUSY",
@@ -166,6 +169,17 @@ async function withAiProviderCapacity<T>(operation: () => Promise<T>): Promise<T
   activeAiProviderRequests += 1;
   try {
     return await operation();
+  } catch (error) {
+    // This wrapper covers transport only; HTTP failures are recorded after the
+    // response arrives. A provider timeout/network failure must open the same
+    // circuit, but student cancellation and the admission denial above must not.
+    if (
+      !clientSignal?.aborted &&
+      !(error instanceof CompanionUpstreamError && error.code === "REQUEST_CANCELLED")
+    ) {
+      await recordProviderSignal({ provider: "openai", success: false }).catch(() => undefined);
+    }
+    throw error;
   } finally {
     activeAiProviderRequests -= 1;
   }
@@ -1268,21 +1282,23 @@ async function aiTextCompletion(
   opts: { temperature: number; maxTokens: number },
   clientSignal?: AbortSignal,
 ): Promise<string> {
-  const res = await withAiProviderCapacity(() =>
-    fetchWithTimeout(
-      AI_COMPLETIONS_URL,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${aiApiKey}`,
-          "Content-Type": "application/json",
+  const res = await withAiProviderCapacity(
+    () =>
+      fetchWithTimeout(
+        AI_COMPLETIONS_URL,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${aiApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(aiCompletionBody("text", messages, opts.maxTokens, process.env)),
         },
-        body: JSON.stringify(aiCompletionBody("text", messages, opts.maxTokens, process.env)),
-      },
-      AI_PROVIDER_TIMEOUT_MS,
-      new CompanionUpstreamError("AI_TIMEOUT", "ai", 504, "UniMate’s AI request timed out."),
-      clientSignal,
-    ),
+        AI_PROVIDER_TIMEOUT_MS,
+        new CompanionUpstreamError("AI_TIMEOUT", "ai", 504, "UniMate’s AI request timed out."),
+        clientSignal,
+      ),
+    clientSignal,
   );
   if (!res.ok) {
     const failure = await readAiProviderError(res);
@@ -1803,6 +1819,27 @@ async function handleGenerateStudyMap(request: Request): Promise<Response> {
   }
 }
 
+function configuredCanvasProxyHosts(): Set<string> {
+  // Legacy integration is disabled until an operator approves exact Canvas
+  // hosts. Never infer trust from a student's URL or allow wildcard suffixes.
+  // Configure only institution-controlled public hosts; no DNS lookup is made.
+  const hosts = (process.env.CANVAS_PROXY_ALLOWED_HOSTS || "")
+    .split(",")
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+  const publicHostname =
+    /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+  if (
+    hosts.some(
+      (host) =>
+        !publicHostname.test(host) ||
+        /(?:^|\.)(?:localhost|local|internal|invalid|test)$/.test(host),
+    )
+  )
+    return new Set();
+  return new Set(hosts);
+}
+
 // Handle /api/canvas-proxy endpoint — the Canvas REST API doesn't send CORS
 // headers, so browsers can't call it directly. The client sends the user's
 // Canvas host + token here and we forward the request server-side.
@@ -1817,6 +1854,13 @@ async function handleCanvasProxy(request: Request): Promise<Response> {
 
     const authResult = await requireAuthenticatedUser(request);
     if (authResult instanceof Response) return authResult;
+    const allowedHosts = configuredCanvasProxyHosts();
+    if (!allowedHosts.size) {
+      return jsonResponse(
+        { error: "Canvas connections are not enabled.", code: "CANVAS_PROXY_DISABLED" },
+        503,
+      );
+    }
     const rateLimited = enforceUserRateLimit(authResult.id, "canvas-proxy", 120);
     if (rateLimited) return rateLimited;
 
@@ -1852,13 +1896,11 @@ async function handleCanvasProxy(request: Request): Promise<Response> {
       return jsonResponse({ error: "Canvas URL must use https" }, 400);
     }
     const hostname = canvasUrl.hostname;
-    if (
-      hostname === "localhost" ||
-      !hostname.includes(".") ||
-      /^[\d.]+$/.test(hostname) ||
-      hostname.includes(":")
-    ) {
-      return jsonResponse({ error: "Invalid Canvas host" }, 400);
+    if (!allowedHosts.has(hostname)) {
+      return jsonResponse(
+        { error: "This Canvas host is not enabled.", code: "CANVAS_HOST_DENIED" },
+        403,
+      );
     }
     let targetUrl: URL;
     try {
@@ -1997,38 +2039,40 @@ async function handleAnalyzeScreenshot(request: Request): Promise<Response> {
 
     // Only caller-supplied image data is accepted; no remote URL fetches.
     const callVisionModel = async (systemPrompt: string): Promise<string> => {
-      const providerResponse = await withAiProviderCapacity(() =>
-        fetchWithTimeout(
-          AI_COMPLETIONS_URL,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${aiApiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(
-              aiCompletionBody(
-                "vision",
-                [
-                  { role: "system", content: systemPrompt },
-                  ...history,
-                  {
-                    role: "user",
-                    content: [
-                      { type: "text", text: userContent },
-                      { type: "image_url", image_url: { url: imageBase64 } },
-                    ],
-                  },
-                ],
-                companionMaxTokens(userPrompt),
-                process.env,
+      const providerResponse = await withAiProviderCapacity(
+        () =>
+          fetchWithTimeout(
+            AI_COMPLETIONS_URL,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${aiApiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(
+                aiCompletionBody(
+                  "vision",
+                  [
+                    { role: "system", content: systemPrompt },
+                    ...history,
+                    {
+                      role: "user",
+                      content: [
+                        { type: "text", text: userContent },
+                        { type: "image_url", image_url: { url: imageBase64 } },
+                      ],
+                    },
+                  ],
+                  companionMaxTokens(userPrompt),
+                  process.env,
+                ),
               ),
-            ),
-          },
-          AI_PROVIDER_TIMEOUT_MS,
-          new CompanionUpstreamError("AI_TIMEOUT", "ai", 504, "UniMate’s AI request timed out."),
-          request.signal,
-        ),
+            },
+            AI_PROVIDER_TIMEOUT_MS,
+            new CompanionUpstreamError("AI_TIMEOUT", "ai", 504, "UniMate’s AI request timed out."),
+            request.signal,
+          ),
+        request.signal,
       );
 
       if (!providerResponse.ok) {

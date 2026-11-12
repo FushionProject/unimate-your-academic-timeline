@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import ts from "typescript";
 import { z } from "zod";
 import * as jsx from "react/jsx-runtime";
+import { createMemoryHistory } from "@tanstack/history";
 
 const read = (file) => fs.readFileSync(new URL(`../../${file}`, import.meta.url), "utf8");
 const source = (file) =>
@@ -140,7 +141,9 @@ for (const [file, name, childName] of [
     effectIndex,
     work,
     getFails = false,
-    setFails = false;
+    setFails = false,
+    blocker,
+    confirmLeave = true;
   const localStorage = {
     getItem: (key) => {
       if (getFails) throw new Error("storage blocked");
@@ -177,14 +180,19 @@ for (const [file, name, childName] of [
   const context = vm.createContext({
     exports: {},
     localStorage,
-    window: { confirm: () => true },
+    window: { confirm: () => confirmLeave },
     require: (name) =>
       name === "react"
         ? hooks
         : name === "react/jsx-runtime"
           ? jsx
           : name === "@tanstack/react-router"
-            ? { createFileRoute: () => (options) => options }
+            ? {
+                createFileRoute: () => (options) => options,
+                useBlocker: (options) => {
+                  blocker = options;
+                },
+              }
             : name.endsWith("auth-context")
               ? { useAuth: () => ({ user }) }
               : name.endsWith("courses")
@@ -205,6 +213,26 @@ for (const [file, name, childName] of [
     pending.clear();
   };
   const state = (name) => slots[stateNames.indexOf(name)];
+  const attemptNavigation = async () => {
+    const previousDocument = globalThis.document;
+    globalThis.document = {};
+    try {
+      const history = createMemoryHistory({ initialEntries: ["/notes"] });
+      if (!blocker.disabled) {
+        history.block({
+          blockerFn: blocker.shouldBlockFn,
+          enableBeforeUnload: blocker.enableBeforeUnload,
+        });
+      }
+      history.push("/dashboard");
+      await Promise.resolve();
+      await Promise.resolve();
+      return history.location.pathname;
+    } finally {
+      if (previousDocument === undefined) delete globalThis.document;
+      else globalThis.document = previousDocument;
+    }
+  };
   const privateNote = {
     id: "note-A",
     title: "Private A",
@@ -220,6 +248,8 @@ for (const [file, name, childName] of [
   render();
   flush();
   assert.equal(state("body"), privateNote.body);
+  render();
+  assert.equal(blocker.disabled, true, "Saved notes must not block navigation");
   slots[stateNames.indexOf("title")] = "Unsent title edit";
   user = { id: "student-A", accessToken: "refreshed" };
   render();
@@ -229,9 +259,23 @@ for (const [file, name, childName] of [
     "Unsent title edit",
     "Same-account refresh preserves unsaved editor text",
   );
+  assert.equal(blocker.disabled, false, "Editor changes must guard route navigation");
+  assert.equal(blocker.enableBeforeUnload, true, "Reload and tab close must also be guarded");
+  confirmLeave = false;
+  assert.equal(blocker.shouldBlockFn(), true, "Cancel keeps the note draft open");
+  assert.equal(
+    await attemptNavigation(),
+    "/notes",
+    "Cancelled navigation must remain in the editor",
+  );
+  assert.equal(state("title"), "Unsent title edit", "Cancelled navigation must keep the draft");
+  confirmLeave = true;
+  assert.equal(blocker.shouldBlockFn(), false, "Explicit discard permits navigation");
+  assert.equal(await attemptNavigation(), "/dashboard");
   const before = writes.length;
   user = { id: "student-B" };
   render();
+  assert.equal(blocker.disabled, true, "A previous account's draft must not block this account");
   assert.equal(writes.length, before, "Do not write A's closed-over notes under B's key");
   flush();
   render();
@@ -285,7 +329,6 @@ for (const [file, name, childName] of [
   render();
   flush();
   assert.match(state("storageError"), /only in this tab/);
-  setFails = false;
   const find = (value, predicate) =>
     !value || typeof value !== "object"
       ? null
@@ -294,6 +337,7 @@ for (const [file, name, childName] of [
         : predicate(value)
           ? value
           : find(value.props?.children, predicate);
+  slots[stateNames.indexOf("body")] = "Draft after storage failure";
   const saveButton = find(
     render(),
     (node) =>
@@ -305,9 +349,31 @@ for (const [file, name, childName] of [
   flush();
   render();
   flush();
+  render();
+  assert.equal(state("saveStatus"), "", "Failed storage must not report a successful save");
+  assert.equal(blocker.disabled, false, "Failed Save must keep draft protection active");
+  assert.equal(blocker.enableBeforeUnload, true);
+  confirmLeave = false;
+  assert.equal(await attemptNavigation(), "/notes", "Storage failure must not unlock navigation");
+  assert.equal(JSON.parse(stored.get("unimateNotes:student-A"))[0].body, privateNote.body);
+  setFails = false;
+  saveButton.props.onClick();
+  flush();
+  render();
+  flush();
+  render();
   assert.equal(state("storageError"), "");
   assert.equal(state("saveStatus"), "Saved");
-  assert.equal(JSON.parse(stored.get("unimateNotes:student-A"))[0].body, privateNote.body);
+  assert.equal(blocker.disabled, true, "Successful persistence releases navigation protection");
+  assert.equal(
+    await attemptNavigation(),
+    "/dashboard",
+    "Saved work no longer requires confirmation",
+  );
+  assert.equal(
+    JSON.parse(stored.get("unimateNotes:student-A"))[0].body,
+    "Draft after storage failure",
+  );
 }
 
 // Execute Results' actual load/save effects against separate account keys.

@@ -529,7 +529,6 @@
       .replaceAll("\\cdot", "·")
       .replace(/^#{1,6}\s*/gm, "")
       .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
-      .replace(/\$([^$\n]+)\$/g, "$1")
       .replace(/\n{3,}/g, "\n\n");
   }
 
@@ -1044,14 +1043,17 @@
       contextCharacterCount: context.visiblePageText?.length || 0,
       screenshotFallbackStatus: "pending",
     };
-    // Persisted chat rows remain visible, but only turns created in this page
-    // session are sent back to the model. This prevents claims from another
-    // site or an earlier Canvas page becoming evidence in a new conversation.
+    // Saved dialogue supports follow-ups after reloads and website handoffs.
+    // It is bounded conversational context, separate from the freshly collected
+    // page evidence; the backend forbids treating past page claims as sources.
     if (state.pageHistoryUrl !== location.href) {
       state.pageHistory = [];
       state.pageHistoryUrl = location.href;
     }
-    const previousHistory = state.pageHistory.slice(-12);
+    const previousHistory = state.messages
+      .filter((item) => item?.role === "user" || item?.role === "assistant")
+      .slice(-10)
+      .map((item) => ({ role: item.role, message: String(item.message || "").slice(0, 4000) }));
     const requestPageUrl = unresolved?.pageUrl || location.href;
     const requestUserId = state.auth.userId;
     const requestId = unresolved?.payload.requestId || crypto.randomUUID();

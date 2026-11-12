@@ -311,6 +311,7 @@ const authenticatedRequest = (path = "/api/billing-status", options = {}) =>
   let upstreamSignal;
   let streamController;
   let cancelled = 0;
+  const providerSignals = [];
   const context = serverFunctions(
     ["CompanionUpstreamError", "fetchWithTimeout", "withAiProviderCapacity"],
     {
@@ -319,6 +320,7 @@ const authenticatedRequest = (path = "/api/billing-status", options = {}) =>
       clearTimeout,
       activeAiProviderRequests: 0,
       configuredAiConcurrency: () => 1,
+      recordProviderSignal: async (signal) => providerSignals.push(signal),
       fetch: async (_url, init) => {
         upstreamSignal = init.signal;
         return new Response(
@@ -348,13 +350,22 @@ const authenticatedRequest = (path = "/api/billing-status", options = {}) =>
   assert.equal(upstreamSignal.aborted, true);
   assert.ok(cancelled > 0);
   assert.equal(context.activeAiProviderRequests, 0);
+  assert.equal(
+    providerSignals.length,
+    1,
+    "A body-stream timeout signals provider failure once; AI_BUSY does not",
+  );
 
   const client = new AbortController();
-  const abandoned = fetchBody(client.signal);
+  const abandoned = context.api.withAiProviderCapacity(
+    () => fetchBody(client.signal),
+    client.signal,
+  );
   await Promise.resolve();
   client.abort();
   await assert.rejects(abandoned, (e) => e.code === "REQUEST_CANCELLED");
   assert.equal(upstreamSignal.aborted, true);
+  assert.equal(providerSignals.length, 1, "Abandoning a provider stream does not open its circuit");
 
   const oversized = fetchBody(undefined, 3);
   await Promise.resolve();

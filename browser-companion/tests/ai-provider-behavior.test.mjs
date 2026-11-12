@@ -233,22 +233,29 @@ assert.equal(
   const calls = [];
   const completions = [];
   const signals = [];
-  let networkFailure = false;
+  let transportError;
   let reply = new Response(
     JSON.stringify({ choices: [{ message: { content: "A helpful answer" } }] }),
   );
   const context = serverHelpers(
-    ["CompanionUpstreamError", "aiTextCompletion", "aiErrorResponse", "runCapacityTracked"],
+    [
+      "CompanionUpstreamError",
+      "withAiProviderCapacity",
+      "aiTextCompletion",
+      "aiErrorResponse",
+      "runCapacityTracked",
+    ],
     {
       AI_COMPLETIONS_URL,
       aiCompletionBody,
       AiProviderError,
       readAiProviderError,
       AI_PROVIDER_TIMEOUT_MS: 45000,
-      withAiProviderCapacity: (operation) => operation(),
+      activeAiProviderRequests: 0,
+      configuredAiConcurrency: () => 1,
       fetchWithTimeout: async (...args) => {
         calls.push(args);
-        if (networkFailure) throw new TypeError("private-network-detail");
+        if (transportError) throw transportError;
         return reply;
       },
       recordProviderSignal: async (signal) => signals.push(signal),
@@ -342,7 +349,8 @@ assert.equal(
     "Truncated answers never trigger a hidden paid retry",
   );
   assert.equal(signals.at(-1).success, false);
-  networkFailure = true;
+  transportError = new TypeError("private-network-detail");
+  const signalsBeforeNetworkFailure = signals.length;
   try {
     await context.api.aiTextCompletion("fixture", [], { maxTokens: 100 });
     assert.fail("Transport failure must not be treated as an answer");
@@ -353,6 +361,59 @@ assert.equal(
     assert.equal(body.retryable, true);
     assert.doesNotMatch(JSON.stringify(body), /private-network-detail/);
   }
+  assert.equal(signals.length, signalsBeforeNetworkFailure + 1);
+  assert.equal(signals.at(-1).success, false);
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await assert.rejects(context.api.aiTextCompletion("fixture", [], { maxTokens: 100 }));
+  }
+  assert.equal(
+    signals.length,
+    signalsBeforeNetworkFailure + 6,
+    "Every transport failure reaches the circuit breaker, including a sustained outage",
+  );
+  transportError = new context.api.CompanionUpstreamError("AI_TIMEOUT", "ai", 504, "Timed out");
+  await assert.rejects(
+    context.api.aiTextCompletion("fixture", [], { maxTokens: 100 }),
+    (error) => error === transportError,
+  );
+  assert.equal(signals.length, signalsBeforeNetworkFailure + 7);
+
+  const beforeCancellation = signals.length;
+  transportError = new context.api.CompanionUpstreamError(
+    "REQUEST_CANCELLED",
+    "ai",
+    499,
+    "Cancelled",
+  );
+  await assert.rejects(
+    context.api.aiTextCompletion("fixture", [], { maxTokens: 100 }),
+    (error) => error === transportError,
+  );
+  const cancelled = new AbortController();
+  cancelled.abort();
+  transportError = new TypeError("synthetic cancellation transport error");
+  await assert.rejects(
+    context.api.aiTextCompletion("fixture", [], { maxTokens: 100 }, cancelled.signal),
+  );
+  assert.equal(
+    signals.length,
+    beforeCancellation,
+    "Client cancellation must not open the provider circuit",
+  );
+
+  const beforeBusy = calls.length;
+  context.activeAiProviderRequests = 1;
+  await assert.rejects(
+    context.api.aiTextCompletion("fixture", [], { maxTokens: 100 }),
+    (error) => error.code === "AI_BUSY",
+  );
+  assert.equal(calls.length, beforeBusy, "Local capacity denial makes no provider call");
+  assert.equal(
+    signals.length,
+    beforeCancellation,
+    "Local capacity denial does not signal provider failure",
+  );
+  context.activeAiProviderRequests = 0;
 }
 
 // Execute the screenshot route, including its real transport, serializer and
@@ -362,8 +423,14 @@ assert.equal(
   const signals = [];
   const completions = [];
   let reply;
+  let transportError;
   const context = serverHelpers(
-    ["CompanionUpstreamError", "aiErrorResponse", "handleAnalyzeScreenshot"],
+    [
+      "CompanionUpstreamError",
+      "withAiProviderCapacity",
+      "aiErrorResponse",
+      "handleAnalyzeScreenshot",
+    ],
     {
       AI_COMPLETIONS_URL,
       aiCompletionBody,
@@ -388,9 +455,11 @@ assert.equal(
       buildTutorTaskInstruction: () => "Explain",
       normalizeCompanionHistory: () => [],
       companionMaxTokens: () => 500,
-      withAiProviderCapacity: (operation) => operation(),
+      activeAiProviderRequests: 0,
+      configuredAiConcurrency: () => 1,
       fetchWithTimeout: async (...args) => {
         calls.push(args);
+        if (transportError) throw transportError;
         return reply;
       },
       recordProviderSignal: async (signal) => signals.push(signal),
@@ -458,6 +527,56 @@ assert.equal(
   assert.match(truncatedBody.error, /cut off.*try again.*shorter response/s);
   assert.equal(signals.at(-1).success, false);
   assert.equal(completions.at(-1)[2], "provider_error");
+
+  const screenshotRequest = (signal) =>
+    new Request("https://unimate.test/api/analyze-screenshot", {
+      method: "POST",
+      signal,
+      body: JSON.stringify({ imageBase64: "data:image/png;base64,AAAA", question: "Explain this" }),
+    });
+  for (const [failure, expectedStatus] of [
+    [new TypeError("private-network-detail"), 502],
+    [new context.api.CompanionUpstreamError("AI_TIMEOUT", "ai", 504, "Timed out"), 504],
+  ]) {
+    transportError = failure;
+    const signalsBefore = signals.length;
+    const response = await context.api.handleAnalyzeScreenshot(screenshotRequest());
+    assert.equal(response.status, expectedStatus);
+    assert.equal(
+      signals.length,
+      signalsBefore + 1,
+      "Vision transport failures signal the circuit once",
+    );
+    assert.equal(signals.at(-1).success, false);
+    assert.doesNotMatch(await response.text(), /private-network-detail/);
+  }
+  const beforeCancelledVision = signals.length;
+  transportError = new context.api.CompanionUpstreamError(
+    "REQUEST_CANCELLED",
+    "ai",
+    499,
+    "Cancelled",
+  );
+  assert.equal((await context.api.handleAnalyzeScreenshot(screenshotRequest())).status, 499);
+  const cancelled = new AbortController();
+  cancelled.abort();
+  transportError = new TypeError("synthetic cancellation transport error");
+  await context.api.handleAnalyzeScreenshot(screenshotRequest(cancelled.signal));
+  assert.equal(
+    signals.length,
+    beforeCancelledVision,
+    "Vision cancellation never opens the provider circuit",
+  );
+  context.activeAiProviderRequests = 1;
+  const beforeBusyVision = calls.length;
+  assert.equal((await context.api.handleAnalyzeScreenshot(screenshotRequest())).status, 503);
+  assert.equal(calls.length, beforeBusyVision);
+  assert.equal(
+    signals.length,
+    beforeCancelledVision,
+    "Vision local capacity denial is not provider failure",
+  );
+  context.activeAiProviderRequests = 0;
 }
 
 // Execute the Ask client adapter with simulated API responses, proving the

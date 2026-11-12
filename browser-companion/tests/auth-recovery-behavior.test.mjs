@@ -124,6 +124,7 @@ function harness(source, name, seed = [], globals = {}) {
     states,
     context,
     mountEffects: () => effects.splice(0).map((effect) => effect()),
+    runEffect: (index) => effects.splice(0)[index]?.(),
     render: () => {
       cursor = 0;
       refCursor = 0;
@@ -169,6 +170,8 @@ function authFixture({ recovery = true, stored = true, denied = false, configure
     resend: async () => ({ error: null }),
     resendCalls: [],
     authListener: null,
+    signOut: async () => ({ error: null }),
+    companionEvents: [],
   };
   const storage = {
     getItem: (key) => {
@@ -181,6 +184,15 @@ function authFixture({ recovery = true, stored = true, denied = false, configure
   const ui = harness(`${storageSource}\n${authSource}`, "AuthProvider", [null, false, recovery], {
     sessionStorage: storage,
     localStorage: storage,
+    CustomEvent: class {
+      constructor(type) {
+        this.type = type;
+      }
+    },
+    document: {
+      documentElement: { dataset: {} },
+      dispatchEvent: (event) => state.companionEvents.push(event.type),
+    },
     supabase: configured
       ? {
           auth: {
@@ -201,11 +213,48 @@ function authFixture({ recovery = true, stored = true, denied = false, configure
               state.resendCalls.push(args);
               return state.resend(...args);
             },
+            signOut: () => state.signOut(),
           },
         }
       : null,
   });
   return { ...ui, state, values, api: () => ui.render().props.value };
+}
+
+// Anonymous public pages do not control the independent extension session.
+// Definitive revocation, explicit sign-out and website account changes still do.
+{
+  const f = authFixture({ recovery: false, stored: false });
+  f.api();
+  f.mountEffects();
+  await Promise.resolve();
+  assert.equal(f.context.document.documentElement.dataset.unimateAuthState, "anonymous");
+  assert.deepEqual(f.state.companionEvents, []);
+  const publish = (event, userId) => {
+    f.state.authListener(event, userId ? { user: { id: userId } } : null);
+    f.api();
+    f.runEffect(1);
+  };
+  publish("INITIAL_SESSION", null);
+  assert.equal(f.context.document.documentElement.dataset.unimateAuthState, "anonymous");
+  publish("SIGNED_IN", "user-a");
+  publish("TOKEN_REFRESHED", "user-a");
+  assert.equal(f.context.document.documentElement.dataset.unimateAuthState, "signed-in");
+  assert.deepEqual(f.state.companionEvents, []);
+  publish("SIGNED_IN", "user-b");
+  assert.deepEqual(f.state.companionEvents, ["unimate-auth-signed-out"]);
+  publish("SIGNED_OUT", null);
+  assert.equal(f.context.document.documentElement.dataset.unimateAuthState, "signed-out");
+  assert.equal(f.state.companionEvents.length, 2);
+}
+{
+  const f = authFixture({ recovery: false });
+  f.state.signOut = async () => ({ error: { message: "Temporary outage" } });
+  assert((await f.api().signOut()).error);
+  assert.deepEqual(f.state.companionEvents, []);
+  f.state.signOut = async () => ({ error: null });
+  assert.equal((await f.api().signOut()).error, null);
+  assert.deepEqual(f.state.companionEvents, ["unimate-auth-signed-out"]);
 }
 
 // Context catches transport rejects, retains provider codes, and generates only

@@ -28,7 +28,6 @@ export function courseworkEvidence(
   const dueDate = new Intl.DateTimeFormat("en-US", {
     timeZone,
     dateStyle: "full",
-    timeStyle: "short",
   });
   const names = new Map(courses.map((course) => [course.id, course.name]));
   const items = assignments
@@ -37,6 +36,8 @@ export function courseworkEvidence(
   const evidence = JSON.stringify({
     today: date.format(now),
     timeZone,
+    deadlinePrecision:
+      "Calendar dates only. Deadline times are not recorded; do not infer a time of day.",
     courses: courses.slice(0, 30).map((course) => ({
       name: course.name.slice(0, 150),
       code: course.course_code?.slice(0, 40),

@@ -52,6 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     null,
   );
   const recoveryIdentity = useRef({ generation: 0, userId: null as string | null });
+  const companionWebsiteIdentity = useRef<string | null>(null);
+  const companionSignedOut = useRef(false);
 
   useEffect(() => {
     if (!supabase) {
@@ -83,6 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRecoveryMode(readBrowserStorage(() => sessionStorage, RECOVERY_SESSION_KEY) === "active");
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === "SIGNED_OUT") companionSignedOut.current = true;
+      else if (newSession) companionSignedOut.current = false;
       const nextUserId = newSession?.user.id ?? null;
       const accountChanged = recoveryIdentity.current.userId !== nextUserId;
       if (accountChanged || event === "PASSWORD_RECOVERY" || event === "SIGNED_OUT") {
@@ -105,7 +109,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (loading) return;
-    document.documentElement.dataset.unimateAuthState = session ? "signed-in" : "signed-out";
+    const nextUserId = session?.user.id ?? null;
+    const previousUserId = companionWebsiteIdentity.current;
+    companionWebsiteIdentity.current = nextUserId;
+    if (previousUserId && previousUserId !== nextUserId) {
+      companionSignedOut.current = true;
+      document.dispatchEvent(new CustomEvent(UNIMATE_AUTH_SIGNED_OUT_EVENT));
+    }
+    // The website and extension have independent sessions. Opening a public
+    // page anonymously must not revoke the extension's authenticated session.
+    // Preserve explicit logout, revocation and account-switch boundaries.
+    document.documentElement.dataset.unimateAuthState = nextUserId
+      ? "signed-in"
+      : companionSignedOut.current
+        ? "signed-out"
+        : "anonymous";
     return () => {
       delete document.documentElement.dataset.unimateAuthState;
     };

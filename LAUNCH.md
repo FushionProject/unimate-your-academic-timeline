@@ -10,6 +10,65 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - Every completed manual item must include a dated evidence note or link.
 - If a release-blocking check fails, stop promotion and record the response under **Launch incidents**.
 
+## November 11 audit repairs — source verification, still private
+
+The owner authorized repair of the November 11 audit findings. These changes do
+not deploy the app, enable public signup, modify the database, submit the Store
+package, or enable live Stripe. The previously recorded hosted evidence below
+remains historical; this repair pass uses offline fixtures and local builds.
+
+- **Companion session preservation:** an initial anonymous website visit no
+  longer signs out the independently authenticated extension or discards its
+  draft/pending answer. Successful explicit logout, session revocation and direct
+  account switching still invalidate extension state. Behavioral regressions
+  cover those boundaries and failed logout recovery.
+- **Resumed tutoring:** saved conversation messages now enter the next request
+  as bounded dialogue (latest ten turns, at most 4,000 characters each). Fresh
+  page evidence stays separate; instructions prohibit treating old page claims
+  as current evidence. A saved-quiz follow-up after reload/handoff is exercised
+  offline. This is not a new real-model tutoring-quality evaluation.
+- **Accuracy and work preservation:** tutor evidence emits calendar dates and
+  explicitly says deadline times are not recorded. Notes blocks route changes
+  and unload with unsaved edits, including failed browser-storage saves; the
+  guard releases only after successful persistence or explicit discard. Course
+  deletion names the class and number of cascading deadlines before proceeding;
+  individual deadline deletion also confirms. The pressure map includes current
+  work even when old courses remain, and discloses dates outside its window.
+- **Recovery and rendering:** only a verified pre-generation screenshot shutdown
+  (exact status/code) can fall back to available page text; provider timeouts,
+  uncertain responses, revoked consent and unavailable text do not cause a
+  second inference. Currency signs are preserved instead of stripped as math.
+- **Backend restrictions:** the legacy Canvas proxy is disabled by default.
+  `CANVAS_PROXY_ALLOWED_HOSTS` is an optional server-only list of exact trusted
+  public school hostnames; malformed/local entries disable the configuration.
+  No wildcard or student-provided destination becomes trusted automatically.
+  Text/vision transport failures now count toward the provider circuit breaker;
+  user cancellations and local concurrency denials remain excluded.
+- **Dependency repairs:** Zod is now 4.6.7; Cloudflare adapter 1.69.0 brings
+  Undici 7.30.1; the compatible serializer is 1.8.1. A narrowly scoped override
+  selects patched Minimatch 11 for `@typescript-eslint/typescript-estree` because
+  its current release still requests the affected major. Remove that override
+  when its upstream range includes a patched release. Actual API-client schema
+  contracts are tested under Zod 4. The existing bundled-lock regression caught
+  npm 11 pruning two unchanged optional WASI bundle records; those exact records
+  were preserved for clean Linux installs.
+
+Verification: the full offline suite, targeted behavioral regressions, TypeScript, lint (zero errors;
+eight existing Fast Refresh warnings), secret scan, and both Cloudflare/Vercel
+builds plus their emitted-artifact synthetic API checks pass. Fresh npm advisory
+lookup reports zero vulnerabilities. Builds used an isolated source snapshot
+without private environment files; Cloudflare emitted a local logger-permission
+warning but built and passed artifact checks. Local runtime is Node 24.13.0;
+the pushed candidate must also complete the configured Node 22 GitHub workflow.
+No new real AI calls, database writes, payment transactions or browser-compatibility
+tests were performed.
+
+Product limits remain explicit: saved coursework is course names and deadline
+dates, not a persistent syllabus/lecture knowledge base. Ask now tells students
+to paste the source instructions they want explained. Notes/Bulletin remain
+browser-local, the planner is not an adaptive calendar, and the prior owner,
+Store, hosted-lifecycle, operations and public-release gates below remain open.
+
 ## Remaining work and owner handoff — October 19, 2026
 
 **Still private; not approved for public release or live payments.** Historical

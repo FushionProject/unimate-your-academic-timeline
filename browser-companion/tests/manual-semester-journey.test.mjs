@@ -104,6 +104,54 @@ function visit(node) {
 visit(dashboard);
 assert.equal(targets.size, 2);
 assert.ok(focusEffect);
+
+// Execute the real destructive handlers: cancelling must not issue a mutation,
+// and course confirmation must describe the assignment cascade accurately.
+const dashboardComponent = dashboard.statements.find(
+  (node) => ts.isFunctionDeclaration(node) && node.name?.text === "Dashboard",
+);
+for (const handler of ["handleRemoveCourse", "handleRemoveAssignment"]) {
+  const declaration = dashboardComponent.body.statements.find(
+    (node) =>
+      ts.isVariableStatement(node) &&
+      node.declarationList.declarations.some((item) => item.name.getText(dashboard) === handler),
+  );
+  assert.ok(declaration);
+  const mutations = [];
+  const prompts = [];
+  let confirmed = false;
+  const context = vm.createContext({
+    assignments: [{ course_id: "biology" }, { course_id: "biology" }, { course_id: "math" }],
+    window: {
+      confirm: (message) => {
+        prompts.push(message);
+        return confirmed;
+      },
+    },
+    setFormMessage: () => {},
+    setCompletionMessage: () => {},
+    removeCourse: { mutate: (id) => mutations.push(id) },
+    removeAssignment: { mutate: (id) => mutations.push(id) },
+  });
+  const code = ts.transpileModule(declaration.getText(dashboard), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+  }).outputText;
+  vm.runInContext(`${code}\nglobalThis.remove = ${handler};`, context);
+  const args =
+    handler === "handleRemoveCourse"
+      ? ["biology", "Biology"]
+      : [{ id: "exam", name: "Final exam" }];
+  context.remove(...args);
+  assert.equal(mutations.length, 0, "Cancelling deletion must preserve saved work");
+  assert.match(
+    prompts[0],
+    handler === "handleRemoveCourse" ? /Biology.*2 saved deadlines/ : /Final exam/,
+  );
+  assert.match(prompts[0], /cannot be undone/);
+  confirmed = true;
+  context.remove(...args);
+  assert.equal(mutations.length, 1, "Confirmed deletion should execute once");
+}
 for (const hash of ["#course-setup", "#deadline-setup", "#unrelated"]) {
   for (const [loading, loadError] of [
     [true, false],
