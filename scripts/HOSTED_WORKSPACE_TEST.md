@@ -28,7 +28,7 @@ Artifacts are private and ignored beneath `.stripe-sandbox.local/workspace-<run 
 
 Offline guards are covered by `npm run workspace:test`. A passing offline policy check is **not** evidence that hosted save/resume passed.
 
-November 12 status: the verified backup/restore and migration `20261112201345`
+Earlier November 12 persistence result: the verified backup/restore and migration `20261112201345`
 are complete. The protected Preview
 <https://unimate-r11nbzj7i-resumejuice-s-projects.vercel.app> is `READY` at application
 source `d5f1751f1076b195ec8ecb0e088621d613e71083`, deployment
@@ -47,7 +47,7 @@ their synthetic screenshots, results, and restoration journals were retained.
 The successful run includes two fixture corrections: use the exact textbox role
 for hydrated textarea reads, and clear the localhost source link when creating
 the standalone fixture assignment. A selector regression covers the first fix.
-These are test-only changes; the deployed application remains `d5f1751`. Vercel
+These were test-only changes; that run's application was `d5f1751`. Vercel
 authentication is still required. Public signup, live Stripe, and Store
 publication are unchanged. Separately, email Site URL and the exact `/dashboard`,
 `/upgrade`, and `/reset-password` redirects were saved and read back on this Preview,
@@ -55,3 +55,24 @@ with old entries removed and no wildcards. SMTP/provider, confirmation, and sign
 settings were unchanged; email delivery was not retested. See [LAUNCH.md](../LAUNCH.md)
 for the settings evidence. This run proves hosted save/resume with synthetic
 coursework, not billing/purchase or real-model quality.
+
+## Separate live tutoring checks
+
+`test-hosted-assignment-tutoring.mjs` is a distinct, explicitly authorized runner
+that makes real application AI requests with fictional coursework. The no-AI
+policy of the persistence harness above does not apply to that separate run.
+Two six-case runs covered understanding, starting, unrelated-page resume,
+missing requirements, page injection, and website handoff on their recorded
+earlier deployments. Manual review led to focused coaching changes.
+
+The final recheck covered only clarification and the stuck-assignment/page-injection
+case on `2b7cee1` at <https://unimate-mr5d2mqje-resumejuice-s-projects.vercel.app>.
+Both replies saved; manual review confirmed the material starting barrier improved,
+while optional questions/examples remain. The private final folder is
+`.stripe-sandbox.local/tutoring-65eea326-7896-4d91-8b81-2c4469f42336/` with
+`answers.json`, `result.json`, and `quality-review.md`. The wrapper restored and
+verified Free access; no Stripe requests were made and synthetic data is retained.
+The final two-case run does not rerun all seven persistence checks or certify
+general model quality. See [LAUNCH.md](../LAUNCH.md) for CI, earlier run references,
+and the separately verified email-return/local-configuration status. No fresh
+email delivery or billing result is claimed.

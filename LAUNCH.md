@@ -10,7 +10,64 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - Every completed manual item must include a dated evidence note or link.
 - If a release-blocking check fails, stop promotion and record the response under **Launch incidents**.
 
-## November 12 connected workspace — private hosted persistence verified
+## November 12 latest private tutoring checkpoint
+
+Application source `2b7cee1fa172f9e65608feb8875788867177c854` is `READY` at
+<https://unimate-mr5d2mqje-resumejuice-s-projects.vercel.app>, deployment
+`dpl_ATMSdRNb547eVaSF7XU44Fi1TNiR`. CI run `43320348464`, the full local test suite,
+lint, secret scan, Vercel build, and emitted-artifact checks passed. The source
+upload audit covered 145 files (9,196,853 bytes); anonymous access still redirects
+to Vercel authentication (302). Public access, Store publication, and live billing
+remain closed; this is a private testing checkpoint.
+
+The changes preserve typed questions during assignment/reply shortcuts, target
+the selected older reply for explanation follow-ups, and allow explicit progress
+saves before instructions are available. The saved-assignment source badge now
+distinguishes that evidence from planner counts. Grounding guards keep saved-work
+claims separate from current-page claims. Shared coaching guidance favors a
+manageable next action, relevant clarification, and the student's own work.
+
+Live evidence remains scoped to the application version used:
+
+| Application / private Preview | Cases and result |
+| --- | --- |
+| `21e0e17` / `unimate-d6vzv10n0-resumejuice-s-projects.vercel.app` | Six technical checks passed; manual review found excessive checklists and unasked drafting offers. |
+| `cdc5011` / `unimate-get27qe60-resumejuice-s-projects.vercel.app` | Six technical checks passed; shorter starting/resume help and corrected source badge, with clarification still needing focus. |
+| `2b7cee1` / `unimate-mr5d2mqje-resumejuice-s-projects.vercel.app` | Final clarification and stuck-assignment/page-injection checks passed; both replies saved. |
+
+The final two replies prioritize useful preparation without requiring all missing
+instructions first, and replace the full drafted paragraph with a short example.
+The page injection did not redirect the task or induce a false submission claim.
+Manual review supports moving to real-student private-beta feedback. It does not
+guarantee one-question/one-sentence compliance: optional clarification bullets
+and a complete example sentence remained. The full six-case journey and earlier
+seven-case persistence test were not repeated on the final deployment.
+
+All 14 application AI requests across these three runs returned saved replies;
+provider attempt counts are not independently observable by these runners. No
+Stripe requests were made. Temporary access was restored; independent database
+readback confirmed both marked accounts are Free. All four generated test browser
+profiles were removed; private evidence and synthetic database records are retained.
+Private run folders under `.stripe-sandbox.local/` are
+`tutoring-7e08df3e-5968-417e-9b16-0b6b22d70dff`,
+`tutoring-52467716-7dcf-4137-9158-d6d9b339bb07`, and
+`tutoring-65eea326-7896-4d91-8b81-2c4469f42336`; the final folder contains
+`answers.json`, `result.json`, and `quality-review.md`. Final restoration journal:
+`tutoring-entitlement-0c2ef816-e9ff-4fcd-ac73-17a7d06d2c66.json`.
+
+The final Preview's homepage was opened. Supabase Site URL and exactly
+`/dashboard`, `/upgrade`, and `/reset-password` redirects were saved and verified
+after reload on this origin; all old `r11nbzj7i` entries were removed, with no
+wildcards. SMTP, signup, and confirmation settings were unchanged; no email was
+sent or delivery retested. Private proof:
+`/private/tmp/unimate-tutoring-email-settings-20261112.jpg`.
+Ignored local Companion configuration was atomically updated and read back with
+this origin and debug disabled; its previous version is privately backed up at
+`.stripe-sandbox.local/companion-config-before-tutoring-20261112.js`.
+This does not claim a reload of the owner's installed browser profile. No new
+billing, Store-review, or email-delivery result is claimed.
+
+## Earlier November 12 connected workspace — private hosted persistence verified
 
 The owner subsequently authorized a fresh backup, this migration, and an updated
 private Preview/installed Companion with cross-app persistence checks. Initial

@@ -1,6 +1,20 @@
 # UniMate Browser Companion — Chrome Web Store readiness
 
-November 12 private rollout addendum: the backup/restore and workspace migration
+Latest November 12 private tutoring checkpoint: `2b7cee1` is ready at
+<https://unimate-mr5d2mqje-resumejuice-s-projects.vercel.app>; CI `43320348464` passed.
+Draft preservation, selected-reply explanations, progress-only saves, a clearer
+saved-source badge, and shared coaching/grounding refinements are included.
+Two six-case live runs on earlier candidates and a final two-case clarification/
+page-injection recheck produced saved replies. Manual review found a meaningful
+coaching improvement, with remaining optional-question/example limitations.
+This small synthetic sample is not a broad tutoring-quality certification.
+Temporary test access was restored to Free; no Stripe request, Store ZIP upload,
+publisher change, or public release occurred. Exact email return settings and
+ignored local Companion configuration now target this Preview, with saved readback
+verified. No new email-delivery, owner-profile reload, or billing proof is claimed.
+See [LAUNCH.md](../LAUNCH.md) for each deployment's evidence scope.
+
+Earlier November 12 private rollout addendum: the backup/restore and workspace migration
 `20261112201345` are complete. Application source
 `d5f1751f1076b195ec8ecb0e088621d613e71083` is `READY` at protected Preview
 <https://unimate-r11nbzj7i-resumejuice-s-projects.vercel.app>, deployment

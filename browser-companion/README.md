@@ -1,5 +1,20 @@
 # UniMate Browser Companion
 
+Latest private tutoring checkpoint — November 12: application `2b7cee1` is ready at
+<https://unimate-mr5d2mqje-resumejuice-s-projects.vercel.app>; CI `43320348464` passed.
+Typed drafts are preserved during shortcuts, older-reply actions target the chosen
+answer, and progress can be saved before instructions are available. The source
+badge identifies saved assignment evidence separately from planner context.
+Two earlier six-case live runs and a final two-case recheck verified saved replies,
+resume continuity, and resistance to the tested page injection on their respective
+deployments. Final manual review found more manageable coaching; optional questions
+and examples remain, so this is not a universal quality guarantee. Free access was
+restored after temporary testing; no Stripe requests or Store submission occurred.
+The exact Site URL/three email redirects and ignored local Companion configuration
+now target this Preview, with saved readback verified and no wildcard redirects.
+Email delivery and the owner's installed-profile reload were not retested.
+See [LAUNCH.md](../LAUNCH.md) for exact scope and private evidence references.
+
 ## Connected assignment flow (private hosted persistence verified)
 
 Students can use the Pro Companion on its own or with the UniMate workspace;
@@ -15,7 +30,7 @@ Conflicting changes keep the student's draft for review. Saving does not invoke
 AI or submit coursework; the tutor cannot silently change saved work. Account
 switches and Pro access checks still apply.
 
-November 12 status: the backup/restore check and migration
+Earlier November 12 persistence checkpoint: the backup/restore check and migration
 `supabase/migrations/20261112201345_study_workspace.sql` are complete. Matching
 application source `d5f1751f1076b195ec8ecb0e088621d613e71083` is `READY` at the
 protected Preview <https://unimate-r11nbzj7i-resumejuice-s-projects.vercel.app>
@@ -23,7 +38,7 @@ protected Preview <https://unimate-r11nbzj7i-resumejuice-s-projects.vercel.app>
 `43308680054` and protected HTTP smoke checks passed; the homepage visibly loaded.
 Signup and live Stripe remain disabled; the monthly price is USD 9.99.
 
-Local ignored Companion configuration now targets that exact Preview with debug
+At that checkpoint, ignored Companion configuration targeted that Preview with debug
 disabled, with its previous contents backed up privately. No `.env` file, ZIP,
 Store setting, or authentication token was changed by that configuration update.
 Vercel authentication is still required. Email Site URL and exactly `/dashboard`,
