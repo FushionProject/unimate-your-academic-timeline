@@ -1,5 +1,27 @@
 # UniMate Browser Companion
 
+## Connected assignment flow (private rollout pending)
+
+Students can use the Pro Companion on its own or with the UniMate workspace;
+creating classes and uploading a syllabus are optional. The assignment flow is
+**understand → get started → save progress → resume**. “Save to UniMate” opens a
+review form for an assignment, note, or source link. Students choose what to save
+and can optionally attach a class. Saved notes appear in Notes, links in
+Bulletin, and active assignments on Today and in Ask. Selecting an assignment
+restores its saved chat, instructions, progress, and next step.
+
+Edits must be saved or discarded before tutoring continues with that assignment.
+Conflicting changes keep the student's draft for review. Saving does not invoke
+AI or submit coursework; the tutor cannot silently change saved work. Account
+switches and Pro access checks still apply.
+
+This source requires `supabase/migrations/20261112201345_study_workspace.sql`
+and a matching private website deployment before updating the installed
+Companion. Neither hosted change has been made by this implementation pass.
+See [LAUNCH.md](../LAUNCH.md) for verification and rollout dependencies.
+
+## Earlier launch evidence
+
 Store owner update — October 19, 2026: the publisher account and launch price
 approved October 18 remain `unimatesupport@gmail.com` and USD 9.99/month. The
 owner confirmed “I created it” for the UniMate logo/mascot; this is an authorship

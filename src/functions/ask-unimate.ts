@@ -61,6 +61,7 @@ export async function askUniMate(
     canvasContext?: string;
     selectedCourseId?: string;
     timezone?: string;
+    workspaceId?: string;
   },
   access: { expectedUserId: string; signal?: AbortSignal },
 ) {
@@ -72,6 +73,7 @@ export async function askUniMate(
     canvasContext,
     selectedCourseId,
     timezone,
+    workspaceId,
   } = data;
 
   // Missing runtime options must fail closed too (not only at the TS boundary).
@@ -96,6 +98,7 @@ export async function askUniMate(
       canvasContext,
       selectedCourseId,
       timezone,
+      workspaceId,
     }),
   });
 

@@ -286,9 +286,11 @@ async function parseResponse(response, phase = "network") {
           ? "AUTH_REQUIRED"
           : proRequired
             ? "PRO_REQUIRED"
-            : response.status >= 500
-              ? "BACKEND_UNAVAILABLE"
-              : "BACKEND_REQUEST_FAILED",
+            : phase === "persistence" && /^WORKSPACE_[A-Z_]+$/.test(body?.code || "")
+              ? body.code
+              : response.status >= 500
+                ? "BACKEND_UNAVAILABLE"
+                : "BACKEND_REQUEST_FAILED",
         phase: authRequired ? "auth" : proRequired ? "entitlement" : phase,
         retryable: body?.retryable === false ? false : undefined,
       },
@@ -815,11 +817,207 @@ async function loadChatState(session, epoch = sessionEpoch) {
       phase: "persistence",
     });
   }
+  let workspaceItem = null;
+  let workspaceUnavailable = false;
+  try {
+    const workspace = await studyWorkspaceRequest(
+      session,
+      "GET",
+      undefined,
+      {
+        kind: "assignment",
+        conversationId,
+      },
+      epoch,
+    );
+    workspaceItem = workspace.items?.[0] || null;
+  } catch (error) {
+    // Chat stays usable during an independent workspace outage. Explicit Save
+    // and Saved work actions surface the error and never pretend to persist.
+    if (error?.code === "AUTH_REQUIRED" || error?.code === "PRO_REQUIRED") throw error;
+    workspaceUnavailable = true;
+  }
+  assertSessionEpoch(epoch);
   return {
     conversationId: conversation.id,
     conversationTitle: conversation.title || "Chat",
     messages,
+    workspaceItem,
+    workspaceUnavailable,
   };
+}
+
+function validStudyItemForSession(item, session) {
+  const uuid = (value) =>
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  if (
+    !item ||
+    item.userId !== session.user.id ||
+    !uuid(item.id) ||
+    !["assignment", "note", "link"].includes(item.kind) ||
+    !Number.isInteger(item.version) ||
+    item.version < 1 ||
+    !["active", "done"].includes(item.status)
+  )
+    return false;
+  for (const [field, max] of [
+    ["title", 160],
+    ["content", 12000],
+    ["sourceTitle", 200],
+    ["nextStep", 2000],
+    ["progress", 4000],
+  ]) {
+    if (typeof item[field] !== "string" || item[field].length > max) return false;
+  }
+  if (
+    !item.title.trim() ||
+    (item.courseId !== null && !uuid(item.courseId)) ||
+    (item.conversationId !== null && !uuid(item.conversationId))
+  )
+    return false;
+  if (item.sourceUrl !== null) {
+    try {
+      const url = new URL(item.sourceUrl);
+      if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+function assertExpectedStudyUser(request, session, required = true) {
+  if (
+    (required || request.expectedUserId !== undefined) &&
+    request.expectedUserId !== session.user.id
+  ) {
+    throw new CompanionError(
+      "Your account changed. Reopen Companion before using this saved work.",
+      { code: "AUTH_REQUIRED", phase: "auth" },
+    );
+  }
+}
+
+async function studyWorkspaceRequest(session, method, payload, filters = {}, epoch = sessionEpoch) {
+  assertSessionEpoch(epoch);
+  const url = new URL("/api/study-workspace", config.UNIMATE_API_URL);
+  for (const key of ["kind", "conversationId", "id", "offset"]) {
+    if (filters[key]) url.searchParams.set(key, String(filters[key]));
+  }
+  const response = await fetchWithTimeout(
+    url.href,
+    {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+        "X-UniMate-Client": "companion",
+      },
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
+    },
+    PERSISTENCE_TIMEOUT_MS,
+    new CompanionError(
+      "Your workspace did not respond. Your draft is still here; try saving again.",
+      {
+        code: "WORKSPACE_TIMEOUT",
+        phase: "persistence",
+      },
+    ),
+  );
+  const data = await parseResponse(response, "persistence");
+  assertSessionEpoch(epoch);
+  if (
+    method === "GET"
+      ? !Array.isArray(data?.items) ||
+        !Array.isArray(data?.courses) ||
+        data.items.some((item) => !validStudyItemForSession(item, session)) ||
+        data.courses.some(
+          (course) => typeof course?.id !== "string" || typeof course?.name !== "string",
+        )
+      : !validStudyItemForSession(data?.item, session)
+  ) {
+    throw new CompanionError(
+      "Your saved workspace is not available yet. Your chat and edits are kept.",
+      {
+        code: "WORKSPACE_UNAVAILABLE",
+        phase: "persistence",
+      },
+    );
+  }
+  return data;
+}
+
+async function selectStudyConversation(request, epoch) {
+  const session = await requireProSession();
+  assertSessionEpoch(epoch);
+  assertExpectedStudyUser(request, session);
+  const id = String(request.conversationId || "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    throw new CompanionError("Choose a saved assignment first.", {
+      code: "INVALID_CONVERSATION",
+      phase: "persistence",
+    });
+  }
+  if (request.create === true) {
+    const response = await fetchWithTimeout(
+      `${config.SUPABASE_URL}/rest/v1/companion_conversations?on_conflict=id`,
+      {
+        method: "POST",
+        headers: {
+          ...jsonHeaders(session.access_token),
+          Prefer: "resolution=ignore-duplicates,return=minimal",
+        },
+        body: JSON.stringify({ id, user_id: session.user.id, title: "New assignment" }),
+      },
+      PERSISTENCE_TIMEOUT_MS,
+      new CompanionError("Creating your assignment chat timed out. Try again.", {
+        code: "PERSISTENCE_TIMEOUT",
+        phase: "persistence",
+      }),
+    );
+    await parseResponse(response, "persistence");
+    assertSessionEpoch(epoch);
+  }
+  const ownedResponse = await fetchWithTimeout(
+    `${config.SUPABASE_URL}/rest/v1/companion_conversations?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(session.user.id)}&select=id&limit=1`,
+    { headers: jsonHeaders(session.access_token) },
+    PERSISTENCE_TIMEOUT_MS,
+    new CompanionError("Loading your assignment chat timed out.", {
+      code: "PERSISTENCE_TIMEOUT",
+      phase: "persistence",
+    }),
+  );
+  const owned = await parseResponse(ownedResponse, "persistence");
+  assertSessionEpoch(epoch);
+  if (owned?.[0]?.id !== id)
+    throw new CompanionError("That assignment chat is unavailable.", {
+      code: "CONVERSATION_UNAVAILABLE",
+      phase: "persistence",
+    });
+  const response = await fetchWithTimeout(
+    `${config.SUPABASE_URL}/rest/v1/companion_preferences?on_conflict=user_id`,
+    {
+      method: "POST",
+      headers: {
+        ...jsonHeaders(session.access_token),
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify({
+        user_id: session.user.id,
+        active_conversation_id: id,
+        updated_at: new Date().toISOString(),
+      }),
+    },
+    PERSISTENCE_TIMEOUT_MS,
+    new CompanionError("Selecting your assignment chat timed out. Try again.", {
+      code: "PERSISTENCE_TIMEOUT",
+      phase: "persistence",
+    }),
+  );
+  await parseResponse(response, "persistence");
+  assertSessionEpoch(epoch);
+  return loadChatState(session, epoch);
 }
 
 // Map the extractor's context into the labelled provenance fields the backend
@@ -895,7 +1093,15 @@ function sanitizePageContext(pageContext, sender) {
   };
 }
 
-async function callTextChat(session, message, pageContext, history, requestId) {
+async function callTextChat(
+  session,
+  message,
+  pageContext,
+  history,
+  requestId,
+  workspaceId,
+  conversationId,
+) {
   const epoch = sessionEpoch;
   await requirePrivacyConsent();
   assertSessionEpoch(epoch);
@@ -915,6 +1121,7 @@ async function callTextChat(session, message, pageContext, history, requestId) {
         message: normalizedStudentMessage(message),
         pageContext: companionProvenanceFields(pageContext),
         chatHistory: groundedChatHistory(history),
+        ...(workspaceId ? { workspaceId, conversationId } : {}),
       }),
     },
     "text-analysis",
@@ -926,7 +1133,16 @@ async function callTextChat(session, message, pageContext, history, requestId) {
   };
 }
 
-async function callScreenshotChat(session, message, pageContext, imageDataUrl, history, requestId) {
+async function callScreenshotChat(
+  session,
+  message,
+  pageContext,
+  imageDataUrl,
+  history,
+  requestId,
+  workspaceId,
+  conversationId,
+) {
   const epoch = sessionEpoch;
   await requirePrivacyConsent();
   assertSessionEpoch(epoch);
@@ -947,6 +1163,7 @@ async function callScreenshotChat(session, message, pageContext, imageDataUrl, h
         question: normalizedStudentMessage(message),
         pageContext: companionProvenanceFields(pageContext),
         chatHistory: groundedChatHistory(history),
+        ...(workspaceId ? { workspaceId, conversationId } : {}),
       }),
     },
     "screenshot-analysis",
@@ -1258,6 +1475,7 @@ async function executeChat(payload, sender, session, requestId, requestKey, epoc
       : Array.isArray(payload.history)
         ? payload.history
         : [];
+  const workspaceId = payload.conversationId === conversationId ? payload.workspaceId : null;
   const pageContext = sanitizePageContext(payload.context, sender);
   let answer;
   let pipelineDiagnostics = null;
@@ -1274,6 +1492,8 @@ async function executeChat(payload, sender, session, requestId, requestKey, epoc
         image,
         history,
         requestId,
+        workspaceId,
+        conversationId,
       );
       answer = result.answer;
       pipelineDiagnostics = result.pipelineDiagnostics;
@@ -1304,7 +1524,15 @@ async function executeChat(payload, sender, session, requestId, requestKey, epoc
         throw error;
       }
       assertSessionEpoch(epoch);
-      const result = await callTextChat(session, payload.message, pageContext, history, requestId);
+      const result = await callTextChat(
+        session,
+        payload.message,
+        pageContext,
+        history,
+        requestId,
+        workspaceId,
+        conversationId,
+      );
       answer = result.answer;
       pipelineDiagnostics = result.pipelineDiagnostics;
       contextMode = "text-fallback";
@@ -1418,6 +1646,7 @@ async function sendChat(payload, sender) {
   payload = { ...payload, message };
   await requirePrivacyConsent();
   const session = await requireProSession();
+  assertExpectedStudyUser(payload, session, false);
   await requirePrivacyConsent();
   assertSessionEpoch(epoch);
   const requestId =
@@ -1524,7 +1753,46 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const epoch = sessionEpoch;
         const session = await requireProSession();
         assertSessionEpoch(epoch);
+        assertExpectedStudyUser(request, session, false);
         return loadChatState(session, epoch);
+      }
+      case "LOAD_STUDY_WORKSPACE": {
+        const epoch = sessionEpoch;
+        const session = await requireProSession();
+        assertSessionEpoch(epoch);
+        assertExpectedStudyUser(request, session);
+        return studyWorkspaceRequest(session, "GET", undefined, request.filters || {}, epoch);
+      }
+      case "SAVE_STUDY_ITEM": {
+        const epoch = sessionEpoch;
+        await requirePrivacyConsent();
+        const session = await requireProSession();
+        await requirePrivacyConsent();
+        assertSessionEpoch(epoch);
+        assertExpectedStudyUser(request, session);
+        const updating = Number.isInteger(request.expectedVersion) && request.expectedVersion > 0;
+        const { id: _id, kind: _kind, ...patch } = request.item || {};
+        return studyWorkspaceRequest(
+          session,
+          updating ? "PATCH" : "POST",
+          updating
+            ? { id: request.item?.id, expectedVersion: request.expectedVersion, patch }
+            : { item: request.item },
+          {},
+          epoch,
+        );
+      }
+      case "SELECT_STUDY_CONVERSATION":
+        return selectStudyConversation(request, sessionEpoch);
+      case "OPEN_STUDY_WORKSPACE": {
+        const epoch = sessionEpoch;
+        const session = await requireProSession();
+        assertSessionEpoch(epoch);
+        assertExpectedStudyUser(request, session);
+        const path =
+          request.section === "note" ? "/notes" : request.section === "link" ? "/bulletin" : "/ask";
+        await chrome.tabs.create({ url: new URL(path, config.UNIMATE_API_URL).href });
+        return { opened: true };
       }
       case "RUNTIME_DIAGNOSTICS":
         return runtimeDiagnostics(sender);

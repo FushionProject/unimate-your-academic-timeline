@@ -98,12 +98,12 @@ function Index() {
             <span className="journey-highlight">You’ve got this.</span>
           </h1>
           <p className="mt-7 max-w-md text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
-            Meet UniMate, your study sidekick. Turn your syllabus into a clear plan, know what
-            matters today, and get a hand when you’re stuck.
+            Meet UniMate, your college sidekick. Understand an assignment, find your first step, and
+            keep your schoolwork together—with help right beside you on the web.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <Link to="/signup" className="journey-button">
-              Build my semester <ArrowRight className="h-4 w-4" />
+              Get started with UniMate <ArrowRight className="h-4 w-4" />
             </Link>
             <a
               href="#meet-unimate"
@@ -113,7 +113,7 @@ function Index() {
             </a>
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
-            Start free · Review every deadline before saving
+            Free planning tools · Ask UniMate and Companion included with Pro
           </p>
         </div>
         <div className="journey-preview-wrap">
@@ -169,6 +169,43 @@ function Index() {
             <span>Less “where do I even start?”</span>
           </div>
         </div>
+      </section>
+      <section className="mx-auto max-w-6xl px-6 pt-14" aria-labelledby="choose-your-start">
+        <p className="journey-eyebrow">YOUR SCHOOL DAY, YOUR WAY</p>
+        <h2 id="choose-your-start" className="mt-3 font-serif-display text-3xl sm:text-4xl">
+          Start wherever you need a hand.
+        </h2>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <article className="rounded-2xl border border-border bg-card p-6">
+            <PanelRight className="h-6 w-6 text-primary" aria-hidden />
+            <h3 className="mt-4 text-lg font-semibold">Just my browser buddy</h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Bring UniMate to the page you’re working on. Ask questions, work through a first step,
+              and save your place. No class setup required. Companion is part of Pro.
+            </p>
+            <Link
+              to="/companion-setup"
+              className="mt-4 inline-flex min-h-11 items-center gap-2 font-semibold text-sm"
+            >
+              See Companion setup <ArrowRight className="h-4 w-4" />
+            </Link>
+          </article>
+          <article className="rounded-2xl border border-border bg-card p-6">
+            <BookOpen className="h-6 w-6 text-primary" aria-hidden />
+            <h3 className="mt-4 text-lg font-semibold">My whole school workspace</h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Keep classes, deadlines, saved notes, and useful links together. Add the Companion
+              whenever you want. You can start with a single assignment.
+            </p>
+            <Link
+              to="/dashboard"
+              className="mt-4 inline-flex min-h-11 items-center gap-2 font-semibold text-sm"
+            >
+              Open my workspace <ArrowRight className="h-4 w-4" />
+            </Link>
+          </article>
+        </div>
+        <p className="mt-4 text-sm text-muted-foreground">One account. Use either path, or both.</p>
       </section>
       <section
         className="border-y border-border/60 bg-card/40 px-6 py-5"

@@ -38,6 +38,15 @@
     failedQuestion: null,
     unresolvedRequest: null,
     pendingSave: null,
+    workspaceItem: null,
+    workspaceUnavailable: false,
+    workspaceNextOffset: null,
+    workspaceItems: [],
+    workspaceCourses: [],
+    workspaceDraft: null,
+    workspaceResume: null,
+    workspaceBusy: false,
+    workspaceLoadVersion: 0,
     contextMode: null,
     busy: false,
     sessionVersion: 0,
@@ -81,7 +90,7 @@
   style.textContent = `
     :host { all: initial; --um-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     * { box-sizing: border-box; }
-    .um-root { position: fixed; z-index: 2147483647; right: 0; top: 50%; transform: translateY(-50%); font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #24211d; }
+    .um-root { position: fixed; z-index: 2147483647; right: 0; top: 0; bottom: 0; width: 0; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #24211d; }
     .um-mascot { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 62px; height: 76px; padding: 0; border: 0; border-radius: 24px 0 0 24px; background: #F5C518; box-shadow: 0 10px 32px rgba(37, 31, 20, .2); cursor: pointer; display: grid; place-items: center; transition: width .18s ease, filter .18s ease; }
     .um-mascot:hover { width: 68px; filter: brightness(1.03); }
     .um-mascot:focus-visible, .um-icon-button:focus-visible, .um-screen:focus-visible, .um-send:focus-visible, .um-primary:focus-visible, .um-secondary:focus-visible, .um-link:focus-visible { outline: 3px solid rgba(36,33,29,.72); outline-offset: 3px; }
@@ -99,7 +108,7 @@
     .um-status { margin: 14px 16px 0; padding: 9px 11px; border-radius: 12px; background: #fff9dc; color: #675512; font: 600 11px/1.35 var(--um-font); }
     .um-status.error { background: #fff0ed; color: #9a3429; }
     .um-recovery-question { max-height: 96px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
-    .um-messages { flex: 1; min-height: 80px; overflow-y: auto; overscroll-behavior: auto; padding: 17px 16px 8px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; scrollbar-color: rgba(36,33,29,.2) transparent; }
+    .um-messages { flex: 1; min-height: 80px; overflow-y: auto; overscroll-behavior: contain; padding: 17px 16px 8px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; scrollbar-color: rgba(36,33,29,.2) transparent; }
     .um-empty { margin: auto 22px; text-align: center; color: #746e66; font: 500 13px/1.55 var(--um-font); }
     .um-empty strong { display: block; color: #24211d; font-size: 17px; margin-bottom: 7px; }
     .um-message { max-width: 86%; border-radius: 16px; padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; font: 500 13px/1.48 var(--um-font); }
@@ -117,7 +126,7 @@
     .um-screen:disabled { opacity: .45; cursor: default; }
     .um-form { display: flex; align-items: flex-end; gap: 8px; padding: 7px 7px 7px 12px; border: 1px solid rgba(36,33,29,.14); border-radius: 17px; background: #fff; }
     .um-form:focus-within { border-color: #b39117; box-shadow: 0 0 0 3px rgba(245,197,24,.15); }
-    .um-input { flex: 1; min-width: 0; resize: none; border: 0; outline: 0; min-height: 30px; max-height: 112px; padding: 7px 0; background: transparent; color: #24211d; font: 500 13px/1.4 var(--um-font); }
+    .um-input { overscroll-behavior: contain; flex: 1; min-width: 0; resize: none; border: 0; outline: 0; min-height: 30px; max-height: 112px; padding: 7px 0; background: transparent; color: #24211d; font: 500 13px/1.4 var(--um-font); }
     .um-send { flex: 0 0 auto; width: 38px; height: 38px; border: 0; border-radius: 13px; background: #F5C518; color: #2c2508; cursor: pointer; font: 800 17px/1 var(--um-font); }
     .um-send:disabled { opacity: .45; cursor: default; }
     .um-auth { margin: auto; width: 100%; padding: 28px; text-align: center; overflow-y: auto; overscroll-behavior: contain; }
@@ -128,10 +137,25 @@
     .um-secondary { width: 100%; margin-top: 8px; padding: 11px; border: 1px solid rgba(36,33,29,.14); border-radius: 13px; background: transparent; color: #5f5951; cursor: pointer; font: 700 12px/1 var(--um-font); }
     .um-primary { width: 100%; margin-top: 12px; padding: 12px; border: 0; border-radius: 13px; background: #F5C518; color: #2c2508; cursor: pointer; font: 750 13px/1 var(--um-font); }
     .um-primary:disabled { opacity: .5; }
+    .um-actions { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 9px; }
+    .um-chip { border:1px solid rgba(36,33,29,.14); border-radius:10px; padding:7px 9px; background:#fff; color:#5f5951; cursor:pointer; font:650 11px/1.3 var(--um-font); }
+    .um-chip:disabled { opacity:.45; cursor:default; }
+    .um-chip:focus-visible, .um-field:focus-visible { outline:3px solid rgba(36,33,29,.72); outline-offset:2px; }
+    .um-resume { margin:12px 16px 0; padding:10px 12px; border:1px solid #e4dcbf; border-radius:12px; background:#fff9e5; font:500 12px/1.4 var(--um-font); overflow-wrap:anywhere; }
+    .um-resume strong { display:block; margin-bottom:3px; }
+    .um-workspace { padding:18px; overflow-y:auto; font:500 12px/1.5 var(--um-font); }
+    .um-workspace h2 { margin:10px 0 6px; font:750 19px/1.3 var(--um-font); }
+    .um-workspace p { color:#746e66; margin:6px 0 14px; }
+    .um-workspace label { display:block; margin:13px 0 5px; font-weight:650; }
+    .um-field { display:block; width:100%; border:1px solid rgba(36,33,29,.2); border-radius:10px; padding:9px; background:#fff; color:#24211d; font:500 12px/1.5 var(--um-font); }
+    textarea.um-field { min-height:72px; resize:vertical; }
+    .um-workspace-list { display:flex; flex-direction:column; gap:8px; padding:0; list-style:none; }
+    .um-workspace-list .um-secondary { text-align:left; line-height:1.5; margin:0; }
     .um-link { border: 0; background: transparent; margin-top: 14px; color: #746e66; text-decoration: underline; cursor: pointer; font: 600 11px/1 var(--um-font); }
     .um-hidden { display: none !important; }
     .um-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-    @media (max-width: 520px) { .um-root { top: auto; bottom: 16px; transform: none; } .um-panel, .um-panel.open { position: fixed; inset: 12px 68px 12px 12px; width: auto; height: auto; transform: none; transition: none; border-radius: 20px; } .um-mascot { width: 54px; height: 68px; } }
+    @media (max-width: 520px) { .um-root { top: 0; bottom: 0; } .um-panel, .um-panel.open { position: fixed; inset: 12px 68px 12px 12px; width: auto; height: auto; transform: none; transition: none; border-radius: 20px; } .um-mascot { top: auto; bottom: 16px; transform: none; width: 54px; height: 68px; } }
+    @media (max-height: 540px) { .um-input { max-height: 64px; } }
     @media (prefers-reduced-motion: reduce) { .um-mascot, .um-panel { transition: none; } .um-thinking i { animation: none; opacity: .55; } }
   `;
 
@@ -323,6 +347,18 @@
   }
 
   async function send(request) {
+    if (
+      [
+        "LOAD_CHAT_STATE",
+        "LOAD_STUDY_WORKSPACE",
+        "SAVE_STUDY_ITEM",
+        "SELECT_STUDY_CONVERSATION",
+        "OPEN_STUDY_WORKSPACE",
+        "SEND_CHAT",
+      ].includes(request.type)
+    ) {
+      request = { ...request, expectedUserId: request.expectedUserId || state.auth?.userId };
+    }
     const attempts = 2;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       try {
@@ -378,7 +414,7 @@
     const sessionVersion = state.sessionVersion;
     const loadVersion = ++state.historyLoadVersion;
     try {
-      if (state.pendingSave || state.failedQuestion) {
+      if (state.pendingSave || state.failedQuestion || state.workspaceDraft) {
         // Keep unresolved work in its conversation, but still revalidate access.
         // Skipping history replacement must not also skip a revocation/sign-out.
         const auth = await send({ type: "AUTH_STATE" });
@@ -413,6 +449,8 @@
       state.messages = chatState.messages;
       state.activeConversationId = chatState.conversationId;
       state.activeConversationTitle = chatState.conversationTitle;
+      state.workspaceItem = chatState.workspaceItem || null;
+      state.workspaceUnavailable = Boolean(chatState.workspaceUnavailable);
       // Shared history is visible for continuity, but it is not treated as
       // evidence about the current webpage in the next screenshot request.
       state.conversationStartIndex = chatState.messages.length;
@@ -692,6 +730,9 @@
       </div>`;
     body.querySelector(".um-signout").addEventListener("click", handleSignOut);
     body
+      .querySelector(".um-workspace-retry")
+      ?.addEventListener("click", () => openStudyWorkspace("assignment"));
+    body
       .querySelector(".um-upgrade")
       .addEventListener("click", () =>
         send({ type: "OPEN_UPGRADE" }).catch(() =>
@@ -758,11 +799,13 @@
               }</div>`,
           )
           .join("")
-      : `<div class="um-empty"><strong>Let’s work through it together.</strong>Ask me to explain a tricky idea, find a starting point, or walk through a problem. Highlight a passage to help me focus.</div>`;
+      : `<div class="um-empty"><strong>A little help, right where you are.</strong>Understand an assignment, find a first step, or ask anything about your schoolwork. You can use Companion on its own and save to a class whenever you’re ready.</div>`;
     body.innerHTML = `
       ${status ? `<div class="um-status ${isError ? "error" : ""}">${escapeHtml(status)}</div>` : ""}
       ${state.failedQuestion ? `<div class="um-status"><strong>${state.unresolvedRequest ? "Your earlier question’s status is uncertain." : "Your earlier question is still here."}</strong> Your new draft is safe below. ${state.unresolvedRequest ? "Retry checks the same request; it does not start a separate question." : "Retry this question or discard it before sending your new draft."}<p class="um-recovery-question" tabindex="0" aria-label="Earlier question">${escapeHtml(state.failedQuestion)}</p><button class="um-secondary um-retry-question" type="button" ${state.busy ? "disabled" : ""}>Retry earlier question</button><button class="um-link um-discard-question" type="button" ${state.busy ? "disabled" : ""}>Discard earlier question</button></div>` : ""}
       ${state.pendingSave ? '<div class="um-status">This answer has not synced yet. Copy it before continuing without saving if you want to keep it.<button class="um-secondary um-retry-save" type="button">Save this answer again</button><button class="um-link um-skip-save" type="button">Continue without saving</button></div>' : ""}
+      ${state.workspaceUnavailable ? '<div class="um-status">Saved assignment context couldn’t be loaded. Replies can use this page and chat only.<button class="um-link um-workspace-retry" type="button">Retry saved work</button></div>' : ""}
+      ${state.workspaceItem ? `<div class="um-resume"><strong>${escapeHtml(state.workspaceItem.title)}</strong>${escapeHtml(state.workspaceItem.status === "done" ? "Marked complete. You can revisit it any time." : state.workspaceItem.nextStep || "Your assignment is saved. Choose a next step when you’re ready.")}</div>` : ""}
       <div class="um-messages" role="log" aria-live="off" aria-busy="${state.busy}">${messages}${state.busy ? '<div class="um-thinking" aria-label="UniMate is thinking"><i></i><i></i><i></i></div>' : ""}</div>
       <div class="um-composer">
         <div class="um-context-row">
@@ -774,7 +817,20 @@
           <button class="um-send" type="submit" aria-label="Send" ${state.busy ? "disabled" : ""}>↑</button>
         </form>
         <span id="um-composer-hint" class="um-hidden">Press Enter to send. Press Shift and Enter for a new line.</span>
+        <div class="um-actions" aria-label="Ways to get help">
+          <button class="um-chip um-understand" type="button" ${state.busy ? "disabled" : ""}>Understand this</button>
+          <button class="um-chip um-get-started" type="button" ${state.busy ? "disabled" : ""}>Help me start</button>
+          ${state.workspaceItem ? `<button class="um-chip um-continue-work" type="button" ${state.busy ? "disabled" : ""}>Pick up where I left off</button>` : ""}
+        </div>
         <p class="um-context" style="white-space:normal;margin:8px 4px 0;line-height:1.5">${state.contextMode === "text-fallback" ? "Last answer used visible page text; a screenshot wasn’t available." : "Send shares one image of this tab and a short text sample. Nothing is captured while you type."}</p>
+        <div class="um-actions" style="margin:10px 0 0" aria-label="Keep your work">
+          <details class="um-save-menu"><summary class="um-chip">Save to UniMate</summary><div class="um-actions" style="margin:8px 0 0">
+          <button class="um-chip um-save-progress" type="button" ${state.busy ? "disabled" : ""}>${state.workspaceItem ? "Update progress" : "Save assignment"}</button>
+          <button class="um-chip um-save-note" type="button" ${state.busy || !state.messages.some((item) => item.role === "assistant") ? "disabled" : ""}>Save note</button>
+          <button class="um-chip um-save-link" type="button" ${state.busy ? "disabled" : ""}>Save link</button>
+          </div></details>
+          <button class="um-chip um-saved-work" type="button" ${state.busy ? "disabled" : ""}>Saved work</button>
+        </div>
         <div style="display:flex;justify-content:space-between"><button class="um-link um-privacy-settings" type="button" ${state.busy ? "disabled" : ""}>Page sharing</button><button class="um-link um-signout" type="button" ${state.busy ? "disabled" : ""}>Sign out</button></div>
       </div>`;
     const messagesNode = body.querySelector(".um-messages");
@@ -802,6 +858,23 @@
       .querySelector(".um-privacy-settings")
       .addEventListener("click", () => renderPrivacyConsent());
     body.querySelector(".um-signout").addEventListener("click", handleSignOut);
+    body
+      .querySelector(".um-understand")
+      .addEventListener("click", () => chooseStudyPrompt("understand"));
+    body
+      .querySelector(".um-get-started")
+      .addEventListener("click", () => chooseStudyPrompt("start"));
+    body
+      .querySelector(".um-continue-work")
+      ?.addEventListener("click", () => chooseStudyPrompt("continue"));
+    body
+      .querySelector(".um-save-progress")
+      .addEventListener("click", () => openStudyWorkspace("assignment"));
+    body.querySelector(".um-save-note").addEventListener("click", () => openStudyWorkspace("note"));
+    body.querySelector(".um-save-link").addEventListener("click", () => openStudyWorkspace("link"));
+    body
+      .querySelector(".um-saved-work")
+      .addEventListener("click", () => openStudyWorkspace("list"));
     body.querySelector(".um-retry-save")?.addEventListener("click", retrySaving);
     body.querySelector(".um-retry-question")?.addEventListener("click", () => {
       if (!state.busy && state.failedQuestion) void submitChat(state.failedQuestion, true);
@@ -828,6 +901,388 @@
         if (action && !action.disabled) action.focus({ preventScroll: true });
         else focusInitialControl();
       });
+  }
+
+  function chooseStudyPrompt(intent) {
+    if (state.busy) return;
+    if (state.draft.trim())
+      return renderChat("Your draft is kept. Send or clear it before choosing a starter.");
+    const prompts = {
+      understand:
+        "Help me understand this assignment. Explain what I need to do, what I need to hand in, and anything unclear. Use the instructions you can see and ask me for anything missing.",
+      start:
+        "Help me get started on this assignment. Suggest one small first step I can work through in about 15 minutes, then guide me while I try it. Ask for any missing instructions.",
+      continue:
+        "Help me pick up my saved assignment. Use my saved progress and next step, check what I need now, and guide me through the next small step.",
+    };
+    state.draft = prompts[intent] || prompts.understand;
+    renderChat(
+      "Your question is ready. Review it, then Send when you’re ready to share this page.",
+    );
+    body.querySelector(".um-input")?.focus({ preventScroll: true });
+  }
+
+  function studyPageUrl() {
+    try {
+      const url = new URL(location.href);
+      if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return "";
+      url.hash = "";
+      for (const name of [...url.searchParams.keys()]) {
+        if (/token|secret|password|session|auth|^code$|api.?key/i.test(name))
+          url.searchParams.delete(name);
+      }
+      return url.href;
+    } catch {
+      return "";
+    }
+  }
+
+  async function openStudyWorkspace(kind) {
+    if (state.busy || state.workspaceBusy) return;
+    if (state.workspaceDraft) return renderStudyEditor();
+    const sessionVersion = state.sessionVersion;
+    const loadVersion = ++state.workspaceLoadVersion;
+    state.workspaceBusy = true;
+    state.view = "workspace";
+    body.innerHTML =
+      '<div class="um-workspace" role="status"><p>Opening your saved work…</p></div>';
+    try {
+      const workspace = await send({
+        type: "LOAD_STUDY_WORKSPACE",
+        filters:
+          kind === "list"
+            ? { kind: "assignment" }
+            : { kind: "assignment", conversationId: state.activeConversationId },
+      });
+      if (sessionVersion !== state.sessionVersion || loadVersion !== state.workspaceLoadVersion)
+        return;
+      state.workspaceItems = workspace.items;
+      state.workspaceCourses = workspace.courses;
+      state.workspaceNextOffset = workspace.nextOffset ?? null;
+      state.workspaceBusy = false;
+      if (kind === "list") return renderStudyList();
+      state.workspaceUnavailable = false;
+      state.workspaceItem =
+        workspace.items.find(
+          (item) =>
+            item.kind === "assignment" && item.conversationId === state.activeConversationId,
+        ) || null;
+      const current = kind === "assignment" ? state.workspaceItem : null;
+      const answer =
+        [...state.messages].reverse().find((item) => item.role === "assistant")?.message || "";
+      state.workspaceDraft = current
+        ? { ...current }
+        : {
+            id: crypto.randomUUID(),
+            kind,
+            title: String(
+              kind === "note"
+                ? state.workspaceItem?.title
+                  ? `${state.workspaceItem.title} — note`
+                  : "Study note"
+                : document.title || "Untitled assignment",
+            ).slice(0, 160),
+            content: kind === "note" ? answer : "",
+            // A saved answer may come from an earlier page. Do not attribute
+            // that answer to whichever tab happens to be open now.
+            sourceUrl: kind === "note" ? "" : studyPageUrl(),
+            sourceTitle: kind === "note" ? "" : String(document.title || "").slice(0, 200),
+            nextStep: "",
+            progress: "",
+            status: "active",
+            courseId: state.workspaceItem?.courseId || null,
+            conversationId: state.activeConversationId,
+          };
+      renderStudyEditor();
+      body.querySelector("#um-work-title")?.focus({ preventScroll: true });
+    } catch (error) {
+      if (sessionVersion !== state.sessionVersion || loadVersion !== state.workspaceLoadVersion)
+        return;
+      state.workspaceBusy = false;
+      if (handleAccessRequired(error)) return;
+      renderChat(
+        "Your saved workspace is unavailable right now. Your chat and draft are kept; try again in a moment.",
+        true,
+      );
+    }
+  }
+
+  function renderStudyEditor(error = "") {
+    const draft = state.workspaceDraft;
+    if (!draft) return renderChat();
+    state.view = "workspace";
+    const assignment = draft.kind === "assignment";
+    const label = assignment
+      ? "Save your place"
+      : draft.kind === "note"
+        ? "Keep a study note"
+        : "Keep this link";
+    body.innerHTML = `<div class="um-workspace">
+      <button type="button" class="um-chip um-work-back" ${state.workspaceBusy ? "disabled" : ""}>Back to chat</button>
+      <h2>${label}</h2>
+      <p>${assignment ? "Keep the instructions and your next step together. A class is optional." : draft.kind === "note" ? "Review and edit this answer before saving it to Notes." : "Review the address before saving it to your Bulletin Board."}</p>
+      ${error ? `<div class="um-status error" role="alert">${escapeHtml(error)}</div>` : ""}
+      ${draft.content.length > 12000 ? '<div class="um-status">The full text is kept here. Shorten it to 12,000 characters or fewer before saving.</div>' : ""}
+      ${draft.pageTextNotice ? `<p>${escapeHtml(draft.pageTextNotice)}</p>` : ""}
+      <form class="um-study-form"><fieldset style="border:0;padding:0;margin:0;min-width:0" ${state.workspaceBusy ? "disabled" : ""}>
+        <label for="um-work-title">Title</label><input id="um-work-title" class="um-field" name="title" maxlength="160" required value="${escapeHtml(draft.title)}" />
+        <label for="um-work-course">Class (optional)</label><select id="um-work-course" class="um-field" name="courseId"><option value="">No class — keep it in my workspace</option>${state.workspaceCourses.map((course) => `<option value="${escapeHtml(course.id)}" ${course.id === draft.courseId ? "selected" : ""}>${escapeHtml(course.name)}</option>`).join("")}</select>
+        ${assignment ? `<button type="button" class="um-chip um-use-page" ${state.workspaceBusy ? "disabled" : ""}>Use text from this page</button>` : ""}
+        ${draft.kind !== "link" ? `<label for="um-work-content">${assignment ? "Assignment instructions (paste what matters)" : "Note"}</label><textarea id="um-work-content" class="um-field" name="content" maxlength="12000" ${assignment ? "" : "required"}>${escapeHtml(draft.content)}</textarea>` : ""}
+        <label for="um-work-url">${draft.kind === "link" ? "Link" : "Source link (optional)"}</label><input id="um-work-url" class="um-field" name="sourceUrl" type="url" ${draft.kind === "link" ? "required" : ""} value="${escapeHtml(draft.sourceUrl || "")}" />
+        ${assignment ? `<label for="um-work-progress">What have you done so far?</label><textarea id="um-work-progress" class="um-field" name="progress" maxlength="4000">${escapeHtml(draft.progress)}</textarea><label for="um-work-next">Next small step</label><textarea id="um-work-next" class="um-field" name="nextStep" maxlength="2000" placeholder="For example: find one source for my introduction">${escapeHtml(draft.nextStep)}</textarea><label for="um-work-status">Status</label><select id="um-work-status" class="um-field" name="status"><option value="active" ${draft.status === "active" ? "selected" : ""}>In progress</option><option value="done" ${draft.status === "done" ? "selected" : ""}>Complete</option></select>` : ""}
+        <p>Only these fields are saved to your UniMate account. Nothing is added until you choose Save.</p>
+        <button type="submit" class="um-primary" ${state.workspaceBusy ? "disabled" : ""}>${state.workspaceBusy ? "Saving…" : "Save"}</button>
+        <button type="button" class="um-link um-discard-work" ${state.workspaceBusy ? "disabled" : ""}>Discard these edits</button>
+      </fieldset></form></div>`;
+    const form = body.querySelector(".um-study-form");
+    form.addEventListener("input", (event) => {
+      const field = event.target;
+      if (
+        ["title", "content", "sourceUrl", "courseId", "nextStep", "progress", "status"].includes(
+          field.name,
+        )
+      ) {
+        draft[field.name] = field.name === "courseId" ? field.value || null : field.value;
+      }
+    });
+    // Some browsers emit only change for selects.
+    form.addEventListener("change", (event) => {
+      const field = event.target;
+      if (field.name === "courseId" || field.name === "status")
+        draft[field.name] = field.value || null;
+    });
+    form.addEventListener("submit", saveStudyDraft);
+    body.querySelector(".um-use-page")?.addEventListener("click", useStudyPageText);
+    body
+      .querySelector(".um-work-back")
+      .addEventListener("click", () =>
+        renderChat("Your workspace edits are kept here. Reopen Save to continue editing."),
+      );
+    body.querySelector(".um-discard-work").addEventListener("click", () => {
+      state.workspaceDraft = null;
+      renderChat("Workspace edits discarded. Your chat is unchanged.");
+    });
+  }
+
+  async function useStudyPageText() {
+    const draft = state.workspaceDraft;
+    if (!draft || state.workspaceBusy) return;
+    if (draft.content.trim())
+      return renderStudyEditor(
+        "Your instructions are kept. Clear that field first if you want to replace it with page text.",
+      );
+    const sessionVersion = state.sessionVersion;
+    state.workspaceBusy = true;
+    renderStudyEditor();
+    try {
+      const consent = await send({ type: "PRIVACY_CONSENT_STATE" });
+      if (sessionVersion !== state.sessionVersion || state.workspaceDraft !== draft) return;
+      if (!consent.accepted)
+        throw new Error(
+          "Page sharing is off. Review Page sharing in the chat before using page text.",
+        );
+      const context = extractContext();
+      const text = String(context.highlightedText || context.visiblePageText || "").trim();
+      if (!text)
+        throw new Error(
+          "There’s no readable page text to use. Paste the assignment instructions into the field instead.",
+        );
+      draft.content = text;
+      draft.sourceUrl = studyPageUrl();
+      draft.sourceTitle = String(context.pageTitle || document.title || "").slice(0, 200);
+      draft.pageTextNotice = context.highlightedText
+        ? "Your highlighted text is ready to review. Check that it includes all the instructions you need."
+        : "A short visible-text sample is ready to review. It may omit instructions elsewhere on the page; add anything missing before saving.";
+      state.workspaceBusy = false;
+      renderStudyEditor();
+    } catch (error) {
+      if (sessionVersion !== state.sessionVersion || state.workspaceDraft !== draft) return;
+      state.workspaceBusy = false;
+      renderStudyEditor(error?.message || "Page text could not be read. Your draft is kept.");
+    }
+  }
+
+  async function loadMoreStudyWork() {
+    if (state.workspaceBusy || state.workspaceNextOffset === null) return;
+    const sessionVersion = state.sessionVersion;
+    state.workspaceBusy = true;
+    renderStudyList();
+    try {
+      const result = await send({
+        type: "LOAD_STUDY_WORKSPACE",
+        filters: { kind: "assignment", offset: state.workspaceNextOffset },
+      });
+      if (sessionVersion !== state.sessionVersion) return;
+      const merged = new Map(state.workspaceItems.map((item) => [item.id, item]));
+      for (const item of result.items) merged.set(item.id, item);
+      state.workspaceItems = [...merged.values()];
+      state.workspaceNextOffset = result.nextOffset ?? null;
+      state.workspaceBusy = false;
+      renderStudyList();
+    } catch (error) {
+      if (sessionVersion !== state.sessionVersion) return;
+      state.workspaceBusy = false;
+      if (handleAccessRequired(error)) return;
+      renderStudyList(
+        "More assignments could not be loaded. The saved work already shown is kept; try again.",
+      );
+    }
+  }
+
+  async function saveStudyDraft(event) {
+    event.preventDefault();
+    if (state.workspaceBusy || !state.workspaceDraft) return;
+    const draft = state.workspaceDraft;
+    if (draft.content.length > 12000)
+      return renderStudyEditor(
+        "Your full text is kept. Shorten it to 12,000 characters or fewer before saving.",
+      );
+    const sessionVersion = state.sessionVersion;
+    state.workspaceBusy = true;
+    renderStudyEditor();
+    const item = Object.fromEntries(
+      [
+        "id",
+        "kind",
+        "title",
+        "content",
+        "sourceUrl",
+        "sourceTitle",
+        "nextStep",
+        "progress",
+        "status",
+        "courseId",
+        "conversationId",
+      ].map((key) => [key, draft[key]]),
+    );
+    item.sourceUrl = item.sourceUrl || null;
+    try {
+      const result = await send({ type: "SAVE_STUDY_ITEM", item, expectedVersion: draft.version });
+      if (sessionVersion !== state.sessionVersion || state.workspaceDraft !== draft) return;
+      if (!result?.item?.id) throw new Error("The save could not be confirmed.");
+      state.workspaceBusy = false;
+      state.workspaceDraft = null;
+      if (result.item.kind === "assignment") state.workspaceItem = result.item;
+      renderChat(
+        result.item.kind === "assignment"
+          ? "Saved. Your instructions, progress and next step are ready whenever you return."
+          : result.item.kind === "note"
+            ? "Saved to Notes in your UniMate workspace."
+            : "Saved to your Bulletin Board in UniMate.",
+      );
+    } catch (error) {
+      if (sessionVersion !== state.sessionVersion || state.workspaceDraft !== draft) return;
+      state.workspaceBusy = false;
+      if (handleAccessRequired(error)) return;
+      renderStudyEditor(
+        error?.code === "WORKSPACE_CONFLICT"
+          ? "This item changed elsewhere. Your edits are kept here. Copy any changes you want to keep, then discard these edits and reopen the saved item to review its latest version."
+          : "We couldn’t confirm the save. Your edits are kept here; try saving again.",
+      );
+    }
+  }
+
+  function renderStudyList(error = "") {
+    state.view = "workspace";
+    const items = state.workspaceItems.filter((item) => item.kind === "assignment");
+    body.innerHTML = `<div class="um-workspace"><button type="button" class="um-chip um-list-back">Back to chat</button><h2>Pick up where you left off</h2><p>Your saved assignments stay with your account, with or without a class.</p>${error ? `<div class="um-status error" role="alert">${escapeHtml(error)}</div>` : ""}<button type="button" class="um-primary um-new-assignment" ${state.workspaceBusy || state.draft.trim() || state.pendingSave || state.failedQuestion || state.workspaceDraft ? "disabled" : ""}>Start a new assignment chat</button>${state.draft.trim() || state.pendingSave || state.failedQuestion || state.workspaceDraft ? "<p>Finish or discard your current draft before switching chats.</p>" : ""}<ul class="um-workspace-list">${items.map((item, index) => `<li><button type="button" class="um-secondary um-resume-item" data-index="${index}" ${state.workspaceBusy || state.draft.trim() || state.pendingSave || state.failedQuestion || state.workspaceDraft ? "disabled" : ""}><strong>${escapeHtml(item.title)}</strong><br/>${escapeHtml(item.status === "done" ? "Complete" : item.nextStep || "Continue your assignment")}</button></li>`).join("") || "<li>No saved assignments yet. Save one from your chat whenever you’re ready.</li>"}</ul>${state.workspaceNextOffset !== null ? `<button type="button" class="um-secondary um-more-work" ${state.workspaceBusy ? "disabled" : ""}>Load more assignments</button>` : ""}<button type="button" class="um-link um-reload-work" ${state.workspaceBusy ? "disabled" : ""}>Refresh saved work</button><br/><button type="button" class="um-link um-open-notes">Open Notes</button> <button type="button" class="um-link um-open-links">Open Bulletin Board</button></div>`;
+    body.querySelector(".um-list-back").addEventListener("click", () => renderChat());
+    body.querySelector(".um-more-work")?.addEventListener("click", loadMoreStudyWork);
+    body
+      .querySelector(".um-new-assignment")
+      .addEventListener("click", () => selectStudyChat(crypto.randomUUID(), true));
+    for (const button of body.querySelectorAll(".um-resume-item"))
+      button.addEventListener("click", () =>
+        selectStudyChat(
+          items[Number(button.dataset.index)].conversationId,
+          false,
+          items[Number(button.dataset.index)],
+        ),
+      );
+    body
+      .querySelector(".um-reload-work")
+      .addEventListener("click", () => openStudyWorkspace("list"));
+    body
+      .querySelector(".um-open-notes")
+      .addEventListener("click", () =>
+        send({ type: "OPEN_STUDY_WORKSPACE", section: "note" }).catch(() =>
+          renderStudyList("UniMate could not be opened. Try again."),
+        ),
+      );
+    body
+      .querySelector(".um-open-links")
+      .addEventListener("click", () =>
+        send({ type: "OPEN_STUDY_WORKSPACE", section: "link" }).catch(() =>
+          renderStudyList("UniMate could not be opened. Try again."),
+        ),
+      );
+  }
+
+  async function selectStudyChat(conversationId, create = false, savedItem = null) {
+    if (
+      state.workspaceBusy ||
+      state.draft.trim() ||
+      state.pendingSave ||
+      state.failedQuestion ||
+      state.workspaceDraft
+    )
+      return;
+    const sessionVersion = state.sessionVersion;
+    const needsAttachment = !conversationId && savedItem;
+    if (needsAttachment) {
+      conversationId =
+        state.workspaceResume?.itemId === savedItem.id
+          ? state.workspaceResume.conversationId
+          : crypto.randomUUID();
+      state.workspaceResume = { itemId: savedItem.id, conversationId };
+    }
+    state.workspaceBusy = true;
+    renderStudyList();
+    let createdChat = false;
+    try {
+      const chat = await send({
+        type: "SELECT_STUDY_CONVERSATION",
+        conversationId,
+        create: create || Boolean(needsAttachment),
+      });
+      if (sessionVersion !== state.sessionVersion) return;
+      createdChat = Boolean(needsAttachment);
+      if (needsAttachment) {
+        const result = await send({
+          type: "SAVE_STUDY_ITEM",
+          item: { id: savedItem.id, conversationId },
+          expectedVersion: savedItem.version,
+        });
+        if (sessionVersion !== state.sessionVersion) return;
+        if (!result?.item?.id) throw new Error("The assignment could not be attached.");
+        chat.workspaceItem = result.item;
+        state.workspaceResume = null;
+      }
+      if (sessionVersion !== state.sessionVersion) return;
+      state.workspaceBusy = false;
+      state.activeConversationId = chat.conversationId;
+      state.activeConversationTitle = chat.conversationTitle;
+      state.messages = chat.messages;
+      state.workspaceItem = chat.workspaceItem || null;
+      state.workspaceUnavailable = Boolean(chat.workspaceUnavailable) && !needsAttachment;
+      state.pageHistory = [];
+      state.conversationStartIndex = chat.messages.length;
+      renderChat(
+        create
+          ? "A fresh assignment chat is ready. Ask about this page, then save your progress whenever you like."
+          : "Welcome back. Your saved progress is here; review it and choose your next step.",
+      );
+    } catch (error) {
+      if (sessionVersion !== state.sessionVersion) return;
+      state.workspaceBusy = false;
+      if (handleAccessRequired(error)) return;
+      renderStudyList(
+        createdChat
+          ? "A new chat was created, but your saved assignment could not be attached. Your progress is unchanged. Refresh saved work, then try opening it again."
+          : "Your assignment chat could not be opened. Try again.",
+      );
+    }
   }
 
   async function retrySaving(event) {
@@ -887,6 +1342,15 @@
     state.failedQuestion = null;
     state.unresolvedRequest = null;
     state.pendingSave = null;
+    state.workspaceItem = null;
+    state.workspaceUnavailable = false;
+    state.workspaceNextOffset = null;
+    state.workspaceItems = [];
+    state.workspaceCourses = [];
+    state.workspaceDraft = null;
+    state.workspaceResume = null;
+    state.workspaceBusy = false;
+    state.workspaceLoadVersion = (state.workspaceLoadVersion || 0) + 1;
     state.contextMode = null;
     state.diagnostics = null;
     state.readingPosition = null;
@@ -963,7 +1427,7 @@
 
   async function handleChat(event) {
     event.preventDefault();
-    if (state.busy) return;
+    if (state.busy || state.workspaceBusy) return;
     const input = event.currentTarget.querySelector(".um-input");
     const message = input.value.trim();
     if (!message) return;
@@ -977,7 +1441,13 @@
   }
 
   async function submitChat(message, retryFailed = false) {
-    if (state.busy) return;
+    if (state.busy || state.workspaceBusy) return;
+    if (state.workspaceDraft?.kind === "assignment") {
+      return renderChat(
+        "You have unsaved assignment instructions or progress. Open Save assignment to save or discard those edits before asking UniMate to use them.",
+        true,
+      );
+    }
     if (state.failedQuestion && !retryFailed)
       return renderChat(
         "Retry or discard your earlier question first. Your new draft is safe below.",
@@ -1061,6 +1531,9 @@
       type: "SEND_CHAT",
       requestId,
       conversationId: state.activeConversationId,
+      ...(state.workspaceItem?.conversationId === state.activeConversationId
+        ? { workspaceId: state.workspaceItem.id }
+        : {}),
       message,
       context,
       useScreenshot: decision.useScreenshot,
@@ -1083,6 +1556,7 @@
       if (result.conversationId && result.conversationId !== state.activeConversationId) {
         state.activeConversationId = result.conversationId;
         state.activeConversationTitle = "Browser Companion";
+        state.workspaceItem = null;
         state.messages = [result.user, result.assistant];
         state.pageHistory = [];
       } else {
@@ -1251,6 +1725,7 @@
       if (!state.auth.authenticated) return renderAuth();
       if (!state.auth.isPro) return renderNotPro();
       if (state.pendingSave || state.failedQuestion) return renderChat();
+      if (state.workspaceDraft) return renderStudyEditor();
       const chatState = await send({ type: "LOAD_CHAT_STATE" });
       if (!isCurrent()) return;
       if (state.activeConversationId && state.activeConversationId !== chatState.conversationId) {
@@ -1260,6 +1735,8 @@
       state.messages = chatState.messages;
       state.activeConversationId = chatState.conversationId;
       state.activeConversationTitle = chatState.conversationTitle;
+      state.workspaceItem = chatState.workspaceItem || null;
+      state.workspaceUnavailable = Boolean(chatState.workspaceUnavailable);
       state.conversationStartIndex = state.messages.length;
       renderChat();
     } catch (error) {

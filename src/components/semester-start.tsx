@@ -36,6 +36,71 @@ export function SemesterStart({
   ];
   const completeCount = steps.filter((step) => step.complete).length;
   if (completeCount === 3) return null;
+  if (courseCount === 0)
+    return (
+      <section
+        className="rounded-3xl border border-border bg-card p-5 sm:p-7"
+        aria-labelledby="semester-start-heading"
+      >
+        <div className="flex items-start gap-4">
+          <LogoMark className="h-11 w-11 shrink-0" />
+          <div>
+            <p className="journey-eyebrow">MAKE YOURSELF AT HOME</p>
+            <h2 id="semester-start-heading" className="mt-1 font-serif-display text-3xl">
+              Where could you use a hand?
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Start with one question, bring your schoolwork together, or take UniMate into your
+              browser. You can use any combination.
+            </p>
+          </div>
+        </div>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-border p-4">
+            <h3 className="font-semibold">Help beside your coursework</h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Understand what’s on your page and save your next step. No classes or syllabus
+              required. Companion is included with Pro.
+            </p>
+            <Link
+              to="/companion-setup"
+              className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-semibold"
+            >
+              Set up Companion <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="rounded-2xl border border-border p-4">
+            <h3 className="font-semibold">Your school workspace</h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Keep assignments, dates, notes, and useful links together. Start small and add classes
+              whenever you’re ready.
+            </p>
+            <Link
+              to="/ask"
+              className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-semibold"
+            >
+              Start with an assignment · Pro <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link
+              to="/planner"
+              className="block min-h-10 text-sm font-medium underline underline-offset-4"
+            >
+              Or bring in my first class
+            </Link>
+            <a
+              href="#course-setup"
+              className="block min-h-10 text-sm font-medium underline underline-offset-4"
+            >
+              No syllabus? Add a class myself · Free
+            </a>
+          </div>
+        </div>
+        <p className="mt-4 text-xs text-muted-foreground">
+          Planning, Notes, and Bulletin are available on Free. Ask UniMate and Companion require
+          Pro.
+        </p>
+      </section>
+    );
   return (
     <section
       className="rounded-3xl border border-border bg-card p-5 sm:p-7"

@@ -19,6 +19,7 @@ import {
 import { useCourses } from "../lib/courses";
 import { ProtectedRoute } from "../components/protected-route";
 import { useAuth } from "../lib/auth-context";
+import { StudyResources, StudyResourceSave } from "../components/study-resources";
 
 export const Route = createFileRoute("/notes")({
   component: NotesRoute,
@@ -386,6 +387,12 @@ function Notes() {
 
   return (
     <div className="min-h-[calc(100vh-12rem)] bg-background" aria-busy={!hasLoadedNotes}>
+      <StudyResources kind="note" />
+      <h2 className="mb-2 text-xl font-semibold">Your browser notebook</h2>
+      <p className="mb-5 text-sm text-muted-foreground">
+        These notes stay on this browser. Copy a note to your account to use its text with UniMate
+        anywhere. Your original note and its formatting stay here.
+      </p>
       {storageError && (
         <p
           role="alert"
@@ -565,6 +572,17 @@ function Notes() {
                   <Save className="h-4 w-4" />
                   Save
                 </button>
+                <StudyResourceSave
+                  kind="note"
+                  initialTitle={title}
+                  content={body}
+                  courseId={
+                    manualCourses.filter((course) => course.name === selectedCourse).length === 1
+                      ? manualCourses.find((course) => course.name === selectedCourse)?.id
+                      : null
+                  }
+                  triggerLabel="Copy to my account"
+                />
                 <span
                   className="min-w-10 text-xs text-muted-foreground"
                   role="status"

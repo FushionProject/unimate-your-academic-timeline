@@ -46,6 +46,7 @@ import { ExperienceSwitch } from "../components/journey-experience";
 import { askJourneyHref, useJourneyExperience } from "../lib/journey-experience";
 import { SemesterStart } from "../components/semester-start";
 import { LogoMark } from "../components/logo-mark";
+import { SavedAssignments } from "../components/saved-assignments";
 import "../journey.css";
 
 export const Route = createFileRoute("/dashboard")({
@@ -406,6 +407,7 @@ function Dashboard() {
           </div>
         ) : (
           <div className="space-y-6">
+            <SavedAssignments />
             {!classic && (
               <SemesterStart
                 courseCount={courses.length}
@@ -477,10 +479,10 @@ function Dashboard() {
                         </p>
                         <div className="mt-5 flex flex-wrap gap-2">
                           <a
-                            href={askJourneyHref(
+                            href={`${askJourneyHref(
                               `Help me get started on ${dailyBrief.focus.name} for ${dailyBrief.focus.course?.name || "my course"}, due ${format(new Date(dailyBrief.focus.due_at), "MMMM d, yyyy")}. Ask me for the assignment instructions if you need them, then help me choose a manageable first step.`,
                               dailyBrief.focus.course_id,
-                            )}
+                            )}&assignment=${encodeURIComponent(dailyBrief.focus.name)}`}
                             className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-95"
                           >
                             <Sparkles className="h-4 w-4" /> Help me start

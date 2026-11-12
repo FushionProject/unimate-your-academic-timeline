@@ -124,6 +124,20 @@ function harness({ pro = true, consent = true, fail = false, authFail = false, o
 }
 
 // Loaded dialogue remains conversational context across reload and handoff.
+{
+  const { state, events, api } = harness();
+  state.workspaceDraft = { kind: "assignment", content: "Changed assignment instructions" };
+  state.workspaceItem = { id: "saved-assignment", content: "Old assignment instructions" };
+  await api.submitChat("Help me with my assignment");
+  assert.equal(
+    events.some(([name]) => name === "extract" || name === "SEND_CHAT"),
+    false,
+  );
+  assert.match(events.at(-1)[1], /unsaved assignment/);
+  assert.equal(state.workspaceDraft.content, "Changed assignment instructions");
+  assert.equal(state.draft, "Explain this");
+}
+
 // It never becomes a field in the fresh page-source packet.
 for (const load of ["initialize", "refreshMessagesOnOpen"]) {
   const saved = [

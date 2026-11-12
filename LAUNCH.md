@@ -10,6 +10,63 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - Every completed manual item must include a dated evidence note or link.
 - If a release-blocking check fails, stop promotion and record the response under **Launch incidents**.
 
+## November 12 connected workspace — source implementation, private rollout pending
+
+The owner requested an optional whole-school workspace or standalone Pro
+Companion: understand an assignment, get started, optionally attach a class,
+save progress, and return later. The warm visual theme and existing AI/Pro
+entitlements are preserved. This pass does not deploy or change hosted data,
+public signup, Store publication, or Stripe mode.
+
+- Home and the empty Today screen offer both entry paths. Manual Free class
+  setup remains available. No class or syllabus is required for Companion.
+- A reviewed assignment record contains instructions, source reference,
+  optional class, progress, and next step. Today, Ask, and Companion can resume
+  it with its saved chat. A deleted chat can be replaced by an explicit relink
+  without deleting the assignment. Progress does not submit coursework or
+  silently alter the deadline timeline.
+- Ask and Companion can save an editable answer to account Notes or a reviewed
+  source link to Bulletin. Selecting an account note/link for Ask includes only
+  that source. Links are references, not automatic website fetches. Existing
+  browser-local Notes/Bulletin remain intact; copying them to the account is
+  optional and explicit (note text is copied; original formatting stays local).
+- Saved-work writes never invoke AI. All model actions remain suggestions until
+  the student chooses a save. Saved instructions are separate from current-page
+  evidence and cannot impersonate system instructions or authorize tool actions.
+- New `study_items` records use owner RLS and composite owner foreign keys;
+  authenticated APIs use the student's bearer token, never a service-role key.
+  Version checks prevent silent cross-device overwrites, stable create IDs
+  support exact-payload retries, pagination keeps older items accessible, and
+  bounded fields plus a 1,000-item account limit constrain storage abuse.
+
+Verification includes the new `npm run workspace:test` behavior suite, the full
+offline regression suite, typecheck/lint, and local Cloudflare/Vercel builds
+with emitted-artifact checks. `npm run workspace:test:postgres` exercises the
+actual additive migration in an isolated socket-only PostgreSQL cluster with
+synthetic users: RLS, ownership, concurrent updates, delete/version races,
+parent unlinking, collection limit, and admin account cleanup. It never uses
+hosted credentials. Responsive web checks use synthetic data and blocked
+external traffic. The installed Chromium fixture passes all 31 scenarios with
+12 simulated AI responses, including reviewed assignment/class/note/link saves,
+reload and cross-chat resume, standalone use without a class, and small-window
+save/recovery access without scrolling the host page. The new starter row sits
+below the composer so it does not push the input out of the short panel.
+Artifact: `unimate-companion-browser-mQyiXH` (assignment screenshots 12–15).
+This is local synthetic evidence, not a hosted persistence or real-model quality
+evaluation; historical Store screenshots remain drafts.
+
+**Private rollout dependency:** back up and review the private database, then
+apply `supabase/migrations/20261112201345_study_workspace.sql` before deploying
+this source and updating the installed Companion. This migration has not been
+applied to hosted Supabase. If absent, saved-work operations fail explicitly
+without reporting success or overwriting browser-local data. Existing general
+chat stays available; an explicitly selected unavailable source blocks tutoring
+until the student retries or chooses to continue without that source.
+
+Full syllabus/lecture indexing, automatic LMS synchronization, adaptive calendar
+rescheduling, and autonomous note/link actions are not part of this change.
+The earlier public-release, owner verification, and live-billing gates remain.
+
 ## November 11 audit repairs — source verification, still private
 
 The owner authorized repair of the November 11 audit findings. These changes do

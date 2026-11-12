@@ -34,6 +34,12 @@ for (const file of [
 
 const student = { id: "10000000-0000-4000-8000-000000000001", email: "pro@example.test" };
 const conversation = { id: "20000000-0000-4000-8000-000000000001", title: "Biology review" };
+const conversations = new Map([[conversation.id, { ...conversation, user_id: student.id }]]);
+let activeConversationId = conversation.id;
+const studyItems = new Map();
+const studyCourses = [
+  { id: "40000000-0000-4000-8000-000000000001", name: "Biology", course_code: "BIO 101" },
+];
 let isPro = false;
 let failSave = false;
 let providerUnavailable = false;
@@ -102,9 +108,63 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/auth/v1/logout") return json({});
   if (url.pathname === "/api/billing-status") return json({ isPro });
-  if (url.pathname === "/rest/v1/companion_preferences")
-    return json([{ active_conversation_id: conversation.id }]);
-  if (url.pathname === "/rest/v1/companion_conversations") return json([conversation]);
+  if (url.pathname === "/api/study-workspace") {
+    if (!isPro) return json({ code: "PRO_REQUIRED", error: "Pro required" }, 403);
+    if (req.method === "GET") {
+      let items = [...studyItems.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      for (const field of ["kind", "conversationId", "id"]) {
+        if (url.searchParams.has(field))
+          items = items.filter((item) => item[field] === url.searchParams.get(field));
+      }
+      const offset = Number(url.searchParams.get("offset") || 0);
+      return json({
+        items: items.slice(offset, offset + 200),
+        courses: studyCourses,
+        hasMore: items.length > offset + 200,
+        nextOffset: items.length > offset + 200 ? offset + 200 : null,
+      });
+    }
+    if (req.method === "POST") {
+      if (studyItems.has(payload.item.id)) return json({ item: studyItems.get(payload.item.id) });
+      const item = {
+        ...payload.item,
+        userId: student.id,
+        version: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      studyItems.set(item.id, item);
+      return json({ item }, 201);
+    }
+    if (req.method === "PATCH") {
+      const current = studyItems.get(payload.id);
+      if (!current || current.version !== payload.expectedVersion)
+        return json({ code: "WORKSPACE_CONFLICT", error: "Changed elsewhere" }, 409);
+      const item = {
+        ...current,
+        ...payload.patch,
+        version: current.version + 1,
+        updatedAt: new Date().toISOString(),
+      };
+      studyItems.set(item.id, item);
+      return json({ item });
+    }
+  }
+  if (url.pathname === "/rest/v1/companion_preferences") {
+    if (req.method === "POST") activeConversationId = payload.active_conversation_id;
+    return json([{ active_conversation_id: activeConversationId }]);
+  }
+  if (url.pathname === "/rest/v1/companion_conversations") {
+    if (req.method === "POST") {
+      const id = payload.id || conversation.id;
+      if (!conversations.has(id)) conversations.set(id, { ...payload, id });
+      return json([conversations.get(id)]);
+    }
+    const id = url.searchParams.get("id")?.replace(/^eq\./, "");
+    return json(
+      id ? (conversations.has(id) ? [conversations.get(id)] : []) : [...conversations.values()],
+    );
+  }
   if (url.pathname === "/rest/v1/companion_chats") {
     if (req.method === "POST") {
       const inserted = [];
@@ -123,6 +183,9 @@ const server = http.createServer(async (req, res) => {
     }
     const requestedIds = url.searchParams.get("id");
     let rows = [...messages.values()];
+    const requestedConversation = url.searchParams.get("conversation_id")?.replace(/^eq\./, "");
+    if (requestedConversation)
+      rows = rows.filter((row) => row.conversation_id === requestedConversation);
     if (requestedIds) rows = rows.filter((row) => requestedIds.includes(row.id));
     else rows.sort((a, b) => b.created_at.localeCompare(a.created_at));
     return json(rows);
@@ -235,7 +298,7 @@ try {
           if (action === 'focused') return this.activeElement === element;
           if (action === 'attribute') return element.getAttribute(value);
           if (action === 'style') return getComputedStyle(element)[value];
-          if (action === 'fill') { element.focus(); element.value = value; element.dispatchEvent(new Event('input', {bubbles:true})); return true; }
+          if (action === 'fill') { element.focus({preventScroll:true}); element.value = value; element.dispatchEvent(new Event('input', {bubbles:true})); return true; }
           if (action === 'value') return element.value;
           if (action === 'visible') { const r=element.getBoundingClientRect(); const s=getComputedStyle(element); return s.visibility!=='hidden' && r.width>0 && r.height>0; }
           if (action === 'bounds') { const r=element.getBoundingClientRect(); return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,height:r.height,scrollHeight:element.scrollHeight,clientHeight:element.clientHeight}; }
@@ -273,6 +336,11 @@ try {
     await page.screenshot({ path: path.join(artifacts, filename), animations: "disabled" });
   }
   const waitFor = (selector) => until(() => shadowCall(selector, "visible"), selector);
+  async function openSaveAction(selector) {
+    await shadowCall(".um-save-menu summary", "click");
+    await waitFor(selector);
+    await shadowCall(selector, "click");
+  }
   async function signIn(email, exerciseFailures = false) {
     await waitFor(".um-signin");
     assert.equal(await shadowCall("input[type=password]"), null);
@@ -758,14 +826,19 @@ try {
     "fill",
     "A multiline draft\nLine two\nLine three\nLine four\nLine five\nLine six",
   );
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
   const hostScrollBefore = await page.evaluate(() => window.scrollY);
   const composerBounds = await shadowCall(".um-input", "bounds");
+
   await shadowCall(".um-input", "scroll-end");
   await page.mouse.move(
     (composerBounds.left + composerBounds.right) / 2,
     Math.min(composerBounds.top + 16, 425),
   );
   await page.mouse.wheel(0, 750);
+
   await until(
     () => shadowCall(".um-signout", "in-view"),
     "mouse-wheel reaches small-window recovery controls",
@@ -852,7 +925,7 @@ try {
   assert.equal(await shadowCall(".um-discard-question", "focused"), true);
   assert.equal(await shadowCall(".um-discard-question", "in-view"), true);
   // Chromium may include the keyboard-scrollable history in native Tab order.
-  for (let step = 0; step < 3 && !(await shadowCall(".um-input", "focused")); step += 1)
+  for (let step = 0; step < 8 && !(await shadowCall(".um-input", "focused")); step += 1)
     await page.keyboard.press("Tab");
   assert.equal(await shadowCall(".um-input", "focused"), true);
   assert.equal(await shadowCall(".um-input", "in-view"), true);
@@ -925,9 +998,10 @@ try {
   const countBeforeNavigationQuestion = aiRequests.length;
   await ask("Explain this new page.");
   await until(() => aiRequests.length > countBeforeNavigationQuestion, "new page request");
-  assert.equal(aiRequests.at(-1).chatHistory.length, 0);
+  assert.ok(aiRequests.at(-1).chatHistory.length > 0 && aiRequests.at(-1).chatHistory.length <= 10);
+  assert.match(aiRequests.at(-1).pageContext.pageUrl, /\/lesson-two$/);
   await until(async () => !(await shadowCall(".um-thinking")), "new page reply");
-  pass("Navigation retains saved conversation but clears old page evidence");
+  pass("Navigation keeps bounded saved dialogue separate from current-page evidence");
 
   const otherPage = await context.newPage();
   const otherCdp = await context.newCDPSession(otherPage);
@@ -1261,7 +1335,9 @@ try {
     (target) => target.type === "service_worker" && target.url === worker.url(),
   );
   assert.ok(interruptedWorker, "Capture interruption requires the real MV3 worker");
-  await interruptedCaptureCdp.send("Target.closeTarget", { targetId: interruptedWorker.targetId });
+  await interruptedCaptureCdp.send("Target.closeTarget", {
+    targetId: interruptedWorker.targetId,
+  });
   await until(
     () => shadowCall(".um-panel", "visible"),
     "content-side recovery after worker termination during capture",
@@ -1327,6 +1403,111 @@ try {
   await restrictedPage.close();
   await page.bringToFront();
   pass("Browser-restricted pages reject injection with an actionable typed error");
+  // Assignment -> first step -> reviewed workspace saves -> reload and resume.
+  // This is one existing Chromium profile using only the synthetic server above.
+  const beforeStarter = aiRequests.length;
+  await shadowCall(".um-understand", "click");
+  assert.match(await shadowCall(".um-input", "value"), /what I need to hand in/);
+  assert.equal(aiRequests.length, beforeStarter, "A starter waits for explicit Send");
+  await shadowCall(".um-input", "focus");
+  await page.keyboard.press("Enter");
+  await until(() => aiRequests.length === beforeStarter + 1, "assignment question sent");
+  await until(async () => !(await shadowCall(".um-thinking")), "assignment explanation ready");
+  await openSaveAction(".um-save-progress");
+  await waitFor("#um-work-title");
+  await shadowCall(".um-use-page", "click");
+  await until(
+    async () => (await shadowCall("#um-work-content", "value"))?.includes("Mitochondria"),
+    "page instructions copied for review",
+  );
+  assert.equal(studyItems.size, 0, "Page capture into review form never autosaves");
+  await shadowCall("#um-work-title", "fill", "Biology lab assignment");
+  await shadowCall("#um-work-course", "fill", studyCourses[0].id);
+  await shadowCall("#um-work-progress", "fill", "Read the instructions and identified the topic.");
+  await shadowCall("#um-work-next", "fill", "Write a short explanation of ATP in my own words.");
+  await savePanelScreenshot("12-assignment-review.png");
+  await page.setViewportSize({ width: 420, height: 620 });
+  await shadowCall(".um-workspace", "scroll-end");
+  assert.equal(
+    await shadowCall(".um-study-form .um-primary", "in-view"),
+    true,
+    "Save remains reachable in a small panel",
+  );
+  const editorBounds = await shadowCall(".um-field", "bounds");
+  assert.ok(
+    editorBounds.left >= 0 && editorBounds.right <= 420,
+    "Editor fields stay inside the viewport",
+  );
+  await savePanelScreenshot("13-assignment-small-panel.png");
+  await shadowCall(".um-study-form .um-primary", "click");
+  await waitFor(".um-resume");
+  const savedAssignment = [...studyItems.values()].find((item) => item.kind === "assignment");
+  assert.equal(savedAssignment.courseId, studyCourses[0].id);
+  assert.equal(savedAssignment.nextStep, "Write a short explanation of ATP in my own words.");
+  assert.equal(savedAssignment.content.includes("HIDDEN_FIXTURE"), false);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openSaveAction(".um-save-note");
+  await waitFor("#um-work-content");
+  assert.equal(
+    await shadowCall("#um-work-url", "value"),
+    "",
+    "Saved answers are not falsely attributed to the current tab",
+  );
+  await shadowCall("#um-work-content", "fill", "Reviewed note: ATP is usable energy for the cell.");
+  await shadowCall(".um-study-form .um-primary", "click");
+  await waitFor(".um-input");
+  assert.equal(
+    [...studyItems.values()].find((item) => item.kind === "note").content,
+    "Reviewed note: ATP is usable energy for the cell.",
+  );
+  await openSaveAction(".um-save-link");
+  await waitFor("#um-work-url");
+  assert.match(await shadowCall("#um-work-url", "value"), /\/lesson-two$/);
+  await shadowCall(".um-study-form .um-primary", "click");
+  await waitFor(".um-input");
+  assert.equal([...studyItems.values()].filter((item) => item.kind === "link").length, 1);
+  assert.equal(aiRequests.length, beforeStarter + 1, "Workspace saves never call AI");
+  await page.reload();
+  await waitFor(".um-mascot");
+  await shadowCall(".um-mascot", "click");
+  await waitFor(".um-resume");
+  assert.match(await shadowCall(".um-resume"), /Write a short explanation of ATP/);
+  await shadowCall(".um-continue-work", "click");
+  await shadowCall(".um-input", "focus");
+  await page.keyboard.press("Enter");
+  await until(() => aiRequests.length === beforeStarter + 2, "saved assignment follow-up sent");
+  assert.equal(aiRequests.at(-1).workspaceId, savedAssignment.id);
+  await until(async () => !(await shadowCall(".um-thinking")), "resume answer ready");
+  await savePanelScreenshot("14-assignment-resumed.png");
+  await shadowCall(".um-saved-work", "click");
+  await waitFor(".um-new-assignment");
+  await shadowCall(".um-new-assignment", "click");
+  await waitFor(".um-input");
+  assert.equal(await shadowCall(".um-resume"), null);
+  await shadowCall(".um-get-started", "click");
+  assert.match(await shadowCall(".um-input", "value"), /15 minutes/);
+  await shadowCall(".um-input", "fill", "");
+  await openSaveAction(".um-save-progress");
+  await waitFor("#um-work-title");
+  await shadowCall("#um-work-title", "fill", "Standalone assignment");
+  assert.equal(await shadowCall("#um-work-course", "value"), "");
+  await shadowCall(".um-study-form .um-primary", "click");
+  await waitFor(".um-resume");
+  assert.equal(
+    [...studyItems.values()].find((item) => item.title === "Standalone assignment").courseId,
+    null,
+  );
+  await shadowCall(".um-saved-work", "click");
+  await waitFor('.um-resume-item[data-index="1"]');
+  await savePanelScreenshot("15-saved-assignments.png");
+  await shadowCall('.um-resume-item[data-index="1"]', "click");
+  await waitFor(".um-resume");
+  assert.match(await shadowCall(".um-resume"), /Biology lab assignment/);
+  assert.match(await shadowCall(".um-messages"), /saved assignment/);
+  assert.equal(aiRequests.length, beforeStarter + 2, "Switching saved assignments never calls AI");
+  pass(
+    "Assignment explanation, page review, optional class, note/link saves and cross-chat resume work in the installed Companion",
+  );
 
   await shadowCall(".um-privacy-settings", "click");
   await waitFor(".um-consent-decline");

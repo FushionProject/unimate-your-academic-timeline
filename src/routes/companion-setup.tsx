@@ -40,7 +40,8 @@ function CompanionSetup() {
           </h1>
           <p className="mx-auto mt-3 max-w-2xl leading-7 text-muted-foreground">
             UniMate Companion helps you understand what’s on your page, work through a tricky
-            problem, and keep your place. It’s included with UniMate Pro.
+            problem, and keep your place. It’s included with UniMate Pro. Use it on its own, or
+            connect what you save to your classes, Notes, and Bulletin Board.
           </p>
         </header>
 
@@ -113,9 +114,14 @@ function CompanionSetup() {
                   ? "Open Uni on the right edge of a regular webpage. Review the page-sharing notice, then sign in with the same UniMate email and password."
                   : "Once Pro is active and Companion is installed, connect this same account. You won’t need a second account."}
               </SetupStep>
-              <SetupStep number="4" title="Choose your browser chat">
-                In Ask UniMate, select “Use in browser” beside the conversation you want the
-                extension to display.
+              <SetupStep number="4" title="Start with the page you’re on">
+                Choose “Understand” or “Help me start,” review your question, and press Send. You
+                can use Companion without adding any classes. Save a next step when you’re ready to
+                pause, or save a helpful answer to Notes.
+                <p className="mt-2">
+                  Already talking in Ask UniMate? Select “Use in browser” beside that chat to
+                  continue it in Companion. Classifying your work is always optional.
+                </p>
                 <p className="mt-2">
                   You choose when to share. Pressing Send shares one image of the visible tab and a
                   short text sample. Companion does not record continuously.

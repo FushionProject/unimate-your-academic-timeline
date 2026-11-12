@@ -113,6 +113,11 @@ function fixture() {
       userId: "student-A",
       question: "Private question from A",
       historyLoading: false,
+      resourceLoading: false,
+      resourceError: "",
+      assignmentDirty: false,
+      assignmentContext: null,
+      savedResource: null,
       selectedConversationId: "conversation-A",
       selectedCourseId: "",
       selectedCourse: undefined,
@@ -359,6 +364,43 @@ for (const reject of [false, true]) {
   assert.equal(f.context.loading, true);
   assert.equal(f.state.writes.length, previousWrites);
   assert.equal(f.state.saves.length, 0);
+}
+for (const field of ["resourceLoading", "assignmentDirty", "resourceError"]) {
+  const f = fixture();
+  f.mount();
+  f.context[field] = field === "resourceError" ? "Source unavailable" : true;
+  await f.context.send();
+  assert.equal(
+    f.state.requests.length,
+    0,
+    "Unready or unsaved source never silently falls back to generic tutoring",
+  );
+}
+for (const kind of ["assignmentContext", "savedResource"]) {
+  const f = fixture();
+  f.mount();
+  f.context[kind] = { id: "33333333-3333-4333-8333-333333333333" };
+  await f.context.send();
+  assert.equal(
+    JSON.parse(f.state.requests[0].body).workspaceId,
+    f.context[kind].id,
+    "Selected saved source is resolved by the authenticated server",
+  );
+}
+{
+  const f = fixture();
+  f.mount();
+  f.context.assignmentDirty = true;
+  await f.context.send(
+    "Understand this saved assignment",
+    "normal",
+    "33333333-3333-4333-8333-333333333333",
+  );
+  assert.equal(
+    JSON.parse(f.state.requests[0].body).workspaceId,
+    "33333333-3333-4333-8333-333333333333",
+    "Save-and-understand uses the confirmed result without waiting for a React rerender",
+  );
 }
 console.log(
   "PASS actual Ask account boundary: no cross-account fetch/history, same-user refresh, abort/unmount, nonretryable identity changes and stale request isolation",

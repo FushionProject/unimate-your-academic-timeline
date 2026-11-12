@@ -3,6 +3,7 @@ import { Plus, Globe, X, ExternalLink, Link2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { ProtectedRoute } from "../components/protected-route";
 import { useAuth } from "../lib/auth-context";
+import { StudyResources, StudyResourceSave } from "../components/study-resources";
 
 export const Route = createFileRoute("/bulletin")({
   component: BulletinRoute,
@@ -195,11 +196,13 @@ function Bulletin() {
           <p className="mx-auto max-w-2xl text-lg text-muted-foreground">
             Keep every class portal, reading, and resource within reach.
           </p>
-          <p className="mt-3 text-xs font-medium text-muted-foreground">
-            Saved in this browser for this UniMate account
-          </p>
         </div>
-
+        <StudyResources kind="link" />
+        <h2 className="mb-2 text-xl font-semibold">Links on this browser</h2>
+        <p className="mb-6 text-sm text-muted-foreground">
+          Your existing shortcuts stay here. Copy any link to your account to find it across
+          UniMate.
+        </p>
         <div className="flex justify-center mb-8">
           <button
             onClick={() => setIsModalOpen(true)}
@@ -302,6 +305,15 @@ function Bulletin() {
                           Open
                           <ExternalLink className="h-3 w-3" />
                         </a>
+                        <div className="mt-3">
+                          <StudyResourceSave
+                            kind="link"
+                            initialTitle={link.title}
+                            sourceUrl={link.url}
+                            content={`Class: ${link.classTag}`}
+                            triggerLabel="Copy to my account"
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>

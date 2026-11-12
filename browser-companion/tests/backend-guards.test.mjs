@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import ts from "typescript";
 
 const serverPath = new URL("../../src/server.ts", import.meta.url);
 const source = await readFile(serverPath, "utf8");
@@ -10,11 +11,16 @@ assert.match(
   /async function requireCompanionEntitlement\(/,
   "Companion endpoints must share one server-side entitlement guard",
 );
-assert.equal(
-  source.match(/await requireCompanionEntitlement\(request\)/g)?.length,
-  2,
-  "Both Companion entry points must invoke the shared entitlement guard",
-);
+const ast = ts.createSourceFile("server.ts", source, ts.ScriptTarget.Latest, true);
+for (const name of ["handleDashboardAI", "handleAnalyzeScreenshot", "handleStudyWorkspace"]) {
+  const handler = ast.statements.find((node) => node.name?.text === name);
+  assert.ok(handler, `Expected Companion entry point ${name}`);
+  assert.match(
+    handler.getText(ast),
+    /await requireCompanionEntitlement\(request\)/,
+    `${name} must invoke the shared server-side Companion entitlement guard`,
+  );
+}
 assert.match(
   source,
   /id=eq\.\$\{encodeURIComponent\(\s*authResult\.id,\s*\)\}/,

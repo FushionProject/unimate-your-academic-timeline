@@ -28,6 +28,9 @@ import { ProtectedRoute } from "../components/protected-route";
 import { useAuth } from "../lib/auth-context";
 import { useBillingStatus } from "../lib/profile";
 import { getCompanionAccessState } from "../lib/companion-store";
+import { AssignmentWorkspace } from "../components/assignment-workspace";
+import { StudyResourceSave } from "../components/study-resources";
+import { listStudyWorkspace, type StudyItem } from "../lib/study-workspace";
 import {
   createCompanionConversation,
   deleteCompanionConversation,
@@ -39,9 +42,22 @@ import {
 } from "../lib/companion-chats";
 
 export const Route = createFileRoute("/ask")({
-  validateSearch: (search: Record<string, unknown>): { prompt?: string; course?: string } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): {
+    prompt?: string;
+    course?: string;
+    conversation?: string;
+    workspace?: string;
+    resource?: string;
+    assignment?: string;
+  } => ({
     prompt: typeof search.prompt === "string" ? search.prompt.slice(0, 4000) : undefined,
     course: typeof search.course === "string" ? search.course.slice(0, 100) : undefined,
+    conversation: validStudyId(search.conversation),
+    workspace: validStudyId(search.workspace),
+    resource: validStudyId(search.resource),
+    assignment: typeof search.assignment === "string" ? search.assignment.slice(0, 160) : undefined,
   }),
   component: () => (
     <ProtectedRoute>
@@ -49,6 +65,13 @@ export const Route = createFileRoute("/ask")({
     </ProtectedRoute>
   ),
 });
+
+function validStudyId(value: unknown): string | undefined {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : undefined;
+}
 
 function AskAccessGate() {
   const { user } = useAuth();
@@ -385,6 +408,16 @@ function Ask({
     null,
   );
   const [conversationBusy, setConversationBusy] = useState(false);
+  const [assignmentContext, setAssignmentContext] = useState<StudyItem | null>(null);
+  const [assignmentDirty, setAssignmentDirty] = useState(false);
+  const [savedResource, setSavedResource] = useState<StudyItem | null>(null);
+  const [resourceLoading, setResourceLoading] = useState(false);
+  const [resourceError, setResourceError] = useState("");
+  const [assignmentSeed, setAssignmentSeed] = useState<{
+    conversationId: string;
+    title: string;
+    courseId: string;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const questionInputRef = useRef<HTMLTextAreaElement>(null);
   const historyRequestRef = useRef(0);
@@ -397,6 +430,47 @@ function Ask({
   const { data: courses = [], isError: coursesError, isLoading: coursesLoading } = useCourses();
   const { data: assignments = [] } = useAssignments();
   const userId = user?.id ?? null;
+  const onAssignmentContext = useCallback((item: StudyItem | null, dirty: boolean) => {
+    setAssignmentContext(item);
+    setAssignmentDirty(dirty);
+  }, []);
+  useEffect(() => {
+    setAssignmentContext(null);
+    setAssignmentDirty(false);
+  }, [selectedConversationId, savedResource?.id]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setSavedResource(null);
+    setResourceError("");
+    if (!search.resource || !userId) {
+      setResourceLoading(false);
+      return;
+    }
+    setResourceLoading(true);
+    void listStudyWorkspace(
+      { id: search.resource },
+      { expectedUserId: userId, signal: controller.signal },
+    )
+      .then(({ items }) => {
+        if (controller.signal.aborted) return;
+        const item = items[0];
+        if (!item || item.kind === "assignment")
+          throw new Error(
+            "That saved note or link is unavailable. Open it again from Notes or Bulletin.",
+          );
+        setSavedResource(item);
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted)
+          setResourceError(
+            cause instanceof Error ? cause.message : "Your saved source could not be opened.",
+          );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setResourceLoading(false);
+      });
+    return () => controller.abort();
+  }, [userId, search.resource]);
   useEffect(() => {
     activeUserIdRef.current = userId;
     return () => {
@@ -492,17 +566,27 @@ function Ask({
       setConversations(dashboard.conversations);
       setActiveBrowserConversationId(dashboard.activeBrowserConversationId);
       setSelectedConversationId((current) =>
-        current && dashboard.conversations.some((item) => item.id === current)
-          ? current
-          : dashboard.activeBrowserConversationId || dashboard.conversations[0]?.id || null,
+        search.conversation &&
+        dashboard.conversations.some((item) => item.id === search.conversation)
+          ? search.conversation
+          : current && dashboard.conversations.some((item) => item.id === current)
+            ? current
+            : dashboard.activeBrowserConversationId || dashboard.conversations[0]?.id || null,
       );
+      if (
+        search.conversation &&
+        !dashboard.conversations.some((item) => item.id === search.conversation)
+      )
+        setHistoryNotice(
+          "The requested chat is unavailable. Your other conversations are still here.",
+        );
     } catch {
       setHistoryNotice("Your conversation dashboard is temporarily unavailable.");
       setHistoryLoading(false);
     } finally {
       setConversationBusy(false);
     }
-  }, [userId]);
+  }, [userId, search.conversation]);
 
   // Ask UniMate and the Browser Companion share the same authenticated chat log.
   useEffect(() => {
@@ -530,6 +614,11 @@ function Ask({
 
   const handleCreateConversation = async () => {
     if (!userId || conversationBusy || loading) return;
+    if (
+      assignmentDirty &&
+      !window.confirm("Start another chat? Unsaved assignment changes will be lost.")
+    )
+      return;
     setConversationBusy(true);
     setConversationNotice("Creating a new chat…");
     setHistoryNotice("");
@@ -557,8 +646,50 @@ function Ask({
     }
   };
 
+  const handleStartAssignment = async () => {
+    if (!userId || conversationBusy || loading) return;
+    if (
+      assignmentDirty &&
+      !window.confirm("Start another assignment? Your unsaved assignment changes will be lost.")
+    )
+      return;
+    setConversationBusy(true);
+    setConversationNotice("Opening a fresh assignment chat…");
+    const title = search.assignment || "";
+    try {
+      const conversation = await createCompanionConversation(userId, title || "Assignment help");
+      if (activeUserIdRef.current !== userId) return;
+      setConversations((current) => [conversation, ...current]);
+      setAssignmentSeed({
+        conversationId: conversation.id,
+        title,
+        courseId: search.course || selectedCourseId,
+      });
+      setSelectedConversationId(conversation.id);
+      setQuestion("");
+      setSavedResource(null);
+      setResourceError("");
+      setConversationNotice(
+        "Add the instructions below. This new assignment keeps your other chats and saved work separate.",
+      );
+    } catch {
+      if (activeUserIdRef.current !== userId) return;
+      setConversationNotice("");
+      setHistoryNotice(
+        "The assignment chat could not be opened. Your existing work has not changed.",
+      );
+    } finally {
+      if (activeUserIdRef.current === userId) setConversationBusy(false);
+    }
+  };
+
   const handleDeleteConversation = async (conversation: CompanionConversation) => {
     if (!userId || conversationBusy || loading) return;
+    if (
+      assignmentDirty &&
+      !window.confirm("Continue deleting? Unsaved assignment changes will be lost.")
+    )
+      return;
     if (!window.confirm(`Delete “${conversation.title}” and all of its messages?`)) return;
     setConversationBusy(true);
     setConversationNotice("Deleting chat…");
@@ -606,6 +737,16 @@ function Ask({
     }
   };
 
+  const selectConversation = (conversationId: string) => {
+    if (conversationId === selectedConversationId) return;
+    if (
+      assignmentDirty &&
+      !window.confirm("Switch chats? Your unsaved assignment changes will be lost.")
+    )
+      return;
+    setSelectedConversationId(conversationId);
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -630,6 +771,7 @@ function Ask({
   const handleSend = async (
     overrideQuestion?: string,
     mode: "normal" | "simpler" | "deeper" = "normal",
+    savedWorkspaceId?: string,
   ) => {
     const questionToSend = (overrideQuestion || question).trim();
     if (
@@ -637,6 +779,9 @@ function Ask({
       !userId ||
       sendingRef.current ||
       historyLoading ||
+      resourceLoading ||
+      Boolean(resourceError) ||
+      (assignmentDirty && !savedWorkspaceId) ||
       !selectedConversationId ||
       (selectedCourseId && !selectedCourse)
     )
@@ -673,6 +818,7 @@ function Ask({
           mode,
           selectedCourseId: selectedCourse?.id,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          workspaceId: savedWorkspaceId || savedResource?.id || assignmentContext?.id,
         },
         { expectedUserId: requestUserId, signal: requestController.signal },
       );
@@ -776,7 +922,36 @@ function Ask({
             ? `${Math.max(0, usage.limit - usage.used)} messages left this month`
             : `${PRO_PLAN.textMonthly} messages / month`}
         </Link>
+        <button
+          type="button"
+          onClick={() => void handleStartAssignment()}
+          disabled={loading || conversationBusy}
+          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-background px-4 text-xs font-semibold disabled:opacity-50"
+        >
+          <Plus className="h-4 w-4" />
+          New assignment
+        </button>
       </header>
+      {search.assignment && !assignmentSeed && (
+        <section
+          aria-label="Start the selected assignment"
+          className="mb-4 rounded-2xl border border-primary/25 bg-primary/10 p-4"
+        >
+          <h2 className="text-sm font-semibold">Ready to work on {search.assignment}?</h2>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Open a dedicated chat, add the instructions, and keep your progress with this
+            assignment. Your existing chat stays as it is.
+          </p>
+          <button
+            type="button"
+            onClick={() => void handleStartAssignment()}
+            disabled={loading || conversationBusy}
+            className="mt-3 min-h-10 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+          >
+            Start a chat for this assignment
+          </button>
+        </section>
+      )}
       <div className="flex min-h-[38rem] w-full flex-1 overflow-hidden rounded-3xl border border-border/60 bg-card/50 shadow-[var(--shadow-card)]">
         <aside className="hidden w-64 shrink-0 flex-col border-r border-border/60 bg-card/50 md:flex">
           <div className="flex items-center justify-between border-b border-border/60 p-4">
@@ -819,7 +994,7 @@ function Ask({
                 >
                   <button
                     type="button"
-                    onClick={() => setSelectedConversationId(conversation.id)}
+                    onClick={() => selectConversation(conversation.id)}
                     disabled={loading}
                     className="w-full truncate rounded-md px-1 py-1 text-left text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
                     aria-current={selected ? "true" : undefined}
@@ -873,7 +1048,7 @@ function Ask({
             <select
               value={selectedConversationId || ""}
               disabled={loading}
-              onChange={(event) => setSelectedConversationId(event.target.value)}
+              onChange={(event) => selectConversation(event.target.value)}
               className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm"
               aria-label="Choose conversation"
             >
@@ -953,8 +1128,89 @@ function Ask({
           </div>
           <p className="border-b border-border/60 px-4 py-2 text-xs leading-5 text-muted-foreground sm:px-6">
             UniMate uses your saved courses and deadline dates. Uploaded syllabus text and Notes
-            aren’t included automatically. Paste the text or instructions you want help with.
+            aren’t included automatically. Choose a saved note or add assignment instructions for
+            source-specific help.
           </p>
+          {(resourceLoading || resourceError || savedResource) && (
+            <section
+              aria-label="Selected saved source"
+              className="border-b border-border/60 bg-primary/5 px-4 py-4 text-sm sm:px-6"
+            >
+              {resourceLoading ? (
+                <p role="status">Opening your saved source…</p>
+              ) : resourceError ? (
+                <p role="alert">{resourceError}</p>
+              ) : (
+                savedResource && (
+                  <>
+                    <p className="font-semibold">
+                      Using your saved {savedResource.kind}: {savedResource.title}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {savedResource.kind === "link"
+                        ? "Your saved title, link, and annotation are included. The linked page is not read automatically."
+                        : "This note’s saved text is included with your question. Other notes stay out of this conversation."}
+                    </p>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs font-semibold">
+                        Review source text
+                      </summary>
+                      <p className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs leading-5">
+                        {savedResource.content ||
+                          "No annotation saved. Paste the relevant passage into your question."}
+                      </p>
+                    </details>
+                  </>
+                )
+              )}
+              {!resourceLoading && (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setSavedResource(null);
+                    setResourceError("");
+                  }}
+                  className="mt-2 min-h-9 text-xs font-semibold underline underline-offset-4"
+                >
+                  Continue without this source
+                </button>
+              )}
+            </section>
+          )}
+          {userId &&
+            selectedConversationId &&
+            !savedResource &&
+            !resourceLoading &&
+            !resourceError && (
+              <AssignmentWorkspace
+                key={`${userId}:${selectedConversationId}`}
+                userId={userId}
+                conversationId={selectedConversationId}
+                initialItemId={
+                  !search.conversation || search.conversation === selectedConversationId
+                    ? search.workspace
+                    : undefined
+                }
+                initialTitle={
+                  assignmentSeed?.conversationId === selectedConversationId
+                    ? assignmentSeed.title
+                    : undefined
+                }
+                initialCourseId={
+                  assignmentSeed?.conversationId === selectedConversationId
+                    ? assignmentSeed.courseId
+                    : search.workspace
+                      ? search.course
+                      : undefined
+                }
+                startExpanded={assignmentSeed?.conversationId === selectedConversationId}
+                courses={courses}
+                disabled={loading || historyLoading || conversationBusy}
+                onContextChange={onAssignmentContext}
+                onAsk={(prompt, item) => void handleSend(prompt, "normal", item.id)}
+              />
+            )}
           {/* Conversation Area */}
           <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
             {selectedConversationId && (
@@ -1049,7 +1305,7 @@ function Ask({
                         )}
                         {message.type === "ai" && (
                           <>
-                            <div className="mt-3 flex gap-2">
+                            <div className="mt-3 flex flex-wrap gap-2">
                               <button
                                 onClick={() => handleSend(questionForAnswer, "simpler")}
                                 disabled={loading || !questionForAnswer}
@@ -1057,6 +1313,28 @@ function Ask({
                               >
                                 Explain simpler
                               </button>
+                              <StudyResourceSave
+                                kind="note"
+                                initialTitle={(
+                                  assignmentContext?.title ||
+                                  savedResource?.title ||
+                                  questionForAnswer ||
+                                  "Study note"
+                                ).slice(0, 160)}
+                                content={message.content}
+                                courseId={
+                                  assignmentContext?.courseId ||
+                                  selectedCourse?.id ||
+                                  savedResource?.courseId ||
+                                  null
+                                }
+                                conversationId={selectedConversationId}
+                                sourceUrl={
+                                  assignmentContext?.sourceUrl || savedResource?.sourceUrl || null
+                                }
+                                triggerLabel="Save to Notes"
+                                disabled={loading}
+                              />
                               <button
                                 onClick={() => handleSend(questionForAnswer, "deeper")}
                                 disabled={loading || !questionForAnswer}
@@ -1089,16 +1367,32 @@ function Ask({
                             </p>
                             <div className="flex flex-wrap gap-2">
                               {message.sources.map((source, index) => (
-                                <a
+                                <div
                                   key={`${source.link}-${index}`}
-                                  href={source.link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 text-xs rounded-full px-3 py-1 transition-colors bg-primary/10 text-primary hover:bg-primary/20"
+                                  className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 p-2"
                                 >
-                                  <ExternalLink className="h-3 w-3" />
-                                  {source.title}
-                                </a>
+                                  <a
+                                    href={source.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 text-xs font-medium underline underline-offset-4"
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                    {source.title}
+                                  </a>
+                                  <StudyResourceSave
+                                    kind="link"
+                                    initialTitle={source.title.slice(0, 160)}
+                                    sourceUrl={source.link}
+                                    content={source.snippet}
+                                    courseId={
+                                      assignmentContext?.courseId || selectedCourse?.id || null
+                                    }
+                                    conversationId={selectedConversationId}
+                                    triggerLabel="Save to Bulletin"
+                                    disabled={loading}
+                                  />
+                                </div>
                               ))}
                             </div>
                           </div>
@@ -1217,7 +1511,9 @@ function Ask({
               />
               <div className="flex items-center justify-between gap-3 px-2 pb-1">
                 <p id="ask-composer-help" className="text-[11px] text-muted-foreground">
-                  Shift + Enter for a new line
+                  {assignmentDirty
+                    ? "Finish saving or reload your assignment above before sending."
+                    : "Shift + Enter for a new line"}
                   {question.length > 3500 ? ` · ${4000 - question.length} characters left` : ""}
                 </p>
                 <div className="flex items-center gap-2">
@@ -1236,6 +1532,9 @@ function Ask({
                     disabled={
                       loading ||
                       historyLoading ||
+                      assignmentDirty ||
+                      resourceLoading ||
+                      Boolean(resourceError) ||
                       !selectedConversationId ||
                       !question.trim() ||
                       Boolean(selectedCourseId && !selectedCourse)

@@ -42,11 +42,17 @@ for (const courseCount of [0, 1]) {
   );
   assert.match(html, new RegExp(`href="#${courseCount ? "deadline" : "course"}-setup"`));
   assert.match(html, /href="\/planner"/);
-  assert.doesNotMatch(
-    html,
-    /href="\/ask"/,
-    "No-syllabus fallback must not dead-end in a Pro paywall",
-  );
+  if (courseCount === 0) {
+    assert.match(html, /No syllabus\? Add a class myself · Free/);
+    assert.match(html, /href="\/companion-setup"/);
+    assert.match(html, /Start with an assignment · Pro/);
+  } else {
+    assert.doesNotMatch(
+      html,
+      /href="\/ask"/,
+      "Manual no-syllabus fallback stays available without Pro",
+    );
+  }
 }
 assert.equal(
   renderToStaticMarkup(

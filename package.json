@@ -40,9 +40,11 @@
     "preview": "wrangler dev --config dist/server/wrangler.json --local",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "npm run companion:verify:v2 && npm run dashboard:test && npm run auth:test && npm run billing:test && npm run pricing:test && npm run hardening:test && npm run capacity:test && npm run resilience:test && npm run operations:test && npm run entitlements:test && npm run api-contract:test",
+    "test": "npm run companion:verify:v2 && npm run dashboard:test && npm run auth:test && npm run billing:test && npm run pricing:test && npm run hardening:test && npm run capacity:test && npm run resilience:test && npm run operations:test && npm run entitlements:test && npm run api-contract:test && npm run workspace:test",
     "api-contract:test": "node browser-companion/tests/api-contract.test.mjs",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "workspace:test": "node browser-companion/tests/study-workspace.test.mjs && node browser-companion/tests/study-workspace-companion.test.mjs && node browser-companion/tests/assignment-workspace.test.mjs && node browser-companion/tests/study-resources.test.mjs",
+    "workspace:test:postgres": "node scripts/test-study-workspace-postgres.mjs"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.69.0",
