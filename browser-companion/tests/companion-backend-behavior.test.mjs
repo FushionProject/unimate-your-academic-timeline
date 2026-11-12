@@ -3,6 +3,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import {
+  ASSIGNMENT_COACHING_GUIDANCE,
   COMPANION_GROUNDING_SYSTEM_PROMPT,
   COMPANION_PROMPT_TEMPLATE_ID,
   GROUNDED_FALLBACK_ANSWER,
@@ -868,8 +869,12 @@ console.log(
       completeCapacitySafely: async (...args) => completions.push(args),
       withAiProviderCapacity: (operation) => operation(),
       recordProviderSignal: async () => {},
-      fetchWithTimeout: async (url) => {
+      fetchWithTimeout: async (url, init) => {
         assert.equal(url, AI_COMPLETIONS_URL);
+        assert.ok(
+          JSON.parse(init.body).messages[0].content.includes(ASSIGNMENT_COACHING_GUIDANCE),
+          "Actual Companion generation carries the shared assignment-coaching policy",
+        );
         providerCalls++;
         return Response.json({
           choices: [
@@ -910,3 +915,79 @@ console.log(
 console.log(
   "PASS screenshot-number fallback is specific, fail-closed, and single-generation/single-reservation",
 );
+
+// Execute Ask's real handler: the selected saved item controls the source badge,
+// while ordinary planner help retains its existing scope/count disclosure.
+{
+  const calls = [];
+  const plannerGrounding = {
+    label: "Your saved coursework",
+    detail: "1 course and 0 open assignments considered; saved planner data may be incomplete.",
+  };
+  let selectedKind = "assignment";
+  let unavailable = false;
+  const context = serverFunctions(["handleAskUniMate", "normalizeCompanionHistory"], {
+    ASSIGNMENT_COACHING_GUIDANCE,
+    MAX_CHAT_HISTORY: 10,
+    process: { env: { OPENAI_API_KEY: "synthetic-offline-fixture" } },
+    rejectLargeRequest: () => null,
+    requireAuthenticatedUser: async () => ({ id: "synthetic-student" }),
+    enforceUserRateLimit: () => null,
+    parseJsonBody: (request) => request.json(),
+    isNonEmptyString: (value) => typeof value === "string" && Boolean(value.trim()),
+    needsWebSearch: () => false,
+    planForAiRequest: async () => "pro",
+    readStudentCoursework: async () => ({ evidence: "Saved planner fixture", grounding: plannerGrounding }),
+    readStudyWorkspaceContext: async (_request, userId, id) => {
+      assert.equal(userId, "synthetic-student");
+      assert.equal(id, "40000000-0000-4000-8000-000000000001");
+      calls.push({ type: "workspace" });
+      if (unavailable) throw new Error("Missing saved item");
+      return {
+        evidence: `Owned saved ${selectedKind} fixture`,
+        grounding: { label: `Your saved ${selectedKind}`, detail: "Selected saved material; linked page not fetched." },
+      };
+    },
+    workspaceErrorResponse: () => Response.json({ code: "WORKSPACE_NOT_FOUND" }, { status: 404 }),
+    reserveProductEntitlementOrResponse: async (options) => {
+      calls.push({ type: "reserve", input: options.input });
+      return { requestId: "synthetic-reservation" };
+    },
+    runCapacityTracked: (_reservation, _userId, operation) => operation(),
+    aiSystemMode: () => "normal",
+    aiTextCompletion: async (_key, messages, options) => {
+      calls.push({ type: "model", messages, options });
+      return "Write one opening sentence using the outline you already finished.";
+    },
+    aiErrorResponse: (error) => { throw error; },
+  });
+  const ask = (workspaceId) => context.api.handleAskUniMate(
+    authenticatedRequest("/api/ask-unimate", {
+      method: "POST",
+      body: JSON.stringify({ question: "Help me continue.", workspaceId }),
+    }),
+  );
+  for (selectedKind of ["assignment", "note", "link"]) {
+    const response = await ask("40000000-0000-4000-8000-000000000001");
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.grounding.label, `Your saved ${selectedKind}`);
+    assert.doesNotMatch(body.grounding.detail, /0 open assignments/);
+    const generation = calls.at(-1);
+    assert.equal(generation.type, "model");
+    assert.ok(generation.messages[0].content.includes(ASSIGNMENT_COACHING_GUIDANCE));
+    assert.ok(generation.messages[0].content.includes(`Owned saved ${selectedKind} fixture`));
+    assert.equal(generation.options.maxTokens, 1024, "Coaching does not change the answer budget");
+    assert.equal(calls.at(-2).input.workspaceEvidence, `Owned saved ${selectedKind} fixture`);
+  }
+  const readsBefore = calls.filter((call) => call.type === "workspace").length;
+  assert.deepEqual((await (await ask()).json()).grounding, plannerGrounding);
+  assert.equal(calls.filter((call) => call.type === "workspace").length, readsBefore);
+  unavailable = true;
+  const providersBefore = calls.filter((call) => call.type === "model").length;
+  const reservationsBefore = calls.filter((call) => call.type === "reserve").length;
+  assert.equal((await ask("40000000-0000-4000-8000-000000000001")).status, 404);
+  assert.equal(calls.filter((call) => call.type === "model").length, providersBefore);
+  assert.equal(calls.filter((call) => call.type === "reserve").length, reservationsBefore);
+}
+console.log("PASS Ask selected-work source badge, shared coaching, planner fallback and fail-closed evidence");

@@ -300,6 +300,28 @@ assert.match(evidence, /saved assignment, not a fresh observation/);
 assert.match(evidence, /500 words/);
 assert.match(evidence, /Outlined the experiment/);
 assert.match(evidence, /URL has not been fetched/);
+const beforeContextRead = requests.length;
+const assignmentContext = await server.readStudyWorkspaceContext(request(), owner, id, conversation);
+assert.equal(requests.length, beforeContextRead + 1, "Evidence and its badge share one owned read");
+assert.equal(assignmentContext.evidence, evidence);
+assert.equal(assignmentContext.grounding.label, "Your saved assignment");
+assert.match(assignmentContext.grounding.detail, /instructions, progress, and next step/);
+assert.match(assignmentContext.grounding.detail, /Linked pages have not been fetched/);
+assert.doesNotMatch(assignmentContext.grounding.detail, /0 open assignments/);
+const noteContext = await server.readStudyWorkspaceContext(request(), owner, standalone);
+assert.equal(noteContext.grounding.label, "Your saved note");
+assert.match(noteContext.grounding.detail, /selected saved note/);
+const savedLinkId = crypto.randomUUID();
+records.set(savedLinkId, {
+  ...records.get(standalone),
+  id: savedLinkId,
+  kind: "link",
+  source_url: "https://example.edu/reading",
+});
+const linkContext = await server.readStudyWorkspaceContext(request(), owner, savedLinkId);
+assert.equal(linkContext.grounding.label, "Your saved link");
+assert.match(linkContext.grounding.detail, /link and annotation/);
+assert.match(linkContext.grounding.detail, /linked page has not been fetched/);
 await assert.rejects(
   server.readStudyWorkspaceEvidence(request(), owner, id, other),
   (error) => error.code === "WORKSPACE_REFERENCE_INVALID",
@@ -308,6 +330,10 @@ records.set(other, { ...records.get(id), id: other, user_id: other });
 assert.equal((await call("GET", undefined, `?id=${other}`)).items.length, 0);
 await assert.rejects(
   server.readStudyWorkspaceEvidence(request(), owner, other),
+  (error) => error.code === "WORKSPACE_NOT_FOUND",
+);
+await assert.rejects(
+  server.readStudyWorkspaceContext(request(), owner, other),
   (error) => error.code === "WORKSPACE_NOT_FOUND",
 );
 assert.equal(
