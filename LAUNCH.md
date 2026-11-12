@@ -10,7 +10,7 @@ This is the single operating checklist for UniMate's public launch. A box is che
 - Every completed manual item must include a dated evidence note or link.
 - If a release-blocking check fails, stop promotion and record the response under **Launch incidents**.
 
-## November 12 connected workspace — private Preview ready, hosted persistence pending
+## November 12 connected workspace — private hosted persistence verified
 
 The owner subsequently authorized a fresh backup, this migration, and an updated
 private Preview/installed Companion with cross-app persistence checks. Initial
@@ -24,7 +24,7 @@ marked `INCOMPLETE` and is not a recovery point.
 
 Migration `20261112201345` was applied with its exact history record in one
 transaction after that restore check. Whole-row digests of all existing accounts,
-profiles, coursework, and chats were unchanged. Readback confirms the empty
+profiles, coursework, and chats were unchanged. Migration-time readback confirmed the initially empty
 workspace table, four owner policies, authenticated CRUD, no anonymous SELECT,
 both owner foreign keys, and an invoker trigger. Supabase's advisor found no new
 workspace warning; prior signup-trigger execution and password-protection warnings
@@ -39,7 +39,8 @@ private files excluded. Application source
 `d5f1751f1076b195ec8ecb0e088621d613e71083` is now deployed at
 <https://unimate-r11nbzj7i-resumejuice-s-projects.vercel.app>, deployment
 `dpl_GbGLtrh6Ejv8Jjg37XYoAzWoB3gw`: `READY`, Preview (`target: null`), and no
-aliases. GitHub CI run `43308680054` passed. An anonymous Preview request returned
+aliases. GitHub CI run `43308680054` passed; follow-up documentation commit
+`00325f9` also passed CI run `43310636222`. An anonymous Preview request returned
 302; protected health returned 200; unauthenticated workspace and billing APIs
 returned 401. The homepage visibly loaded. Readback confirmed signup disabled,
 live Stripe disabled, and the monthly price set to 999 cents (USD 9.99).
@@ -47,17 +48,48 @@ live Stripe disabled, and the monthly price set to 999 cents (USD 9.99).
 The ignored `browser-companion/config.local.js` was atomically updated to this
 exact Preview with debug disabled, after backing up its previous contents in
 the ignored private area. No `.env` file, ZIP, Store setting, or authentication
-token was changed. This prepares local configuration; the installed Companion
-has not been run against this deployment, and Vercel authentication is still
-required. Email callback settings were not moved.
+token was changed by that configuration update. The installed test below used a
+separate private extension copy and isolated profile; Vercel authentication is
+still required.
 
-A dedicated hosted workspace harness is prepared for the marked sandbox user:
-real website/Companion saves and reloads with synthetic coursework, no AI or
-payment requests. Its offline transport-policy checks are not hosted persistence
-proof. Automatic approval review rejected implied authorization for temporarily
-granting that account Pro; explicit owner approval remains pending. No entitlement
-or test data was changed, and the hosted cross-app test has not run. This rollout
-does not establish new billing, purchase, or installed-Companion evidence.
+Email return settings were saved and read back: the Site URL now uses this exact
+Preview, with exactly three redirect entries on the same origin: `/dashboard`,
+`/upgrade`, and `/reset-password`. The prior `rvrhmln07` entries were removed;
+there are no wildcards. The UI confirmed the Site URL save and a final total of
+three URLs. SMTP, provider settings, required confirmation, and closed signup
+were unchanged. No email was sent and delivery was not retested on this Preview.
+Private settings evidence: `/private/tmp/unimate-preview-email-settings-20261112.jpg`.
+
+After explicit owner approval of temporary Pro access for the marked sandbox
+account, the hosted workspace harness passed all seven checks on this exact
+Preview:
+
+1. Website saves a standalone assignment with progress.
+2. Installed Companion resumes that assignment and its next step from the server.
+3. Website reloads the exact progress and next step edited in Companion.
+4. A website account note is read through the installed Companion's authenticated
+   worker path (not an in-panel Notes list).
+5. A Companion-saved link appears in the website's account Bulletin Board.
+6. Closing and reopening the page retains the same saved Companion assignment.
+7. A new standalone Companion assignment resumes on the website with its exact
+   saved instructions.
+
+The successful run made zero AI requests, zero Stripe requests, and zero
+policy-blocked requests. Evidence is retained privately in
+`.stripe-sandbox.local/workspace-4dc3f77a-20fa-4c25-9f79-b3c142d88f11/result.json`
+with the associated synthetic screenshots. The wrapper restored the marked
+account to Free and verified readback; its private journal is
+`workspace-entitlement-6aa3beed-c82e-4a1d-aae3-ef38a1617476.json`. Synthetic saved
+records are retained for review; existing test data was not deleted.
+The three disposable Chromium profiles were removed after verification;
+screenshots, results, and restoration journals remain private.
+
+Earlier attempts stopped on two fixture issues: a hydrated-textarea label lookup
+and the standalone fixture's prefilled localhost source link. The harness now
+uses the exact textbox role and clears that fixture-only link; a selector
+regression was added. Product application source remains `d5f1751`. This is real
+hosted persistence evidence with synthetic coursework and temporary access,
+not billing/purchase proof or a real-model tutoring-quality evaluation.
 
 The owner requested an optional whole-school workspace or standalone Pro
 Companion: understand an assignment, get started, optionally attach a class,
@@ -103,16 +135,14 @@ Artifact: `unimate-companion-browser-mQyiXH` (assignment screenshots 12–15).
 This is local synthetic evidence, not a hosted persistence or real-model quality
 evaluation; historical Store screenshots remain drafts.
 
-**Remaining private rollout check:** the verified backup and application of
+**Private workspace rollout complete:** the verified backup and application of
 `supabase/migrations/20261112201345_study_workspace.sql` are complete, as recorded
-above. The matching protected Preview is ready and local Companion configuration
-is prepared. After explicit approval of the temporary marked-account Pro access,
-run the installed cross-app persistence check and restore the account's prior
-entitlement afterward. If the schema is unavailable, saved-work operations
-fail explicitly without reporting success or overwriting browser-local data.
-Existing general chat stays available; an explicitly selected unavailable source
-blocks tutoring until the student retries or chooses to continue without that
-source.
+above. The matching protected Preview and installed cross-app persistence check
+passed, and the temporary test entitlement was restored to Free. If the schema
+is unavailable, saved-work operations fail explicitly without reporting success
+or overwriting browser-local data. Existing general chat stays available; an
+explicitly selected unavailable source blocks tutoring until the student retries
+or chooses to continue without that source.
 
 Full syllabus/lecture indexing, automatic LMS synchronization, adaptive calendar
 rescheduling, and autonomous note/link actions are not part of this change.

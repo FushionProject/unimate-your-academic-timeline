@@ -1,6 +1,6 @@
 # UniMate Browser Companion
 
-## Connected assignment flow (private Preview ready; hosted persistence pending)
+## Connected assignment flow (private hosted persistence verified)
 
 Students can use the Pro Companion on its own or with the UniMate workspace;
 creating classes and uploading a syllabus are optional. The assignment flow is
@@ -25,15 +25,23 @@ Signup and live Stripe remain disabled; the monthly price is USD 9.99.
 
 Local ignored Companion configuration now targets that exact Preview with debug
 disabled, with its previous contents backed up privately. No `.env` file, ZIP,
-Store setting, authentication token, or email callback was changed. Configuration
-is prepared, but no installed Companion run against this Preview has occurred;
-Vercel authentication is still required.
+Store setting, or authentication token was changed by that configuration update.
+Vercel authentication is still required. Email Site URL and exactly `/dashboard`,
+`/upgrade`, and `/reset-password` redirects were saved and verified on this
+Preview; the old entries were removed and no wildcard was added. SMTP, provider,
+confirmation, and signup settings were unchanged. Email delivery was not retested.
 
-Hosted save/resume testing awaits explicit owner approval for temporary Pro access
-on the marked test account after automatic approval review rejected implied
-authorization. No entitlement or test data changed. The hosted cross-app check
-has not run, and this is not new billing or purchase proof. See
-[LAUNCH.md](../LAUNCH.md) for the exact verification scope and unchanged public
+After explicit owner approval of temporary Pro access, all seven hosted checks
+passed using the marked sandbox account and an isolated installed Companion:
+website assignment → Companion resume → edited progress back on the website;
+website note read through the extension's authenticated worker; Companion link
+in Bulletin; reload continuity; and a new standalone Companion assignment resumed
+on the website. No AI, Stripe, or policy-blocked requests occurred. The wrapper
+restored and verified Free access afterward; synthetic saved records are retained.
+The two fixture corrections changed only test selection and the fixture's local
+source link, not deployed product code. This is persistence evidence, not a new
+billing/purchase test or real-model tutoring-quality evaluation. See
+[LAUNCH.md](../LAUNCH.md) for private artifact references and unchanged public
 release gates.
 
 ## Earlier launch evidence

@@ -6,14 +6,20 @@ November 12 private rollout addendum: the backup/restore and workspace migration
 <https://unimate-r11nbzj7i-resumejuice-s-projects.vercel.app>, deployment
 `dpl_GbGLtrh6Ejv8Jjg37XYoAzWoB3gw` (Preview target, no aliases). CI run
 `43308680054` and protected HTTP smoke checks passed; signup and live Stripe
-remain disabled and the price remains USD 9.99/month. Local ignored Companion
-configuration is prepared for this Preview, but no installed run or hosted
-cross-app persistence test has occurred. Temporary Pro access for the marked
-test account awaits explicit owner approval after automatic approval review
-rejected implied authorization; no entitlement or test data changed. Vercel
-authentication remains required. No Store ZIP, publisher setting, submission,
-email callback, or public access changed. Historical billing/email evidence below
-retains its original deployment scope; see [LAUNCH.md](../LAUNCH.md).
+remain disabled and the price remains USD 9.99/month. All seven hosted workspace
+checks passed with synthetic coursework in an isolated installed Companion after
+owner approval of temporary Pro access for the marked account. Assignment
+save/resume, progress synchronization, note readback, link saving, and reload
+continuity passed with zero AI, Stripe, or policy-blocked requests. The wrapper
+restored and verified Free access; synthetic test records are retained. This is
+hosted persistence evidence, not billing proof or real-model quality evaluation.
+Vercel authentication remains required. No Store ZIP, publisher setting,
+submission, or public access changed. Email Site URL and the exact `/dashboard`,
+`/upgrade`, and `/reset-password` redirects were saved and verified on this Preview;
+old entries were removed without adding wildcards. SMTP/provider, confirmation,
+and signup settings were unchanged. No email was sent or delivery retested.
+Historical billing/email evidence below retains its original deployment scope;
+see [LAUNCH.md](../LAUNCH.md).
 
 Readiness updated: October 19, 2026. On October 18 the owner approved
 `unimatesupport@gmail.com` as the long-term Chrome Web Store publisher account

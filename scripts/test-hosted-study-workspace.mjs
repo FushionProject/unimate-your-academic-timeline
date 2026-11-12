@@ -41,6 +41,8 @@ async function until(check, label, timeout = 30_000) {
   fail(`TIMEOUT_${label}`);
 }
 
+export const workspaceTextbox = (page, name) => page.getByRole("textbox", { name, exact: true });
+
 async function revealAssignment(page) {
   const section = page.locator('section[aria-label="Assignment workspace"]');
   await section.waitFor();
@@ -168,7 +170,8 @@ export async function runHostedWorkspaceTest({ approved = false, origin } = {}) 
   const artifactDir = path.join(ROOT, ".stripe-sandbox.local", `workspace-${runId}`);
   await fs.mkdir(artifactDir, { mode: 0o700 });
   const { chromium } = await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE_PATH).href);
-  let browser, website, extension, disposeWebsite, server, timeout;
+  let browser, website, extension, disposeWebsite, server, timeout, page, fixture, worker, policy;
+  let policyFailure = false;
   let stage = "launch";
   let closing;
   const checks = [];
@@ -205,7 +208,7 @@ export async function runHostedWorkspaceTest({ approved = false, origin } = {}) 
       () => void close(),
       Math.min(12 * 60_000, access.expiresAt - Date.now() - 5000),
     );
-    const policy = createHostedWorkspacePolicy({
+    policy = createHostedWorkspacePolicy({
       record,
       app: origin,
       prefix,
@@ -213,7 +216,6 @@ export async function runHostedWorkspaceTest({ approved = false, origin } = {}) 
     });
     const saved = [];
     let selectedBrowserChat = null;
-    let policyFailure = false;
     await website.route(/^https?:\/\//, async (route) => {
       try {
         const request = route.request();
@@ -264,7 +266,7 @@ export async function runHostedWorkspaceTest({ approved = false, origin } = {}) 
         await route.abort("blockedbyclient").catch(() => {});
       }
     });
-    const page = await website.newPage();
+    page = await website.newPage();
     stage = "website-signin";
     report({ stage });
     await page.goto(`${origin}/signin`);
@@ -284,12 +286,10 @@ export async function runHostedWorkspaceTest({ approved = false, origin } = {}) 
         "Synthetic coursework only: compare two fictional study methods and outline three points. No real student materials.",
       );
     await page.getByText("Remember my progress", { exact: true }).click();
-    await page
-      .getByLabel("What I’ve done", { exact: true })
-      .fill("Outlined the three comparison points.");
-    await page
-      .getByLabel("My next step", { exact: true })
-      .fill("Write the first fictional comparison paragraph.");
+    await workspaceTextbox(page, "What I’ve done").fill("Outlined the three comparison points.");
+    await workspaceTextbox(page, "My next step").fill(
+      "Write the first fictional comparison paragraph.",
+    );
     await page.getByRole("button", { name: "Save assignment", exact: true }).click();
     await until(() => saved.some((i) => i.kind === "assignment"), "WEBSITE_ASSIGNMENT_SAVE");
     const assignment = saved.find((i) => i.kind === "assignment");
@@ -359,7 +359,7 @@ export async function runHostedWorkspaceTest({ approved = false, origin } = {}) 
         ? route.continue()
         : route.abort("blockedbyclient");
     });
-    const worker = extension.serviceWorkers()[0] || (await extension.waitForEvent("serviceworker"));
+    worker = extension.serviceWorkers()[0] || (await extension.waitForEvent("serviceworker"));
     worker.once("close", () => void close());
     extension.on("serviceworker", (other) => {
       if (worker !== other) void close();
@@ -379,7 +379,7 @@ export async function runHostedWorkspaceTest({ approved = false, origin } = {}) 
     await signin.locator("#password").fill(record.password);
     await signin.locator("#submit").click();
     await signin.locator("#return").waitFor({ state: "visible" });
-    const fixture = await extension.newPage();
+    fixture = await extension.newPage();
     await fixture.goto(fixtureOrigin);
     const cdp = await extension.newCDPSession(fixture);
     const shadow = (selector, action, value) => shadowCall(cdp, selector, action, value);
@@ -413,17 +413,22 @@ export async function runHostedWorkspaceTest({ approved = false, origin } = {}) 
       async () => (await shadow(".um-resume"))?.includes("Check the second comparison point"),
       "COMPANION_SAVE",
     );
+    stage = "website-resume-companion-progress";
+    report({ stage });
     await page.goto(
       `${origin}/ask?conversation=${assignment.conversationId}&workspace=${assignment.id}`,
     );
     await revealAssignment(page);
     await until(
       async () =>
-        (await page
-          .getByLabel("My next step", { exact: true })
+        (await workspaceTextbox(page, "My next step")
           .inputValue()
           .catch(() => "")) === "Check the second comparison point with my outline.",
       "WEBSITE_RESUME",
+    );
+    assert.equal(
+      await workspaceTextbox(page, "What I’ve done").inputValue(),
+      "Finished the first fictional comparison paragraph in Companion.",
     );
     await snapshot(page, "03-website-resumed-companion");
     pass("Website reloaded the exact progress and next step saved by Companion");
@@ -463,11 +468,6 @@ export async function runHostedWorkspaceTest({ approved = false, origin } = {}) 
     await until(() => shadow("#um-work-url", "visible"), "LINK_EDITOR");
     await shadow("#um-work-title", "fill", `${prefix} Companion link`);
     await shadow("#um-work-url", "fill", "https://example.com/fictional-reading");
-    await shadow(
-      "#um-work-content",
-      "fill",
-      "A fictional reference saved only for persistence testing.",
-    );
     await shadow(".um-study-form .um-primary", "click");
     await until(() => shadow(".um-input", "visible"), "LINK_SAVED");
     await page.goto(`${origin}/bulletin`);
@@ -490,6 +490,8 @@ export async function runHostedWorkspaceTest({ approved = false, origin } = {}) 
     await shadow(".um-save-progress", "click");
     await until(() => shadow("#um-work-title", "visible"), "NEW_EDITOR");
     await shadow("#um-work-title", "fill", `${prefix} Companion assignment`);
+    // This isolated fixture is localhost; review and clear the optional public source link.
+    await shadow("#um-work-url", "fill", "");
     await shadow(
       "#um-work-content",
       "fill",
@@ -519,6 +521,7 @@ export async function runHostedWorkspaceTest({ approved = false, origin } = {}) 
     );
     assert.ok(companionAssignment?.id);
     assert.equal(companionAssignment.courseId, null);
+    assert.equal(companionAssignment.sourceUrl, null);
     await page.goto(
       `${origin}/ask?conversation=${companionAssignment.conversationId}&workspace=${companionAssignment.id}`,
     );
@@ -572,6 +575,39 @@ export async function runHostedWorkspaceTest({ approved = false, origin } = {}) 
     report({ completed: true, checks: checks.length, artifactDir });
     return evidence;
   } catch (error) {
+    const diagnostic = {
+      stage,
+      policyFailure,
+      websiteStats: policy?.stats,
+      extensionStats: await worker
+        ?.evaluate(() => globalThis.__workspaceTestStats)
+        .catch(() => null),
+    };
+    if (page && !page.isClosed()) {
+      const current = new URL(page.url());
+      if (
+        current.origin === origin &&
+        ["/ask", "/notes", "/bulletin"].includes(current.pathname) &&
+        (await page.locator('input[type="password"]').count()) === 0
+      ) {
+        diagnostic.websitePath = current.pathname;
+        diagnostic.exactLabelCount = await page.getByLabel("My next step", { exact: true }).count();
+        diagnostic.textboxCount = await workspaceTextbox(page, "My next step").count();
+        diagnostic.nextStepMatchesExpected = await workspaceTextbox(page, "My next step")
+          .inputValue({ timeout: 1000 })
+          .then((value) => value === "Check the second comparison point with my outline.")
+          .catch(() => false);
+        await snapshot(page, "99-failure-website").catch(() => {});
+      }
+    }
+    if (fixture && !fixture.isClosed() && new URL(fixture.url()).hostname === "127.0.0.1")
+      await snapshot(fixture, "99-failure-companion").catch(() => {});
+    await fs
+      .writeFile(path.join(artifactDir, "failure.json"), JSON.stringify(diagnostic, null, 2), {
+        mode: 0o600,
+        flag: "wx",
+      })
+      .catch(() => {});
     report({
       completed: false,
       stage,

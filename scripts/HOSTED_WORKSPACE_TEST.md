@@ -33,10 +33,25 @@ are complete. The protected Preview
 <https://unimate-r11nbzj7i-resumejuice-s-projects.vercel.app> is `READY` at application
 source `d5f1751f1076b195ec8ecb0e088621d613e71083`, deployment
 `dpl_GbGLtrh6Ejv8Jjg37XYoAzWoB3gw` (Preview target, no aliases). CI run
-`43308680054` and protected HTTP smoke checks passed. The installed cross-app
-test has **not run**: explicit owner approval for temporary Pro access on the
-marked account is pending after automatic approval review rejected implied
-authorization. No entitlement or test data was changed. The local Companion
-configuration is prepared, but Vercel authentication is still required. Public
-signup, live Stripe, Store publication, and email callback settings are unchanged;
-this status is not hosted persistence or billing/purchase evidence.
+`43308680054` and protected HTTP smoke checks passed. After explicit owner approval
+of temporary Pro access, the installed cross-app test **passed all seven checks**
+with zero AI, Stripe, or policy-blocked requests. Its private result is
+`.stripe-sandbox.local/workspace-4dc3f77a-20fa-4c25-9f79-b3c142d88f11/result.json`.
+The operator wrapper restored and verified the marked account's Free access;
+the private restoration journal is
+`workspace-entitlement-6aa3beed-c82e-4a1d-aae3-ef38a1617476.json`. Synthetic saved
+records are retained for review, and existing test data was not deleted.
+All three disposable Chromium profiles from this rollout were removed afterward;
+their synthetic screenshots, results, and restoration journals were retained.
+
+The successful run includes two fixture corrections: use the exact textbox role
+for hydrated textarea reads, and clear the localhost source link when creating
+the standalone fixture assignment. A selector regression covers the first fix.
+These are test-only changes; the deployed application remains `d5f1751`. Vercel
+authentication is still required. Public signup, live Stripe, and Store
+publication are unchanged. Separately, email Site URL and the exact `/dashboard`,
+`/upgrade`, and `/reset-password` redirects were saved and read back on this Preview,
+with old entries removed and no wildcards. SMTP/provider, confirmation, and signup
+settings were unchanged; email delivery was not retested. See [LAUNCH.md](../LAUNCH.md)
+for the settings evidence. This run proves hosted save/resume with synthetic
+coursework, not billing/purchase or real-model quality.
