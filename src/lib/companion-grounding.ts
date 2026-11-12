@@ -433,17 +433,55 @@ const AUTHORED_EXAMPLE =
   /^(?:practice (?:question|problem)|hypothetical (?:example|scenario|practice problem)|example problem)\s*:/i;
 const NAMED_CITATION = /\baccording to\s+[^.!?\n]{1,100}\(\d{4}[a-z]?\)/i;
 
-function sourceReportingSentences(answer: string, intent: CompanionIntent): string[] {
-  const reports: string[] = [];
+type NumericSourceScope = "page" | "saved";
+type SourceReport = { text: string; numericScope?: NumericSourceScope };
+const CURRENT_PAGE_NUMERIC_CLAIM =
+  /\b(?:(?:this|current|visible)\s+(?:page|screen|screenshot)|(?:page|screen|screenshot)\s+(?:says|shows|asks|requires|lists|contains))\b/i;
+const NUMERIC_SOURCE_SUBJECT = String.raw`(?:(?:the|this|your|our)\s+)?(?:(?:current|visible)\s+)?(?:page|screen|screenshot)\b|(?:(?:the|this|your|our)\s+)?saved(?:\s+student)?\s+(?:assignment|note|workspace|work|link)\b`;
+const NUMERIC_SOURCE_START = new RegExp(
+  String.raw`^(?:(?:according to|on|in|from)\s+)?(?:${NUMERIC_SOURCE_SUBJECT})`,
+  "i",
+);
+// Split only before an explicitly named source. A conjunction alone must not
+// let an unsupported page number borrow evidence from the saved workspace.
+const ATTRIBUTED_CLAUSE_BOUNDARY = new RegExp(
+  String.raw`(?:[,;—–]\s*(?:(?:while|whereas|but|and)\s+)?|\s+(?:while|whereas|but|and)\s+)(?=(?:(?:according to|on|in|from)\s+)?(?:${NUMERIC_SOURCE_SUBJECT}))`,
+  "i",
+);
+
+function leadingNumericSource(text: string): NumericSourceScope | undefined {
+  const subject = text
+    .replace(/^\s*\d+[.)]\s+/, "")
+    .trim()
+    .match(NUMERIC_SOURCE_START)?.[0];
+  return subject ? (/\bsaved\b/i.test(subject) ? "saved" : "page") : undefined;
+}
+
+function hasNumericSourceHeading(text: string): boolean {
+  const content = text.replace(/^\s*\d+[.)]\s+/, "").trim();
+  const subject = content.match(NUMERIC_SOURCE_START)?.[0];
+  return Boolean(subject && /^\s*:/.test(content.slice(subject.length)));
+}
+
+function sourceReportingSentences(answer: string, intent: CompanionIntent): SourceReport[] {
+  const reports: SourceReport[] = [];
   for (const paragraph of answer.split(/\n\s*\n/)) {
     const hypothetical = AUTHORED_EXAMPLE.test(paragraph.trim());
     let sourceHeading = false;
+    let numericHeading: NumericSourceScope | undefined;
     for (const sentence of paragraph.split(/(?<!\bet al\.)(?<=[.!?])\s+|\n+/i)) {
+      const leadingScope = leadingNumericSource(sentence);
       const explicitSource =
-        sourceHeading || SOURCE_CLAIM.test(sentence) || NAMED_CITATION.test(sentence);
+        sourceHeading ||
+        hasNumericSourceHeading(sentence) ||
+        SOURCE_CLAIM.test(sentence) ||
+        NAMED_CITATION.test(sentence);
       // A source-attribution heading governs its following lines until a new
       // paragraph, rather than losing evidence requirements at the newline.
-      if (explicitSource && /:\s*$/.test(sentence)) sourceHeading = true;
+      if (explicitSource && /:\s*$/.test(sentence)) {
+        sourceHeading = true;
+        numericHeading = leadingScope;
+      }
       if (
         explicitSource ||
         (!hypothetical &&
@@ -451,7 +489,14 @@ function sourceReportingSentences(answer: string, intent: CompanionIntent): stri
             EMPIRICAL_CLAIM.test(sentence) ||
             POPULATION_NUMBER.test(sentence)))
       ) {
-        reports.push(sentence);
+        for (const text of sentence.split(ATTRIBUTED_CLAUSE_BOUNDARY)) {
+          reports.push({
+            text,
+            numericScope: CURRENT_PAGE_NUMERIC_CLAIM.test(text)
+              ? "page"
+              : leadingNumericSource(text) || numericHeading,
+          });
+        }
       }
     }
   }
@@ -562,6 +607,9 @@ export function detectHallucination(
         .join("\n"),
     ).map(canonicalNumber),
   );
+  const savedSourceNumbers = new Set(
+    numberTokens(provenance.savedStudyText || "").map(canonicalNumber),
+  );
   const resolution = resolveCompanionReference(userMessage, provenance);
   const intent = classifyResolvedCompanionIntent(userMessage, resolution);
   const reportingSentences = sourceReportingSentences(answer, intent);
@@ -607,15 +655,16 @@ export function detectHallucination(
   // Check every reported number, but not a list item's formatting ordinal.
   // Screenshot-only measurements remain unverified here: this detector cannot
   // OCR pixels, and the presence of an image must not waive numeric evidence.
-  for (const sentence of reportingSentences) {
-    const content = sentence.replace(/^\s*\d+[.)]\s+/, "");
+  for (const { text, numericScope } of reportingSentences) {
+    const content = text.replace(/^\s*\d+[.)]\s+/, "");
     // Saved work can support a saved-assignment claim, but cannot license a
     // claim that the current page or screenshot contains a stale requirement.
-    const currentPageClaim =
-      /\b(?:(?:this|current|visible)\s+(?:page|screen|screenshot)|(?:page|screen|screenshot)\s+(?:says|shows|asks|requires|lists|contains))\b/i.test(
-        content,
-      );
-    const allowedNumbers = currentPageClaim ? pageSourceNumbers : sourceNumbers;
+    const allowedNumbers =
+      numericScope === "page"
+        ? pageSourceNumbers
+        : numericScope === "saved"
+          ? savedSourceNumbers
+          : sourceNumbers;
     if (numberTokens(content).some((token) => !allowedNumbers.has(canonicalNumber(token)))) {
       reasons.push("unsupported_number");
       break;
@@ -643,7 +692,7 @@ export function detectHallucination(
 
   // (f) Bulk source reporting should overlap its source. Detailed authored
   // teaching is allowed to explain concepts beyond the wording of the page.
-  const reportedText = reportingSentences.join(" ");
+  const reportedText = reportingSentences.map(({ text }) => text).join(" ");
   if (reportedText.length > 600) {
     const answerTokens = [
       ...new Set(

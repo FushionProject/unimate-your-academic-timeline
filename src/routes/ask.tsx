@@ -394,6 +394,7 @@ function Ask({
     message: string;
     question: string;
     mode: "normal" | "simpler" | "deeper";
+    replyId?: string;
     retryable: boolean;
   } | null>(null);
   const [usage, setUsage] = useState<{ used: number; limit: number; period: string } | null>(null);
@@ -761,10 +762,17 @@ function Ask({
     return () => window.clearTimeout(timeout);
   }, [conversationNotice]);
 
-  const getConversationHistory = () => {
-    return messages.map((msg) => ({
+  const getConversationHistory = (replyId?: string) => {
+    const replyIndex = replyId
+      ? messages.findIndex((message) => message.id === replyId && message.type === "ai")
+      : -1;
+    if (replyId && replyIndex < 0) return null;
+    // An answer action refers to that reply, not whichever answer is newest.
+    // Match the server's history bounds before sending any conversation text.
+    const relevantMessages = replyId ? messages.slice(0, replyIndex + 1) : messages;
+    return relevantMessages.slice(-10).map((msg) => ({
       role: msg.type === "user" ? ("user" as const) : ("assistant" as const),
-      content: msg.content,
+      content: msg.content.slice(0, 4000),
     }));
   };
 
@@ -772,6 +780,7 @@ function Ask({
     overrideQuestion?: string,
     mode: "normal" | "simpler" | "deeper" = "normal",
     savedWorkspaceId?: string,
+    replyId?: string,
   ) => {
     const questionToSend = (overrideQuestion || question).trim();
     if (
@@ -786,6 +795,13 @@ function Ask({
       (selectedCourseId && !selectedCourse)
     )
       return;
+    const conversationHistory = getConversationHistory(replyId);
+    if (!conversationHistory) {
+      setHistoryNotice(
+        "That reply is no longer available. Refresh shared history and choose it again.",
+      );
+      return;
+    }
     sendingRef.current = true;
 
     const requestUserId = userId;
@@ -806,7 +822,8 @@ function Ask({
     localMessageIdsRef.current.add(userMessage.id);
 
     setMessages((prev) => [...prev, userMessage]);
-    setQuestion("");
+    // A shortcut or reply action must not erase a different unsent draft.
+    setQuestion((current) => (current.trim() === questionToSend ? "" : current));
     setLoading(true);
     setSendError(null);
 
@@ -814,7 +831,7 @@ function Ask({
       const result = await askUniMate(
         {
           question: questionToSend,
-          conversationHistory: getConversationHistory(),
+          conversationHistory,
           mode,
           selectedCourseId: selectedCourse?.id,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -877,6 +894,7 @@ function Ask({
       setSendError({
         question: questionToSend,
         mode,
+        replyId,
         retryable:
           !(error instanceof AuthSessionChangedError) &&
           (!(error instanceof UniMateApiError) || error.retryable),
@@ -902,6 +920,14 @@ function Ask({
   };
 
   const handleConceptClick = (concept: string) => handleSend(concept, "normal");
+  const handleStarterPrompt = (prompt: string) => {
+    if (questionValueRef.current.trim()) {
+      setConversationNotice("Your draft is kept. Send or clear it before choosing a starter.");
+      return;
+    }
+    setQuestion(prompt);
+    questionInputRef.current?.focus();
+  };
 
   return (
     <main className="mx-auto flex min-h-[calc(100dvh-10rem)] max-w-7xl flex-col px-3 py-5 sm:px-6 sm:py-7">
@@ -1252,10 +1278,7 @@ function Ask({
                     <button
                       key={prompt.title}
                       type="button"
-                      onClick={() => {
-                        setQuestion(prompt.prompt);
-                        questionInputRef.current?.focus();
-                      }}
+                      onClick={() => handleStarterPrompt(prompt.prompt)}
                       className="group flex min-h-20 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-4 py-3 text-left transition hover:border-primary/50 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     >
                       <prompt.icon className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
@@ -1307,7 +1330,9 @@ function Ask({
                           <>
                             <div className="mt-3 flex flex-wrap gap-2">
                               <button
-                                onClick={() => handleSend(questionForAnswer, "simpler")}
+                                onClick={() =>
+                                  handleSend(questionForAnswer, "simpler", undefined, message.id)
+                                }
                                 disabled={loading || !questionForAnswer}
                                 className="text-xs px-3 py-1.5 rounded-lg transition-colors bg-primary/10 text-primary hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
                               >
@@ -1336,7 +1361,9 @@ function Ask({
                                 disabled={loading}
                               />
                               <button
-                                onClick={() => handleSend(questionForAnswer, "deeper")}
+                                onClick={() =>
+                                  handleSend(questionForAnswer, "deeper", undefined, message.id)
+                                }
                                 disabled={loading || !questionForAnswer}
                                 className="text-xs px-3 py-1.5 rounded-lg transition-colors bg-primary/10 text-primary hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
                               >
@@ -1462,7 +1489,14 @@ function Ask({
                   <button
                     type="button"
                     disabled={loading}
-                    onClick={() => void handleSend(sendError.question, sendError.mode)}
+                    onClick={() =>
+                      void handleSend(
+                        sendError.question,
+                        sendError.mode,
+                        undefined,
+                        sendError.replyId,
+                      )
+                    }
                     className="shrink-0 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold"
                   >
                     Try again

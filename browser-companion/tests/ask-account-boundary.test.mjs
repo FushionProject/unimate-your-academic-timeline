@@ -112,6 +112,7 @@ function fixture() {
     Object.assign(context, {
       userId: "student-A",
       question: "Private question from A",
+      questionValueRef: { current: "Private question from A" },
       historyLoading: false,
       resourceLoading: false,
       resourceError: "",
@@ -138,6 +139,7 @@ function fixture() {
       setQuestion: (value) => {
         state.writes.push("question");
         context.question = typeof value === "function" ? value(context.question) : value;
+        context.questionValueRef.current = context.question;
       },
       setLoading: (value) => {
         state.writes.push("loading");
@@ -155,14 +157,17 @@ function fixture() {
         state.writes.push("notice");
         context.historyNotice = value;
       },
+      setConversationNotice: (value) => {
+        context.conversationNotice = value;
+      },
       saveCompanionExchange: async (...args) => {
         state.saves.push(args);
         return [];
       },
     });
     execute(
-      `${declaration("getConversationHistory")}\n${declaration("handleSend")}\n` +
-        `globalThis.send = handleSend; globalThis.mountRequestEffect = ${cleanupSource};`,
+      `${declaration("getConversationHistory")}\n${declaration("handleSend")}\n${declaration("handleStarterPrompt")}\n` +
+        `globalThis.send = handleSend; globalThis.startPrompt = handleStarterPrompt; globalThis.mountRequestEffect = ${cleanupSource};`,
     );
     return context.mountRequestEffect();
   };
@@ -297,7 +302,99 @@ for (const beforeLookup of [false, true]) {
   assert.equal(f.context.activeRequestRef.current, null);
   assert.equal(f.context.sendingRef.current, false);
   assert.equal(f.context.loading, false);
+  assert.equal(f.context.question, "", "Sending the composer consumes that draft");
 }
+for (const fails of [false, true]) {
+  const f = fixture();
+  f.mount();
+  const draft = f.context.question;
+  if (fails)
+    f.state.reply = async () =>
+      new Response(JSON.stringify({ error: "Temporary provider failure" }), { status: 502 });
+  await f.context.send(
+    "Help me get started on this saved assignment",
+    "normal",
+    "33333333-3333-4333-8333-333333333333",
+  );
+  assert.equal(f.state.requests.length, 1);
+  assert.equal(
+    f.context.question,
+    draft,
+    "An assignment shortcut preserves the separate typed question on success and failure",
+  );
+}
+{
+  const f = fixture();
+  f.mount();
+  const draft = f.context.question;
+  f.context.startPrompt("Help me find my next step");
+  assert.equal(f.context.question, draft, "An empty-chat starter cannot replace a typed draft");
+  assert.match(f.context.conversationNotice, /Your draft is kept/);
+  f.context.question = f.context.questionValueRef.current = "";
+  f.context.startPrompt("Help me find my next step");
+  assert.equal(f.context.question, "Help me find my next step");
+  assert.equal(f.state.requests.length, 0, "Starter review never sends automatically");
+}
+for (const mode of ["simpler", "deeper"]) {
+  const f = fixture();
+  f.mount();
+  const earlier = Array.from({ length: 14 }, (_, index) => ({
+    id: `earlier-${index}`,
+    type: index % 2 ? "ai" : "user",
+    content: `Earlier turn ${index}`,
+  }));
+  const selectedReply = {
+    id: "selected-answer",
+    type: "ai",
+    content: `The selected explanation. ${"x".repeat(4200)}`,
+  };
+  f.context.messages = f.state.messages = [
+    ...earlier,
+    { id: "selected-question", type: "user", content: "Explain photosynthesis" },
+    selectedReply,
+    { id: "later-question", type: "user", content: "Now explain respiration" },
+    { id: "later-answer", type: "ai", content: "A different later explanation" },
+  ];
+  const draft = f.context.question;
+  await f.context.send("Explain photosynthesis", mode, undefined, selectedReply.id);
+  const payload = JSON.parse(f.state.requests[0].body);
+  assert.equal(payload.mode, mode);
+  assert.equal(payload.conversationHistory.length, 10, "Follow-up history is bounded");
+  assert.equal(payload.conversationHistory.at(-1).role, "assistant");
+  assert.equal(payload.conversationHistory.at(-1).content, selectedReply.content.slice(0, 4000));
+  assert.equal(payload.conversationHistory.at(-2).content, "Explain photosynthesis");
+  assert(
+    !JSON.stringify(payload).includes("respiration"),
+    "Later turns cannot retarget this action",
+  );
+  assert.equal(f.context.question, draft, "Reply actions preserve a separate typed question");
+}
+{
+  const f = fixture();
+  f.mount();
+  f.context.messages = f.state.messages = [
+    { id: "question", type: "user", content: "Explain my argument" },
+    { id: "reply", type: "ai", content: "Selected explanation" },
+    { id: "newer", type: "ai", content: "Different newest explanation" },
+  ];
+  f.state.reply = async () =>
+    new Response(JSON.stringify({ error: "Try again later" }), { status: 502 });
+  await f.context.send("Explain my argument", "simpler", undefined, "reply");
+  assert.equal(f.context.sendError.replyId, "reply", "Failed reply action retains its target");
+  const retry = f.context.sendError;
+  f.state.reply = async () => answer();
+  await f.context.send(retry.question, retry.mode, undefined, retry.replyId);
+  assert.equal(
+    JSON.parse(f.state.requests[1].body).conversationHistory.at(-1).content,
+    "Selected explanation",
+    "Retry still explains the originally selected answer",
+  );
+  f.context.messages = [];
+  await f.context.send("Explain my argument", "simpler", undefined, "reply");
+  assert.equal(f.state.requests.length, 2, "A missing reply cannot fall back to another answer");
+}
+assert.match(routeSource, /handleSend\(questionForAnswer, "simpler", undefined, message\.id\)/);
+assert.match(routeSource, /handleSend\(questionForAnswer, "deeper", undefined, message\.id\)/);
 for (const nextUser of [null, "student-B"]) {
   const f = fixture(),
     lookup = deferred();

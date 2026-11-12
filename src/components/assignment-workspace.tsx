@@ -90,7 +90,8 @@ export function AssignmentWorkspace({
   const draftId = useRef(crypto.randomUUID());
   const dirty = !loading && JSON.stringify(draft) !== baseline;
   const needsChatLink = Boolean(item && !item.conversationId);
-  const canUse = Boolean(draft.title.trim() && draft.content.trim());
+  const canSave = Boolean(draft.title.trim());
+  const canTutor = canSave && Boolean(draft.content.trim());
 
   useBlocker({
     shouldBlockFn: () =>
@@ -156,7 +157,7 @@ export function AssignmentWorkspace({
   }, [load]);
 
   const save = async (): Promise<StudyItem | null> => {
-    if (savingRef.current || busy || disabled || loading || loadFailed || !canUse || conflict)
+    if (savingRef.current || busy || disabled || loading || loadFailed || !canSave || conflict)
       return null;
     savingRef.current = true;
     setBusy(true);
@@ -214,7 +215,7 @@ export function AssignmentWorkspace({
   };
 
   const ask = async (intent: keyof typeof assignmentPrompts) => {
-    if (disabled || busy || loading || loadFailed || conflict) return;
+    if (disabled || busy || loading || loadFailed || !canTutor || conflict) return;
     const saved = item && !dirty && !needsChatLink ? item : await save();
     if (saved && aliveRef.current) onAsk(assignmentPrompts[intent], saved);
   };
@@ -339,7 +340,7 @@ export function AssignmentWorkspace({
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  disabled={!canUse || conflict}
+                  disabled={!canTutor || conflict}
                   onClick={() => void ask("understand")}
                   className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-50"
                 >
@@ -348,7 +349,7 @@ export function AssignmentWorkspace({
                 </button>
                 <button
                   type="button"
-                  disabled={!canUse || conflict}
+                  disabled={!canTutor || conflict}
                   onClick={() => void ask("start")}
                   className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-background px-3 text-xs font-semibold disabled:opacity-50"
                 >
@@ -358,7 +359,7 @@ export function AssignmentWorkspace({
                 {item && (
                   <button
                     type="button"
-                    disabled={!canUse || conflict}
+                    disabled={!canTutor || conflict}
                     onClick={() => void ask("resume")}
                     className="min-h-10 rounded-xl border border-border bg-background px-3 text-xs font-semibold disabled:opacity-50"
                   >
@@ -366,6 +367,12 @@ export function AssignmentWorkspace({
                   </button>
                 )}
               </div>
+              {!draft.content.trim() && (
+                <p className="text-xs leading-5 text-muted-foreground">
+                  You can save your progress now. Add the assignment instructions or the part you’re
+                  stuck on above to use these tutoring actions.
+                </p>
+              )}
               <details
                 className="rounded-xl border border-border/60 bg-background/70 p-3"
                 open={Boolean(item?.progress || item?.nextStep)}
@@ -379,7 +386,7 @@ export function AssignmentWorkspace({
                     <textarea
                       value={draft.progress}
                       onChange={(event) => edit("progress", event.target.value)}
-                      maxLength={2000}
+                      maxLength={4000}
                       rows={2}
                       placeholder="e.g. Chose my argument and found two sources"
                       className={fieldClass}
@@ -390,7 +397,7 @@ export function AssignmentWorkspace({
                     <textarea
                       value={draft.nextStep}
                       onChange={(event) => edit("nextStep", event.target.value)}
-                      maxLength={1000}
+                      maxLength={2000}
                       rows={2}
                       placeholder="e.g. Write the evidence paragraph"
                       className={fieldClass}
@@ -418,7 +425,7 @@ export function AssignmentWorkspace({
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  disabled={!canUse || conflict || Boolean(item && !dirty && !needsChatLink)}
+                  disabled={!canSave || conflict || Boolean(item && !dirty && !needsChatLink)}
                   onClick={() => void save()}
                   className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-background px-3 text-xs font-semibold disabled:opacity-50"
                 >

@@ -255,6 +255,45 @@ function fixture(initial = null) {
   assert.equal(resumed.field("My next step").props.value, "Write the first paragraph");
 }
 {
+  const f = fixture(saved({ content: "" }));
+  f.render();
+  await f.settle();
+  assert.match(textOf(f.tree()), /You can save your progress now/);
+  assert(f.button("Understand assignment").props.disabled);
+  assert(f.button("Help me start").props.disabled);
+  assert(f.button("Pick up where I left off").props.disabled);
+  // Even a stale/programmatic click cannot tutor with missing instructions.
+  f.button("Understand assignment").props.onClick();
+  await f.settle();
+  assert.equal(f.state.asks.length, 0);
+  await f.fill("What I’ve done", "Chose the topic; waiting for the rubric");
+  await f.fill("Assignment status", "done");
+  await f.click("Save assignment");
+  assert.equal(f.state.writes[0].patch.content, "");
+  assert.equal(f.state.writes[0].patch.progress, "Chose the topic; waiting for the rubric");
+  assert.equal(f.state.writes[0].patch.status, "done");
+  assert.equal(f.state.asks.length, 0, "Progress/status saves do not call AI");
+  await f.fill("Instructions", "Compare the two sources in one paragraph.");
+  assert(!f.button("Save & understand").props.disabled, "Adding instructions enables tutoring");
+}
+{
+  const progress = "p".repeat(3500);
+  const nextStep = "n".repeat(1700);
+  const f = fixture(saved({ progress, nextStep }));
+  f.render();
+  await f.settle();
+  assert.equal(f.field("What I’ve done").props.maxLength, 4000);
+  assert.equal(f.field("My next step").props.maxLength, 2000);
+  await f.fill("Assignment status", "done");
+  await f.click("Save assignment");
+  assert.equal(f.state.writes[0].patch.progress, progress);
+  assert.equal(
+    f.state.writes[0].patch.nextStep,
+    nextStep,
+    "Companion-length fields survive a web edit",
+  );
+}
+{
   const f = fixture(saved());
   f.render();
   await f.settle();
